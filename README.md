@@ -1,39 +1,65 @@
-# spring-ai-business-copilot
+# Spring AI Business Copilot
 
-#### 介绍
-Spring AI Business Copilot 是一个面向个人开发者、中小团队和企业内部系统的 Java AI 业务智能助手套件。
+English | [简体中文](README.zh-CN.md)
 
-它不是另一个 AI 框架，而是一组可以直接运行、学习、改造和接入真实业务的 Spring AI 应用模块。
+Spring AI Business Copilot is an open-source Java AI business application suite for individuals, small teams, and internal enterprise systems.
 
-#### 软件架构
-软件架构说明
+It provides ready-to-run business modules such as data query, resume screening, customer support, knowledge assistant, and report generation. The goal is not to provide another AI framework, but to provide practical Spring AI applications that teams can clone, run, learn from, and adapt to real business systems.
 
+## What It Builds
 
-#### 安装教程
+The project will start with one complete module:
 
-1.  xxxx
-2.  xxxx
-3.  xxxx
+- Data Copilot: natural-language database query assistant
 
-#### 使用说明
+Future modules:
 
-1.  xxxx
-2.  xxxx
-3.  xxxx
+- Resume Copilot: resume screening and interview question assistant
+- Support Copilot: customer support assistant
+- Knowledge Copilot: enterprise knowledge base assistant
+- Report Copilot: weekly report and business report assistant
 
-#### 参与贡献
+## Core Platform Capabilities
 
-1.  Fork 本仓库
-2.  新建 Feat_xxx 分支
-3.  提交代码
-4.  新建 Pull Request
+Shared capabilities across modules:
 
+- Spring Boot application foundation
+- Spring AI integration
+- prompt templates
+- tool calling
+- tool call audit
+- guardrails and safety checks
+- user and role boundaries
+- sample business data
+- Docker Compose startup
+- bilingual documentation
 
-#### 特技
+## First Module: Data Copilot
 
-1.  使用 Readme\_XXX.md 来支持不同的语言，例如 Readme\_en.md, Readme\_zh.md
-2.  Gitee 官方博客 [blog.gitee.com](https://blog.gitee.com)
-3.  你可以 [https://gitee.com/explore](https://gitee.com/explore) 这个地址来了解 Gitee 上的优秀开源项目
-4.  [GVP](https://gitee.com/gvp) 全称是 Gitee 最有价值开源项目，是综合评定出的优秀开源项目
-5.  Gitee 官方提供的使用手册 [https://gitee.com/help](https://gitee.com/help)
-6.  Gitee 封面人物是一档用来展示 Gitee 会员风采的栏目 [https://gitee.com/gitee-stars/](https://gitee.com/gitee-stars/)
+Data Copilot helps users ask business questions in natural language and get safe, explainable SQL query results.
+
+Example questions:
+
+- What was last month's total revenue?
+- Which products had the highest refund rate?
+- How many new users registered this week?
+- Which customer segment has the highest average order value?
+
+Safety goals:
+
+- generate read-only SQL
+- block destructive SQL
+- show SQL before execution
+- record query audit logs
+- explain query results in business language
+
+## Project Goal
+
+Build a practical Java AI business project that is useful beyond demos:
+
+- easy to run
+- easy to understand
+- easy to extend
+- safe by default
+- close to real small-team and enterprise scenarios
+

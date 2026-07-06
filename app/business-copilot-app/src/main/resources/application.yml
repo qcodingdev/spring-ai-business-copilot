@@ -1,0 +1,18 @@
+spring:
+  application:
+    name: spring-ai-business-copilot
+  ai:
+    model:
+      chat: ${SPRING_AI_MODEL_CHAT:none}
+    openai:
+      api-key: ${SPRING_AI_OPENAI_API_KEY:}
+      base-url: ${SPRING_AI_OPENAI_BASE_URL:https://api.openai.com}
+      chat:
+        options:
+          model: ${SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL:gpt-5-mini}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
