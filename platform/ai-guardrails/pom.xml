@@ -14,4 +14,26 @@
     <artifactId>ai-guardrails</artifactId>
     <name>ai-guardrails</name>
     <description>Guardrails boundary for SQL safety, sensitive data, and business constraints.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>dev.qcoding</groupId>
+            <artifactId>common-web</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.github.jsqlparser</groupId>
+            <artifactId>jsqlparser</artifactId>
+            <version>4.9</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-context</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
 </project>
