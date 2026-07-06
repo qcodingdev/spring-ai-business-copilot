@@ -1,0 +1,169 @@
+package dev.qcoding.businesscopilot.datacopilot.query;
+
+import dev.qcoding.businesscopilot.commonweb.api.BusinessException;
+import dev.qcoding.businesscopilot.commonweb.api.ErrorCode;
+import dev.qcoding.businesscopilot.guardrails.GuardrailsProperties;
+import dev.qcoding.businesscopilot.guardrails.SensitiveDataMasker;
+import dev.qcoding.businesscopilot.guardrails.SqlGuardrailService;
+import dev.qcoding.businesscopilot.guardrails.SqlValidationResult;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.StatementCallback;
+
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * JDBC-based read-only query executor with defensive guardrails and result masking.
+ *
+ * <p>基于 Spring JDBC 的只读查询执行器。只负责执行与脱敏，不写审计——
+ * 审计由上层编排服务（QueryExecutionService）统一处理，确保执行阶段能携带完整的
+ * requestId/userQuestion/modelName 上下文。核心安全机制：
+ * <ul>
+ *   <li>执行前再次调用 SqlGuardrailService 做防御式二次校验——即使生成阶段已通过，
+ *       执行前仍需确认，防止候选被篡改或存储后规则变更。</li>
+ *   <li>设置 query timeout 防止慢查询占用连接。</li>
+ *   <li>设置 max rows，超出时截断并标记 truncated=true。</li>
+ *   <li>查询结果返回前调用 SensitiveDataMasker 对 phone/email 等字段脱敏。</li>
+ *   <li>SQL 异常转换成用户可理解的 BusinessException，不暴露堆栈。</li>
+ * </ul></p>
+ */
+public class JdbcReadOnlyQueryExecutor implements ReadOnlyQueryExecutor {
+
+    private static final Logger log = LoggerFactory.getLogger(JdbcReadOnlyQueryExecutor.class);
+
+    private final JdbcTemplate jdbcTemplate;
+    private final SqlGuardrailService guardrailService;
+    private final GuardrailsProperties guardrailsProperties;
+    private final SensitiveDataMasker masker;
+    private final QueryExecutionProperties queryProperties;
+
+    public JdbcReadOnlyQueryExecutor(JdbcTemplate jdbcTemplate,
+                                      SqlGuardrailService guardrailService,
+                                      GuardrailsProperties guardrailsProperties,
+                                      SensitiveDataMasker masker,
+                                      QueryExecutionProperties queryProperties) {
+        this.jdbcTemplate = jdbcTemplate;
+        this.guardrailService = guardrailService;
+        this.guardrailsProperties = guardrailsProperties;
+        this.masker = masker;
+        this.queryProperties = queryProperties;
+    }
+
+    @Override
+    public QueryResultTable execute(String sql) {
+        // 1. 防御式二次 guardrails 校验
+        SqlValidationResult validationResult = guardrailService.validate(sql, guardrailsProperties);
+        if (!validationResult.passed()) {
+            String violationDetails = String.join("; ",
+                    validationResult.violations().stream()
+                            .map(v -> v.code() + ": " + v.message())
+                            .toList());
+            log.warn("Second guardrails check rejected SQL: {}", violationDetails);
+            throw new BusinessException(ErrorCode.SQL_GUARDRAIL_VIOLATION,
+                    "SQL rejected by guardrails on execution: " + violationDetails);
+        }
+
+        // 2. 执行查询（设置超时和最大行数）；SQL 异常转换成用户可理解的 BusinessException，不暴露堆栈
+        try {
+            return jdbcTemplate.execute(new StatementCallback<>() {
+                @Override
+                public QueryResultTable doInStatement(Statement stmt) throws SQLException {
+                    stmt.setQueryTimeout(queryProperties.queryTimeoutSeconds());
+
+                    try (ResultSet rs = stmt.executeQuery(sql)) {
+                        return mapResultSet(rs);
+                    }
+                }
+            });
+        } catch (DataAccessException ex) {
+            // JdbcTemplate 把 SQLException 包装成 DataAccessException，这里取出原始 SQLException
+            SQLException sqlEx = extractSqlException(ex);
+            String userMessage = sqlEx != null ? translateSQLException(sqlEx) : "查询执行失败";
+            log.error("Query execution failed: {}", userMessage, ex);
+            throw new QueryExecutionException(userMessage, ex);
+        }
+    }
+
+    /** Extract the underlying SQLException from a Spring DataAccessException if present. */
+    private SQLException extractSqlException(DataAccessException ex) {
+        Throwable current = ex;
+        while (current != null) {
+            if (current instanceof SQLException sqlException) {
+                return sqlException;
+            }
+            current = current.getCause();
+        }
+        return null;
+    }
+
+    /** Map a ResultSet to a QueryResultTable, applying masking and truncation. */
+    private QueryResultTable mapResultSet(ResultSet rs) throws SQLException {
+        ResultSetMetaData metaData = rs.getMetaData();
+        int columnCount = metaData.getColumnCount();
+
+        // 提取列描述
+        List<QueryColumn> columns = new ArrayList<>();
+        for (int i = 1; i <= columnCount; i++) {
+            columns.add(new QueryColumn(
+                    metaData.getColumnLabel(i),
+                    metaData.getColumnTypeName(i)));
+        }
+
+        // 提取行数据，应用 max rows 和脱敏
+        List<QueryRow> rows = new ArrayList<>();
+        int maxRows = queryProperties.maxRows();
+        boolean truncated = false;
+
+        while (rs.next()) {
+            if (rows.size() >= maxRows) {
+                truncated = true;
+                break;
+            }
+            Map<String, Object> values = new LinkedHashMap<>();
+            for (int i = 1; i <= columnCount; i++) {
+                String columnName = metaData.getColumnLabel(i);
+                Object rawValue = rs.getObject(i);
+                values.put(columnName, maskIfNeeded(columnName, rawValue));
+            }
+            rows.add(new QueryRow(values));
+        }
+
+        return new QueryResultTable(columns, rows, rows.size(), truncated);
+    }
+
+    /** Apply masking if the column is sensitive; pass through otherwise. */
+    private Object maskIfNeeded(String columnName, Object value) {
+        if (value == null) return null;
+        if (value instanceof String stringValue) {
+            return masker.mask(columnName, stringValue);
+        }
+        // 非字符串类型不做脱敏
+        return value;
+    }
+
+    /** Translate a SQLException into a user-friendly message without internals. */
+    private String translateSQLException(SQLException ex) {
+        String sqlState = ex.getSQLState();
+        // 常见错误类别映射
+        if ("57014".equals(sqlState)) {
+            return "查询超时，请缩小查询范围后重试";
+        }
+        if (sqlState != null && sqlState.startsWith("42")) {
+            return "SQL 语法错误或对象不存在";
+        }
+        if (sqlState != null && sqlState.startsWith("08")) {
+            return "数据库连接异常，请稍后重试";
+        }
+        // 默认：不暴露原始错误
+        return "查询执行失败";
+    }
+}

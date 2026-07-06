@@ -10,9 +10,44 @@ spring:
       chat:
         options:
           model: ${SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL:gpt-5-mini}
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/business_copilot}
+    username: ${SPRING_DATASOURCE_USERNAME:copilot}
+    password: ${SPRING_DATASOURCE_PASSWORD:copilot}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
 
 management:
   endpoints:
     web:
       exposure:
         include: health,info
+
+# ── Data Copilot 配置 ──────────────────────────────────────────
+business-copilot:
+  data-copilot:
+    schema:
+      queryable-tables:
+        - customers
+        - products
+        - orders
+        - order_items
+        - refunds
+        - marketing_events
+      # query_audit_logs 不在白名单中，自然语言查询无法触达
+      max-schema-text-length: 2000
+    confirmation:
+      candidate-ttl-minutes: 10
+    query:
+      query-timeout-seconds: 30
+      max-rows: 100
+  guardrails:
+    default-max-rows: 100
+    require-limit: true
+  ai-core:
+    model-name: ${SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL:gpt-5-mini}

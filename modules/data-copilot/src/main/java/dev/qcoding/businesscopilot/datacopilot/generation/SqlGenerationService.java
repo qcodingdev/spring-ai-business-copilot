@@ -8,6 +8,8 @@ import dev.qcoding.businesscopilot.audit.AuditService;
 import dev.qcoding.businesscopilot.audit.AuditStatus;
 import dev.qcoding.businesscopilot.commonweb.api.BusinessException;
 import dev.qcoding.businesscopilot.commonweb.api.ErrorCode;
+import dev.qcoding.businesscopilot.datacopilot.confirmation.SqlCandidate;
+import dev.qcoding.businesscopilot.datacopilot.confirmation.SqlConfirmationService;
 import dev.qcoding.businesscopilot.datacopilot.schema.SchemaContext;
 import dev.qcoding.businesscopilot.datacopilot.schema.SchemaContextService;
 import dev.qcoding.businesscopilot.guardrails.GuardrailsProperties;
@@ -38,19 +40,22 @@ public class SqlGenerationService {
     private final SqlGuardrailService guardrailService;
     private final AuditService auditService;
     private final GuardrailsProperties guardrailsProperties;
+    private final SqlConfirmationService confirmationService;
 
     public SqlGenerationService(SchemaContextService schemaContextService,
                                  AiChatService aiChatService,
                                  PromptTemplateService promptTemplateService,
                                  SqlGuardrailService guardrailService,
                                  AuditService auditService,
-                                 GuardrailsProperties guardrailsProperties) {
+                                 GuardrailsProperties guardrailsProperties,
+                                 SqlConfirmationService confirmationService) {
         this.schemaContextService = schemaContextService;
         this.aiChatService = aiChatService;
         this.promptTemplateService = promptTemplateService;
         this.guardrailService = guardrailService;
         this.auditService = auditService;
         this.guardrailsProperties = guardrailsProperties;
+        this.confirmationService = confirmationService;
     }
 
     /**
@@ -92,7 +97,7 @@ public class SqlGenerationService {
                 candidate.sql(), guardrailsProperties);
         SqlCandidateValidationSummary validationSummary = SqlCandidateValidationSummary.from(validationResult);
 
-        // 5. Build response
+        // 5. Build response — guardrails 通过时保存候选并返回 token，失败时不生成可执行 token
         long latencyMs = System.currentTimeMillis() - startMs;
         boolean executable = validationResult.passed();
 
@@ -104,8 +109,18 @@ public class SqlGenerationService {
                     request.question(), candidate.sql(), null,
                     AuditStatus.VALIDATION_FAILED, violationDetails, false,
                     null, null, aiChatService.modelName(), latencyMs));
+
+            // guardrails 失败：不生成 token，前端无法据此执行
+            return SqlGenerationResponse.notExecutable(
+                    requestId, request.question(), candidate.sql(), candidate.summary(),
+                    candidate.assumptions() != null ? candidate.assumptions() : List.of(),
+                    candidate.warnings() != null ? candidate.warnings() : List.of(),
+                    validationSummary);
         }
 
+        // guardrails 通过：保存候选并生成 confirmationToken（携带审计上下文，便于执行阶段写审计）
+        SqlCandidate execCandidate = confirmationService.createExecutableCandidate(
+                candidate.sql(), requestId, request.question(), aiChatService.modelName());
         return new SqlGenerationResponse(
                 requestId,
                 request.question(),
@@ -114,6 +129,9 @@ public class SqlGenerationService {
                 candidate.assumptions() != null ? candidate.assumptions() : List.of(),
                 candidate.warnings() != null ? candidate.warnings() : List.of(),
                 validationSummary,
-                executable);
+                true,
+                execCandidate.candidateId(),
+                execCandidate.confirmationToken(),
+                execCandidate.expiresAt());
     }
 }
