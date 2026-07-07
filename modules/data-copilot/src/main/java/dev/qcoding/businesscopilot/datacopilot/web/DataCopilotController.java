@@ -87,8 +87,8 @@ public class DataCopilotController {
     /** GET /api/data-copilot/audit-logs — 返回最近审计日志，分页 */
     @GetMapping("/audit-logs")
     public ResponseEntity<ApiResponse<List<QueryAuditLog>>> getAuditLogs(
-            @RequestParam(defaultValue = "0") @Min(0) int page,
-            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
+            @RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
+            @RequestParam(name = "size", defaultValue = "20") @Min(1) @Max(100) int size) {
         List<QueryAuditLog> logs = auditService.findRecent(page, size);
         return ResponseEntity.ok(ApiResponse.ok(logs));
     }

@@ -3,13 +3,13 @@ spring:
     name: spring-ai-business-copilot
   ai:
     model:
-      chat: ${SPRING_AI_MODEL_CHAT:none}
+      chat: ${SPRING_AI_MODEL_CHAT:openai}
     openai:
       api-key: ${SPRING_AI_OPENAI_API_KEY:}
-      base-url: ${SPRING_AI_OPENAI_BASE_URL:https://api.openai.com}
+      base-url: ${SPRING_AI_OPENAI_BASE_URL:https://api.deepseek.com}
       chat:
         options:
-          model: ${SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL:gpt-5-mini}
+          model: ${SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL:deepseek-v4-flash}
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/business_copilot}
     username: ${SPRING_DATASOURCE_USERNAME:copilot}
@@ -50,4 +50,4 @@ business-copilot:
     default-max-rows: 100
     require-limit: true
   ai-core:
-    model-name: ${SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL:gpt-5-mini}
+    model-name: ${SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL:deepseek-v4-flash}

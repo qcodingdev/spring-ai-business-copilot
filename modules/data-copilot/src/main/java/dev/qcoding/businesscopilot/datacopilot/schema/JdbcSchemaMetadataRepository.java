@@ -22,12 +22,14 @@ public class JdbcSchemaMetadataRepository implements SchemaMetadataRepository {
 
     private static final String FIND_COLUMNS_SQL = """
             SELECT column_name, data_type, is_nullable,
-                   col_description(attrelid, attnum) as description
+                   col_description(t.oid, a.attnum) as description
             FROM information_schema.columns c
-            LEFT JOIN pg_attribute a ON a.attname = c.column_name
-            LEFT JOIN pg_class t ON t.relname = c.table_name AND t.relnamespace = (
-                SELECT oid FROM pg_namespace WHERE nspname = 'public'
-            )
+            LEFT JOIN pg_namespace n ON n.nspname = c.table_schema
+            LEFT JOIN pg_class t ON t.relname = c.table_name AND t.relnamespace = n.oid
+            LEFT JOIN pg_attribute a ON a.attrelid = t.oid
+                AND a.attname = c.column_name
+                AND a.attnum > 0
+                AND NOT a.attisdropped
             WHERE c.table_schema = 'public' AND c.table_name = ?
             ORDER BY c.ordinal_position
             """;

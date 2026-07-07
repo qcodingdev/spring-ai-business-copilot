@@ -221,6 +221,25 @@ class SqlGuardrailServiceTest {
     }
 
     @Test
+    @DisplayName("high-sensitivity field inside expression blocked")
+    void sensitiveFieldInsideExpressionBlocked() {
+        SqlValidationResult result = service.validate(
+                "SELECT substring(password, 1, 2) AS password_prefix FROM customers LIMIT 10", properties);
+        assertThat(result.passed()).isFalse();
+        assertThat(result.violations()).anyMatch(v -> v.code().equals(SqlViolationCode.SENSITIVE_FIELD_BLOCKED.code()));
+    }
+
+    @Test
+    @DisplayName("high-sensitivity field inside CASE expression blocked")
+    void sensitiveFieldInsideCaseExpressionBlocked() {
+        SqlValidationResult result = service.validate(
+                "SELECT CASE WHEN token IS NULL THEN 'missing' ELSE 'present' END AS token_status FROM customers LIMIT 10",
+                properties);
+        assertThat(result.passed()).isFalse();
+        assertThat(result.violations()).anyMatch(v -> v.code().equals(SqlViolationCode.SENSITIVE_FIELD_BLOCKED.code()));
+    }
+
+    @Test
     @DisplayName("non-aggregate query without LIMIT rejected")
     void missingLimitRejected() {
         SqlValidationResult result = service.validate(

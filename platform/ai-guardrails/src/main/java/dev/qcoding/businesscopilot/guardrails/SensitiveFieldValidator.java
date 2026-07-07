@@ -1,7 +1,7 @@
 package dev.qcoding.businesscopilot.guardrails;
 
 import net.sf.jsqlparser.expression.Expression;
-import net.sf.jsqlparser.expression.Function;
+import net.sf.jsqlparser.expression.ExpressionVisitorAdapter;
 import net.sf.jsqlparser.schema.Column;
 import net.sf.jsqlparser.statement.select.PlainSelect;
 import net.sf.jsqlparser.statement.select.Select;
@@ -52,14 +52,21 @@ public class SensitiveFieldValidator implements SqlValidator {
         if (items == null) return;
         for (SelectItem<?> item : items) {
             Expression expr = item.getExpression();
-            if (expr instanceof Column col) {
-                String name = col.getColumnName();
+            collectBlockedColumns(expr, violations);
+            // SELECT * cannot statically determine columns; rely on execution-time masking.
+        }
+    }
+
+    private void collectBlockedColumns(Expression expr, List<SqlViolation> violations) {
+        if (expr == null) return;
+        expr.accept(new ExpressionVisitorAdapter() {
+            @Override
+            public void visit(Column column) {
+                String name = column.getColumnName();
                 if (policy.isBlocked(name)) {
                     violations.add(SqlViolation.of(SqlViolationCode.SENSITIVE_FIELD_BLOCKED, name(), name));
                 }
             }
-            // SELECT * or other expressions: cannot statically determine columns;
-            // rely on schema layer + masker at execution time.
-        }
+        });
     }
 }

@@ -17,9 +17,11 @@ import dev.qcoding.businesscopilot.datacopilot.schema.DataCopilotSchemaPropertie
 import dev.qcoding.businesscopilot.guardrails.GuardrailsProperties;
 import dev.qcoding.businesscopilot.guardrails.SensitiveDataMasker;
 import dev.qcoding.businesscopilot.guardrails.SqlGuardrailService;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
@@ -35,6 +37,19 @@ public class DataCopilotAutoConfiguration {
     @ConfigurationProperties(prefix = "business-copilot.data-copilot.schema")
     public DataCopilotSchemaProperties dataCopilotSchemaProperties() {
         return new DataCopilotSchemaProperties(null, null, null, 0);
+    }
+
+    @Bean
+    @Primary
+    public GuardrailsProperties dataCopilotGuardrailsProperties(
+            @Qualifier("guardrailsProperties") GuardrailsProperties guardrailsProperties,
+            DataCopilotSchemaProperties schemaProperties) {
+        return new GuardrailsProperties(
+                schemaProperties.queryableTables(),
+                guardrailsProperties.blockedColumns(),
+                guardrailsProperties.maskedColumns(),
+                guardrailsProperties.defaultMaxRows(),
+                guardrailsProperties.requireLimit());
     }
 
     @Bean

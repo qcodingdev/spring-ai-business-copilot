@@ -5,6 +5,7 @@ import dev.qcoding.businesscopilot.commonweb.api.ErrorCode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
@@ -35,7 +36,14 @@ public class AiChatService {
 
     /** Whether a usable chat model is configured. */
     public boolean isModelEnabled() {
-        return !properties.modelDisabled() && chatClientBuilderProvider.getIfAvailable() != null;
+        if (properties.modelDisabled()) {
+            return false;
+        }
+        try {
+            return chatClientBuilderProvider.getIfAvailable() != null;
+        } catch (BeansException ex) {
+            return false;
+        }
     }
 
     /** Configured model name, recorded in audit logs. */
@@ -76,7 +84,13 @@ public class AiChatService {
             throw new AiModelNotEnabledException(
                     "AI chat model is disabled (business-copilot.ai-core.model-disabled=true).");
         }
-        ChatClient.Builder builder = chatClientBuilderProvider.getIfAvailable();
+        ChatClient.Builder builder;
+        try {
+            builder = chatClientBuilderProvider.getIfAvailable();
+        } catch (BeansException ex) {
+            throw new AiModelNotEnabledException(
+                    "No AI chat model is configured. Set spring.ai.model.chat and provide API credentials.");
+        }
         if (builder == null) {
             // chat model 为 none 时 ChatClient.Builder bean 不会被创建，给出清晰错误
             throw new AiModelNotEnabledException(

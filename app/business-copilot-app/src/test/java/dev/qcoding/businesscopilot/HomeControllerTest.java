@@ -31,4 +31,11 @@ class HomeControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(view().name("index"));
     }
+
+    @Test
+    @DisplayName("GET /favicon.ico returns no content")
+    void faviconReturnsNoContent() throws Exception {
+        mockMvc.perform(get("/favicon.ico"))
+                .andExpect(status().isNoContent());
+    }
 }

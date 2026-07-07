@@ -1,6 +1,7 @@
 package dev.qcoding.businesscopilot.aicore;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 import org.springframework.beans.factory.ObjectProvider;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -32,6 +33,20 @@ class AiChatServiceTest {
         AiModelProperties props = new AiModelProperties("test", false, 1000);
         AiChatService service = new AiChatService(emptyProvider(), new JsonOutputParser(), props);
 
+        assertThatThrownBy(() -> service.generateText("test"))
+                .isInstanceOf(AiModelNotEnabledException.class)
+                .hasMessageContaining("No AI chat model");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void throwsClearErrorWhenChatClientBuilderProviderFails() {
+        ObjectProvider<org.springframework.ai.chat.client.ChatClient.Builder> provider = mock(ObjectProvider.class);
+        when(provider.getIfAvailable()).thenThrow(new NoSuchBeanDefinitionException("chatModel"));
+        AiModelProperties props = new AiModelProperties("test", false, 1000);
+        AiChatService service = new AiChatService(provider, new JsonOutputParser(), props);
+
+        assertThat(service.isModelEnabled()).isFalse();
         assertThatThrownBy(() -> service.generateText("test"))
                 .isInstanceOf(AiModelNotEnabledException.class)
                 .hasMessageContaining("No AI chat model");

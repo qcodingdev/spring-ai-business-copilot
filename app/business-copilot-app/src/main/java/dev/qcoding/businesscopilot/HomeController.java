@@ -1,6 +1,7 @@
 package dev.qcoding.businesscopilot;
 
 import org.springframework.stereotype.Controller;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 
 /**
@@ -15,5 +16,11 @@ public class HomeController {
     @GetMapping("/")
     public String index() {
         return "index";
+    }
+
+    /** GET /favicon.ico — avoid noisy 500s for the browser's automatic favicon request. */
+    @GetMapping("/favicon.ico")
+    public ResponseEntity<Void> favicon() {
+        return ResponseEntity.noContent().build();
     }
 }
