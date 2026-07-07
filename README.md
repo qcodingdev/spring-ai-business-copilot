@@ -14,7 +14,7 @@ It provides ready-to-run business modules that teams can clone, run, learn from,
 
 ### Prerequisites
 
-- Java 21
+- Java 21 (or run `./scripts/install-jdk21.sh` to install a project-local JDK under `.jdk/`)
 - Maven 3.9+
 - PostgreSQL 16 (or Docker)
 - An OpenAI-compatible chat model API key (optional; the app runs with AI features disabled if absent)
@@ -35,25 +35,36 @@ Flyway automatically creates sample business tables (customers, products, orders
 
 ### Option 2: Local Development
 
-1. Start a PostgreSQL instance and create a database:
+1. Install the project-local JDK 21:
 
-```sql
-CREATE DATABASE business_copilot;
+```bash
+./scripts/install-jdk21.sh
+./mvnw -version
 ```
 
-2. Run the application:
+`./mvnw` uses the JDK under `.jdk/` only for this project. It does not change your global `JAVA_HOME`.
+
+2. Start a PostgreSQL instance and create a database:
+
+```sql
+CREATE USER copilot WITH PASSWORD 'copilot';
+CREATE DATABASE business_copilot OWNER copilot;
+```
+
+3. Run the application:
 
 ```bash
 ./mvnw spring-boot:run -pl app/business-copilot-app \
   -DSPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/business_copilot \
   -DSPRING_DATASOURCE_USERNAME=copilot \
   -DSPRING_DATASOURCE_PASSWORD=copilot \
-  -DSPRING_AI_OPENAI_API_KEY=sk-... \
-  -DSPRING_AI_OPENAI_BASE_URL=https://api.openai.com \
-  -DSPRING_AI_OPENAI_CHAT_OPTIONS_MODEL=gpt-4o-mini
+  -DSPRING_AI_MODEL_CHAT=openai \
+  -DSPRING_AI_OPENAI_API_KEY=<your-api-key> \
+  -DSPRING_AI_OPENAI_BASE_URL=https://api.deepseek.com \
+  -DSPRING_AI_OPENAI_CHAT_OPTIONS_MODEL=deepseek-v4-flash
 ```
 
-3. Open **http://localhost:8080** in your browser.
+4. Open **http://localhost:8080** in your browser.
 
 ### Spring AI / OpenAI-Compatible Model Configuration
 
@@ -61,10 +72,10 @@ The app uses Spring AI with an OpenAI-compatible API. Configure via environment 
 
 | Variable | Default | Description |
 |---|---|---|
-| `SPRING_AI_MODEL_CHAT` | `none` | Set to `openai` to enable AI features |
+| `SPRING_AI_MODEL_CHAT` | `openai` | Set to `none` to disable AI features |
 | `SPRING_AI_OPENAI_API_KEY` | _(empty)_ | Your API key |
-| `SPRING_AI_OPENAI_BASE_URL` | `https://api.openai.com` | Base URL (change for compatible providers) |
-| `SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL` | `gpt-4o-mini` | Model name |
+| `SPRING_AI_OPENAI_BASE_URL` | `https://api.deepseek.com` | Base URL (change for compatible providers) |
+| `SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL` | `deepseek-v4-flash` | Model name |
 
 When `SPRING_AI_MODEL_CHAT=none` (the default), AI features are disabled. The workbench still loads, but SQL generation will return an error. This is useful for infrastructure testing without an API key.
 
@@ -109,6 +120,8 @@ spring-ai-business-copilot/
 ├── examples/
 │   ├── docker-compose.yml          # One-command startup
 │   └── .env.example                # Environment variable template
+├── scripts/
+│   └── install-jdk21.sh            # Project-local JDK installer
 ├── Dockerfile                       # Multi-stage build
 └── docs/
     └── data-copilot.md             # Module documentation

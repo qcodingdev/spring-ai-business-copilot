@@ -7,14 +7,13 @@ Spring AI Business Copilot 是一个面向个人开发者、中小团队和企�
 它不是另一个 AI 框架，而是一组可以直接运行、学习、改造和接入真实业务的 Spring AI 应用模块。
 
 > **V1 状态：** 目前只实现了 Data Copilot。其他模块（Resume Copilot、Support Copilot、Knowledge Copilot、Report Copilot）仅预留位置，尚未实现。
-
 ---
 
 ## 快速开始
 
 ### 前置条件
 
-- Java 21
+- Java 21（也可以运行 `./scripts/install-jdk21.sh`，安装到当前项目的 `.jdk/`）
 - Maven 3.9+
 - PostgreSQL 16（或 Docker）
 - OpenAI 兼容模型 API Key（可选；无 Key 时应用仍可启动，AI 功能不可用）
@@ -35,25 +34,36 @@ Flyway 会在首次启动时自动创建示例业务表（customers、products�
 
 ### 方式二：本地开发
 
-1. 启动 PostgreSQL 并创建数据库：
+1. 安装当前项目专用 JDK 21：
 
-```sql
-CREATE DATABASE business_copilot;
+```bash
+./scripts/install-jdk21.sh
+./mvnw -version
 ```
 
-2. 运行应用：
+`./mvnw` 只会使用 `.jdk/` 下的 JDK，不会修改全局 `JAVA_HOME`。
+
+2. 启动 PostgreSQL 并创建数据库：
+
+```sql
+CREATE USER copilot WITH PASSWORD 'copilot';
+CREATE DATABASE business_copilot OWNER copilot;
+```
+
+3. 运行应用：
 
 ```bash
 ./mvnw spring-boot:run -pl app/business-copilot-app \
   -DSPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/business_copilot \
   -DSPRING_DATASOURCE_USERNAME=copilot \
   -DSPRING_DATASOURCE_PASSWORD=copilot \
-  -DSPRING_AI_OPENAI_API_KEY=sk-... \
-  -DSPRING_AI_OPENAI_BASE_URL=https://api.openai.com \
-  -DSPRING_AI_OPENAI_CHAT_OPTIONS_MODEL=gpt-4o-mini
+  -DSPRING_AI_MODEL_CHAT=openai \
+  -DSPRING_AI_OPENAI_API_KEY=<your-api-key> \
+  -DSPRING_AI_OPENAI_BASE_URL=https://api.deepseek.com \
+  -DSPRING_AI_OPENAI_CHAT_OPTIONS_MODEL=deepseek-v4-flash
 ```
 
-3. 浏览器打开 **http://localhost:8080**。
+4. 浏览器打开 **http://localhost:8080**。
 
 ### Spring AI / OpenAI 兼容模型配置
 
@@ -61,10 +71,10 @@ CREATE DATABASE business_copilot;
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
-| `SPRING_AI_MODEL_CHAT` | `none` | 设为 `openai` 启用 AI 功能 |
+| `SPRING_AI_MODEL_CHAT` | `openai` | 设为 `none` 可关闭 AI 功能 |
 | `SPRING_AI_OPENAI_API_KEY` | _(空)_ | API Key |
-| `SPRING_AI_OPENAI_BASE_URL` | `https://api.openai.com` | API 基础地址（可替换为兼容服务商） |
-| `SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL` | `gpt-4o-mini` | 模型名称 |
+| `SPRING_AI_OPENAI_BASE_URL` | `https://api.deepseek.com` | API 基础地址（可替换为兼容服务商） |
+| `SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL` | `deepseek-v4-flash` | 模型名称 |
 
 `SPRING_AI_MODEL_CHAT=none`（默认）时 AI 功能关闭，工作台可正常加载但 SQL 生成会报错。适合无 Key 时验证基础设施。
 
@@ -109,6 +119,8 @@ spring-ai-business-copilot/
 ├── examples/
 │   ├── docker-compose.yml          # 一键启动
 │   └── .env.example                # 环境变量模板
+├── scripts/
+│   └── install-jdk21.sh            # 当前项目专用 JDK 安装脚本
 ├── Dockerfile                       # 多阶段构建
 └── docs/
     └── data-copilot.md             # 模块文档
