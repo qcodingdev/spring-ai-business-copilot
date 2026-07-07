@@ -8,6 +8,8 @@ It provides ready-to-run business modules that teams can clone, run, learn from,
 
 > **V1 status:** Only Data Copilot is implemented. Other modules (Resume Copilot, Support Copilot, Knowledge Copilot, Report Copilot) are reserved for future work and are not yet usable.
 
+![Data Copilot workbench](img.png)
+
 ---
 
 ## Quick Start
@@ -25,7 +27,7 @@ It provides ready-to-run business modules that teams can clone, run, learn from,
 cd examples
 cp .env.example .env
 # Edit .env and add your API key if you have one:
-#   SPRING_AI_OPENAI_API_KEY=sk-...
+#   SPRING_AI_OPENAI_API_KEY=<your-api-key>
 docker compose up --build
 ```
 

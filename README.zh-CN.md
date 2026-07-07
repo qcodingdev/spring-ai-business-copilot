@@ -7,6 +7,9 @@ Spring AI Business Copilot 是一个面向个人开发者、中小团队和企�
 它不是另一个 AI 框架，而是一组可以直接运行、学习、改造和接入真实业务的 Spring AI 应用模块。
 
 > **V1 状态：** 目前只实现了 Data Copilot。其他模块（Resume Copilot、Support Copilot、Knowledge Copilot、Report Copilot）仅预留位置，尚未实现。
+
+![Data Copilot 工作台](img.png)
+
 ---
 
 ## 快速开始
@@ -24,7 +27,7 @@ Spring AI Business Copilot 是一个面向个人开发者、中小团队和企�
 cd examples
 cp .env.example .env
 # 如果有 API Key，编辑 .env 添加：
-#   SPRING_AI_OPENAI_API_KEY=sk-...
+#   SPRING_AI_OPENAI_API_KEY=<your-api-key>
 docker compose up --build
 ```
 
