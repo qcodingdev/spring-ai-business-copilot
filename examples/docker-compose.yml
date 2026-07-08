@@ -1,15 +1,16 @@
-# PostgreSQL 16 + Spring AI Business Copilot 一键启动。
+# PostgreSQL 16 + pgvector + Spring AI Business Copilot 一键启动。
 # 用法：
 #   cd examples && cp .env.example .env   # 按需填写 API Key
 #   docker compose up --build
-# 启动后访问 http://localhost:8080 ，Flyway 自动初始化示例业务库和审计表。
+# 启动后访问 http://localhost:8080 ，Flyway 自动初始化示例业务库、审计表和 Knowledge Copilot 相关表。
 #
 # 仅启动 PostgreSQL（不要应用）：
 #   docker compose up postgres
 
 services:
   postgres:
-    image: postgres:16-alpine
+    # pgvector 官方镜像，内置 pgvector 扩展，无需手动安装。
+    image: pgvector/pgvector:pg16
     container_name: copilot-postgres
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-business_copilot}
@@ -38,10 +39,16 @@ services:
       SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:postgresql://postgres:5432/business_copilot}
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-copilot}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-copilot}
+      # ── Chat Model ──────────────────────────────────────────────
       SPRING_AI_MODEL_CHAT: ${SPRING_AI_MODEL_CHAT:-none}
       SPRING_AI_OPENAI_API_KEY: ${SPRING_AI_OPENAI_API_KEY:-}
       SPRING_AI_OPENAI_BASE_URL: ${SPRING_AI_OPENAI_BASE_URL:-https://api.openai.com}
       SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL: ${SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL:-gpt-5-mini}
+      # ── Embedding Model ─────────────────────────────────────────
+      # Knowledge Copilot 依赖 embedding 模型进行文档向量化和检索。
+      # 使用 OpenAI 兼容的 embedding 模型（如 text-embedding-3-small）。
+      SPRING_AI_MODEL_EMBEDDING: ${SPRING_AI_MODEL_EMBEDDING:-openai}
+      SPRING_AI_OPENAI_EMBEDDING_MODEL: ${SPRING_AI_OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
     ports:
       - "8080:8080"
 
