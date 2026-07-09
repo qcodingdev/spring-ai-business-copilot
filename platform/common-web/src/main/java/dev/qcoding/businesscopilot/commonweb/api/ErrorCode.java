@@ -31,6 +31,21 @@ public enum ErrorCode {
     /** Read-only query execution failed. */
     QUERY_EXECUTION_ERROR("BIZ_0300", "Query execution failed"),
 
+    /** Uploaded document is empty. */
+    DOCUMENT_EMPTY("BIZ_0400", "Uploaded document is empty"),
+
+    /** Uploaded document exceeds the configured size limit. */
+    DOCUMENT_TOO_LARGE("BIZ_0401", "Uploaded document exceeds size limit"),
+
+    /** Uploaded document format is not supported. */
+    DOCUMENT_FORMAT_UNSUPPORTED("BIZ_0402", "Unsupported document format"),
+
+    /** Uploaded document content duplicates an existing document. */
+    DOCUMENT_DUPLICATE("BIZ_0403", "Document with same content already exists"),
+
+    /** Embedding dimension returned by model does not match the configured database column dimension. */
+    EMBEDDING_DIMENSION_MISMATCH("BIZ_0404", "Embedding dimension mismatch"),
+
     /** Internal server error that must not leak internals to the client. */
     INTERNAL_ERROR("SYS_5000", "Internal server error");
 

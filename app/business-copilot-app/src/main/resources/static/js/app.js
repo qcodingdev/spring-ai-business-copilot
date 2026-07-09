@@ -253,5 +253,18 @@ function resetCandidatePanels() {
   hide($('explanation-panel'));
 }
 
+// ── 模块切换 ──────────────────────────────────────────────────
+document.querySelectorAll('.tab-bar .tab').forEach((tab) => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab-bar .tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+
+    const target = tab.dataset.tab;
+    document.querySelectorAll('.tab-content').forEach(c => hide(c));
+    const content = document.getElementById('tab-' + target);
+    if (content) show(content);
+  });
+});
+
 // 初始加载审计记录
 loadAuditLogs();

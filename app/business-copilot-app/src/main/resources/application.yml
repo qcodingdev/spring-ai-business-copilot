@@ -51,3 +51,26 @@ business-copilot:
     require-limit: true
   ai-core:
     model-name: ${SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL:deepseek-v4-flash}
+  # ── Knowledge Copilot 配置 ─────────────────────────────────────
+  # embedding-dimension 必须与 V4 迁移中 knowledge_chunk_embeddings.embedding 列维度
+  # 以及实际 embedding 模型输出维度一致，否则向量写入或检索会失败。
+  knowledge:
+    enabled: true
+    max-document-size: 2097152
+    top-k: 5
+    min-similarity: 0.70
+    embedding-model-name: ${SPRING_AI_OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
+    embedding-dimension: 1536
+    chunking:
+      chunk-size: 800
+      chunk-overlap: 100
+  # ── Support Copilot 配置 ─────────────────────────────────────
+  # 智能客服助手。工单输入入库前脱敏，回复草稿生成后需人工确认。
+  # high-risk-categories 中的分类默认标记 needsHuman=true。
+  support-copilot:
+    enabled: true
+    max-ticket-length: 2000
+    draft-ttl-minutes: 10
+    high-risk-categories: REFUND,ACCOUNT_SECURITY,INCIDENT
+    auto-human-handoff-enabled: true
+    knowledge-top-k: 5

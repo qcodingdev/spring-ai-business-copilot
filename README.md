@@ -6,7 +6,7 @@ Spring AI Business Copilot is an open-source Java AI business application suite 
 
 It provides ready-to-run business modules that teams can clone, run, learn from, and adapt to real business systems. The goal is not to provide another AI framework, but to provide practical Spring AI applications.
 
-> **V1 status:** Only Data Copilot is implemented. Other modules (Resume Copilot, Support Copilot, Knowledge Copilot, Report Copilot) are reserved for future work and are not yet usable.
+> **V3 status:** Data Copilot is implemented and stable. Knowledge Copilot (enterprise knowledge base assistant) has been implemented as the second module. Support Copilot (intelligent customer service assistant) has been implemented as the third module. Resume Copilot and Report Copilot remain future candidates.
 
 ![Data Copilot workbench](img.png)
 
@@ -107,6 +107,55 @@ See [docs/data-copilot.md](docs/data-copilot.md) for the full module documentati
 
 ---
 
+## Second Module: Knowledge Copilot
+
+Knowledge Copilot is the second business module. It helps teams ask questions over internal documents and receive answers with source citations.
+
+**Key capabilities:**
+
+- Document upload (Markdown, TXT) with automatic chunking and embedding
+- pgvector-based semantic retrieval with configurable topK and similarity thresholds
+- LLM-powered answer generation with mandatory source citations
+- Citation guardrail validation — answers without citations are rejected
+- "No evidence" refusal when knowledge base lacks relevant content
+- Sensitive content masking (phone, email, token, secret, password, id_card)
+- Question answering audit logs
+- Document enable/disable for retrieval control
+
+**Prompt constraints:** The LLM is instructed to answer only based on provided chunks, never from model "common sense" about internal company facts. Every key conclusion must have a corresponding citation. Uncertain output defaults to `NO_EVIDENCE`.
+
+See [docs/knowledge-copilot.md](docs/knowledge-copilot.md) for the full module documentation.
+
+---
+
+## Third Module: Support Copilot
+
+Support Copilot is the third business module. It is an intelligent customer service assistant that helps support teams classify tickets, identify urgency and sentiment, retrieve knowledge-base evidence, and draft replies for human confirmation.
+
+**Key capabilities:**
+
+- Ticket classification (REFUND, ACCOUNT_ACTIVATION, INCIDENT, ACCOUNT_SECURITY, BILLING, PRODUCT_USAGE, OTHER)
+- Sentiment detection (NEUTRAL, CONFUSED, FRUSTRATED, ANGRY)
+- Urgency assessment (LOW, MEDIUM, HIGH, CRITICAL)
+- Knowledge-base evidence retrieval via Knowledge Copilot integration
+- AI-generated reply drafts with mandatory evidence citations
+- High-risk ticket auto-escalation (refund, compensation, security, incidents)
+- Reply draft risk guardrails — forbidden commitments (refund promises, specific timelines) are blocked
+- Server-side confirmation token mechanism — client-supplied draft text is never trusted
+- Full audit trail (CLASSIFIED, DRAFTED, NEEDS_HUMAN, CONFIRMED, CANCELED, FAILED)
+- Sensitive information masking on all inputs and outputs
+
+**Important boundaries:**
+- Does NOT auto-send messages — all replies require human confirmation
+- Does NOT execute real refund, order, account, compensation, or contract operations
+- Does NOT connect to real customer service platforms
+- Does NOT implement multi-channel session aggregation, shift scheduling, or SLA workflows
+- Does NOT train on or store unmasked customer data
+
+See [docs/support-copilot.md](docs/support-copilot.md) for the full module documentation.
+
+---
+
 ## Project Structure
 
 ```
@@ -118,15 +167,19 @@ spring-ai-business-copilot/
 │   ├── ai-tool-audit/              # Query audit logging
 │   └── common-web/                 # Unified API response, error handling
 ├── modules/
-│   └── data-copilot/               # Data Copilot module (v1)
+│   ├── data-copilot/               # Data Copilot module (v1)
+│   ├── knowledge-copilot/          # Knowledge Copilot module (v2)
+│   └── support-copilot/            # Support Copilot module (v3)
 ├── examples/
-│   ├── docker-compose.yml          # One-command startup
+│   ├── docker-compose.yml          # One-command startup (PostgreSQL + pgvector)
 │   └── .env.example                # Environment variable template
 ├── scripts/
 │   └── install-jdk21.sh            # Project-local JDK installer
 ├── Dockerfile                       # Multi-stage build
 └── docs/
-    └── data-copilot.md             # Module documentation
+    ├── data-copilot.md             # Data Copilot documentation
+    ├── knowledge-copilot.md        # Knowledge Copilot documentation
+    └── support-copilot.md          # Support Copilot planning
 ```
 
 ---

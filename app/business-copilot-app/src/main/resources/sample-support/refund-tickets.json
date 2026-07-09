@@ -1,0 +1,34 @@
+[
+  {
+    "customerMessage": "我昨天购买了年费会员，扣了 368 元，但发现不是我要的功能，我要全额退款！订单号是 ORD-2026-0701-001，请马上处理。",
+    "channel": "web",
+    "category": "REFUND",
+    "sentiment": "ANGRY",
+    "urgency": "HIGH",
+    "summary": "客户购买后发现功能不符要求全额退款，情绪激烈，有明确订单号。"
+  },
+  {
+    "customerMessage": "上个月买的商品质量有问题，用了两周就坏了，我需要退货退款，请问怎么走流程？",
+    "channel": "chat",
+    "category": "REFUND",
+    "sentiment": "FRUSTRATED",
+    "urgency": "MEDIUM",
+    "summary": "客户因商品质量问题要求退货退款，询问退款流程。"
+  },
+  {
+    "customerMessage": "想了解一下如果我在试用期内取消订阅，会不会产生任何费用？退款政策怎么规定？",
+    "channel": "email",
+    "category": "REFUND",
+    "sentiment": "NEUTRAL",
+    "urgency": "LOW",
+    "summary": "客户咨询试用期取消订阅的退款政策。"
+  },
+  {
+    "customerMessage": "你们的退款条款完全是霸王条款！我申请了三次退款都不给我退，我要去消费者协会投诉！不要以为消费者好欺负。",
+    "channel": "web",
+    "category": "REFUND",
+    "sentiment": "ANGRY",
+    "urgency": "CRITICAL",
+    "summary": "客户多次申请退款被拒后情绪非常激烈，威胁投诉，存在法律和声誉风险。"
+  }
+]

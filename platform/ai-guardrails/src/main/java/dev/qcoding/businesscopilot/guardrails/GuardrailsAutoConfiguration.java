@@ -31,6 +31,11 @@ public class GuardrailsAutoConfiguration {
     }
 
     @Bean
+    public SensitiveTextMasker sensitiveTextMasker() {
+        return new SensitiveTextMasker();
+    }
+
+    @Bean
     public SqlGuardrailService sqlGuardrailService(GuardrailsProperties properties,
                                                     SensitiveFieldPolicy sensitiveFieldPolicy) {
         List<SqlValidator> validators = List.of(

@@ -81,6 +81,11 @@ public class GlobalExceptionHandler {
             case AI_MODEL_ERROR -> HttpStatus.SERVICE_UNAVAILABLE;
             case AI_OUTPUT_PARSE_ERROR -> HttpStatus.SERVICE_UNAVAILABLE;
             case QUERY_EXECUTION_ERROR -> HttpStatus.INTERNAL_SERVER_ERROR;
+            case DOCUMENT_EMPTY -> HttpStatus.BAD_REQUEST;
+            case DOCUMENT_TOO_LARGE -> HttpStatus.PAYLOAD_TOO_LARGE;
+            case DOCUMENT_FORMAT_UNSUPPORTED -> HttpStatus.BAD_REQUEST;
+            case DOCUMENT_DUPLICATE -> HttpStatus.CONFLICT;
+            case EMBEDDING_DIMENSION_MISMATCH -> HttpStatus.INTERNAL_SERVER_ERROR;
             case INTERNAL_ERROR -> HttpStatus.INTERNAL_SERVER_ERROR;
         };
     }

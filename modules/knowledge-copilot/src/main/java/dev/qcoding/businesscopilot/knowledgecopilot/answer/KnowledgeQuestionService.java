@@ -1,0 +1,75 @@
+package dev.qcoding.businesscopilot.knowledgecopilot.answer;
+
+import dev.qcoding.businesscopilot.knowledgecopilot.retrieval.KnowledgeRetrievalService;
+import dev.qcoding.businesscopilot.knowledgecopilot.retrieval.RetrievedKnowledgeChunk;
+import jakarta.validation.Valid;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.validation.annotation.Validated;
+
+import java.util.List;
+
+/**
+ * Main orchestration service for the Knowledge Copilot question-answering pipeline.
+ *
+ * <p>知识问答主流程编排服务。接收用户问题，协调检索和答案生成：
+ * <ol>
+ *   <li>调用 {@link KnowledgeRetrievalService} 检索相关 chunks</li>
+ *   <li>调用 {@link KnowledgeAnswerService} 生成结构化答案</li>
+ * </ol>
+ * 不处理多轮对话记忆、流式输出或跨用户权限过滤。</p>
+ */
+@Validated
+public class KnowledgeQuestionService {
+
+    private static final Logger log = LoggerFactory.getLogger(KnowledgeQuestionService.class);
+
+    private final KnowledgeRetrievalService retrievalService;
+    private final KnowledgeAnswerService answerService;
+
+    public KnowledgeQuestionService(KnowledgeRetrievalService retrievalService,
+                                     KnowledgeAnswerService answerService) {
+        this.retrievalService = retrievalService;
+        this.answerService = answerService;
+    }
+
+    /**
+     * Answer a question using the knowledge base.
+     *
+     * <p>完整问答流程：
+     * <ol>
+     *   <li>检索：问题向量化 → 从 enabled 文档中检索 topK 相似 chunks</li>
+     *   <li>答案生成：基于检索到的 chunks 调用 LLM 生成结构化答案</li>
+     *   <li>Guardrail：校验 citation 完整性，脱敏检查</li>
+     * </ol>
+     * 检索结果为空或所有 chunk 相似度过低时，直接返回 NO_EVIDENCE，不调用 LLM。</p>
+     *
+     * @param request the question request
+     * @return structured answer response with status, answer, citations, and warnings
+     */
+    public KnowledgeAnswerResponse ask(@Valid KnowledgeAnswerRequest request) {
+        String question = request.question().trim();
+        log.info("Knowledge Q&A: question='{}'", truncate(question));
+
+        long startTime = System.currentTimeMillis();
+
+        // 1. 检索
+        List<RetrievedKnowledgeChunk> retrievedChunks = retrievalService.retrieve(question);
+
+        // 2. 答案生成（含 citation 校验和脱敏）
+        KnowledgeAnswerResponse response = answerService.answer(question, retrievedChunks);
+
+        long latencyMs = System.currentTimeMillis() - startTime;
+        log.info("Knowledge Q&A completed: status={}, citations={}, latencyMs={}",
+                response.status(),
+                response.citations() != null ? response.citations().size() : 0,
+                latencyMs);
+
+        return response;
+    }
+
+    private static String truncate(String text) {
+        if (text == null) return "null";
+        return text.length() > 100 ? text.substring(0, 100) + "..." : text;
+    }
+}

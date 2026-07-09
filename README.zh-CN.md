@@ -6,7 +6,7 @@ Spring AI Business Copilot 是一个面向个人开发者、中小团队和企�
 
 它不是另一个 AI 框架，而是一组可以直接运行、学习、改造和接入真实业务的 Spring AI 应用模块。
 
-> **V1 状态：** 目前只实现了 Data Copilot。其他模块（Resume Copilot、Support Copilot、Knowledge Copilot、Report Copilot）仅预留位置，尚未实现。
+> **V3 状态：** Data Copilot 已实现且稳定。Knowledge Copilot（企业知识库助手）已作为第二模块实现。Support Copilot（智能客服助手）已作为第三模块实现。Resume Copilot 和 Report Copilot 仍作为后续候选。
 
 ![Data Copilot 工作台](img.png)
 
@@ -107,6 +107,55 @@ Data Copilot 是数据库查询助手。用户用自然语言提问，系统生�
 
 ---
 
+## 第二模块：Knowledge Copilot
+
+Knowledge Copilot 是第二个业务模块，用于基于企业内部文档进行问答，并返回来源引用。
+
+**核心能力：**
+
+- 文档上传（Markdown、TXT），自动分片和向量化
+- 基于 pgvector 的语义检索，topK 和相似度阈值可配置
+- LLM 驱动的答案生成，强制带有来源引用
+- 引用 guardrail 校验 — 无引用的回答会被拒绝
+- 知识库无相关内容时返回"无依据"
+- 敏感内容脱敏（手机号、邮箱、token、secret、password、id_card）
+- 问答审计日志
+- 文档启用/停用控制检索范围
+
+**Prompt 约束：** LLM 被指示只能基于提供的知识片段回答，不得使用模型常识补充企业内部事实。每个关键结论必须对应引用。不确定时输出 `NO_EVIDENCE`。
+
+完整模块文档见 [docs/knowledge-copilot.md](docs/knowledge-copilot.md)。
+
+---
+
+## 第三模块：Support Copilot
+
+Support Copilot 是第三个业务模块，定位为智能客服助手，帮助客服团队分类工单、识别紧急程度和情绪、检索知识库依据，并生成需要人工确认的回复草稿。
+
+**核心能力：**
+
+- 工单分类（退款、开通、故障、账号安全、计费、产品使用等）
+- 情绪识别（中立、困惑、不满、愤怒）
+- 紧急程度判断（低、中、高、严重）
+- 通过 Knowledge Copilot 集成检索知识依据
+- AI 生成带有强制引用的回复草稿
+- 高风险工单自动转人工（退款、赔偿、安全、故障）
+- 回复草稿风险 guardrail — 拦截禁止承诺（退款承诺、明确时效等）
+- 服务端确认 token 机制 — 不信任客户端传递的草稿正文
+- 完整审计链路（分类、草稿生成、转人工、确认、取消、失败）
+- 所有输入输出敏感信息脱敏
+
+**重要边界：**
+- 不自动发送消息 — 所有回复需人工确认
+- 不执行真实退款、订单、账号、赔偿或合同操作
+- 不接入真实客服平台
+- 不实现多渠道聚合、排班、SLA 流转
+- 不存储或训练未脱敏客户数据
+
+完整模块文档见 [docs/support-copilot.md](docs/support-copilot.md)。
+
+---
+
 ## 项目结构
 
 ```
@@ -118,15 +167,19 @@ spring-ai-business-copilot/
 │   ├── ai-tool-audit/              # 查询审计日志
 │   └── common-web/                 # 统一 API 响应、异常处理
 ├── modules/
-│   └── data-copilot/               # Data Copilot 模块（V1）
+│   ├── data-copilot/               # Data Copilot 模块（V1）
+│   ├── knowledge-copilot/          # Knowledge Copilot 模块（V2）
+│   └── support-copilot/            # Support Copilot 模块（V3）
 ├── examples/
-│   ├── docker-compose.yml          # 一键启动
+│   ├── docker-compose.yml          # 一键启动（PostgreSQL + pgvector）
 │   └── .env.example                # 环境变量模板
 ├── scripts/
 │   └── install-jdk21.sh            # 当前项目专用 JDK 安装脚本
 ├── Dockerfile                       # 多阶段构建
 └── docs/
-    └── data-copilot.md             # 模块文档
+    ├── data-copilot.md             # Data Copilot 文档
+    ├── knowledge-copilot.md        # Knowledge Copilot 文档
+    └── support-copilot.md          # Support Copilot 规划
 ```
 
 ---

@@ -186,3 +186,244 @@ tbody tr:hover { background: #fafbfc; }
 @media (max-width: 899px) {
   .container { padding: 16px 12px 40px; }
 }
+
+/* ── 模块切换标签栏 ────────────────────────────────────────── */
+.tab-bar {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 20px;
+}
+.tab-bar .tab {
+  padding: 10px 24px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  margin: 0 0 -2px 0;
+  border-radius: 0;
+  transition: color 0.15s, border-color 0.15s;
+}
+.tab-bar .tab:hover { color: var(--text); }
+.tab-bar .tab.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+/* ── Text Input ────────────────────────────────────────────── */
+.text-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+}
+.text-input:focus { outline: 2px solid var(--primary); border-color: var(--primary); }
+
+/* ── Upload Form ───────────────────────────────────────────── */
+.upload-form .field-group { margin-bottom: 12px; }
+
+.inline-status {
+  margin-left: 12px;
+  font-size: 13px;
+  color: var(--pass);
+}
+.inline-status.error { color: var(--danger); }
+
+/* ── Answer Text ───────────────────────────────────────────── */
+.answer-text {
+  font-size: 15px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ── Citation List ─────────────────────────────────────────── */
+.citation-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.citation-list li {
+  padding: 8px 12px;
+  border-left: 3px solid var(--primary);
+  background: var(--code-bg);
+  margin-bottom: 6px;
+  border-radius: 0 6px 6px 0;
+  font-size: 13px;
+}
+.citation-list li .chunk-id {
+  font-weight: 600;
+  color: var(--primary);
+  margin-right: 8px;
+}
+
+/* ── Warnings List ─────────────────────────────────────────── */
+.warnings-list {
+  color: var(--warn);
+  margin: 0;
+  padding-left: 20px;
+}
+.warnings-list li { margin-bottom: 4px; }
+
+/* ── Toggle Switch ─────────────────────────────────────────── */
+.toggle-wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.toggle-switch {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  display: inline-block;
+}
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: #ccc;
+  border-radius: 24px;
+  transition: background 0.2s;
+}
+.toggle-slider::before {
+  content: "";
+  position: absolute;
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+.toggle-switch input:checked + .toggle-slider { background: var(--pass); }
+.toggle-switch input:checked + .toggle-slider::before { transform: translateX(20px); }
+
+/* ── Support Copilot 额外样式 ──────────────────────────────── */
+
+.meta-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+}
+
+.meta-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.sample-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sample-btn {
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+
+.sample-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: #f0f5ff;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.btn-primary {
+  padding: 10px 24px;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--pass);
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.btn-primary:hover { background: #15803d; }
+
+.btn-secondary {
+  padding: 10px 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.btn-secondary:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.snippet {
+  margin: 4px 0 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.badge-info { background: #dbeafe; color: #1e40af; }
+.badge-warn { background: #fef3c7; color: #92400e; }
+.badge-pass { background: #dcfce7; color: #166534; }
+.badge-fail { background: #fee2e2; color: #991b1b; }
+
+.text-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-family: inherit;
+}
+
+/* ── 移动端基本适配 ────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .meta-grid {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .action-buttons {
+    flex-direction: column;
+  }
+  .sample-buttons {
+    flex-direction: column;
+  }
+  .sample-btn {
+    width: 100%;
+    text-align: center;
+  }
+}

@@ -18,6 +18,8 @@
         <module>platform/ai-guardrails</module>
         <module>platform/ai-tool-audit</module>
         <module>modules/data-copilot</module>
+        <module>modules/knowledge-copilot</module>
+        <module>modules/support-copilot</module>
         <module>app/business-copilot-app</module>
     </modules>
 

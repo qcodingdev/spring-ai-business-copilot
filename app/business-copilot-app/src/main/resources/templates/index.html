@@ -3,96 +3,312 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Data Copilot</title>
+  <title>AI Business Copilot</title>
   <link rel="stylesheet" th:href="@{/css/app.css}"/>
 </head>
 <body>
 <div class="container">
 
   <header>
-    <h1>Data Copilot</h1>
-    <p class="subtitle">用自然语言查询业务数据</p>
+    <h1>AI Business Copilot</h1>
+    <p class="subtitle">企业智能助手工作台</p>
   </header>
 
-  <!-- 问题输入区 -->
-  <section class="panel" id="question-panel">
-    <label for="question-input">业务问题</label>
-    <textarea id="question-input" rows="3" placeholder="例如：上个月销售额最高的前5个客户是谁？"></textarea>
-    <button id="generate-btn" type="button">生成 SQL</button>
-  </section>
+  <!-- 模块切换 -->
+  <nav class="tab-bar">
+    <button class="tab active" data-tab="data-copilot">Data Copilot</button>
+    <button class="tab" data-tab="knowledge-copilot">Knowledge Copilot</button>
+    <button class="tab" data-tab="support-copilot">Support Copilot</button>
+  </nav>
 
-  <!-- SQL 候选区 -->
-  <section class="panel" id="candidate-panel" hidden>
-    <h2>SQL 候选</h2>
-    <div class="field-group">
-      <label>SQL</label>
-      <pre id="candidate-sql" class="code-block"></pre>
-    </div>
-    <div class="meta-row">
-      <span><strong>摘要：</strong><span id="candidate-summary"></span></span>
-    </div>
-    <div class="meta-row" id="assumptions-row" hidden>
-      <strong>假设：</strong><span id="candidate-assumptions"></span>
-    </div>
-    <div class="meta-row" id="warnings-row" hidden>
-      <strong>警告：</strong><span id="candidate-warnings"></span>
-    </div>
-  </section>
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- Data Copilot 面板 -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div id="tab-data-copilot" class="tab-content">
 
-  <!-- Guardrails 区 -->
-  <section class="panel" id="guardrails-panel" hidden>
-    <h2>安全校验</h2>
-    <div id="guardrails-pass" hidden>
-      <span class="badge badge-pass">通过</span>
-      <span>SQL 通过安全校验，可以执行。</span>
-    </div>
-    <div id="guardrails-fail" hidden>
-      <span class="badge badge-fail">失败</span>
-      <ul id="guardrails-violations"></ul>
-    </div>
-  </section>
+    <!-- 问题输入区 -->
+    <section class="panel" id="question-panel">
+      <label for="question-input">业务问题</label>
+      <textarea id="question-input" rows="3" placeholder="例如：上个月销售额最高的前5个客户是谁？"></textarea>
+      <button id="generate-btn" type="button">生成 SQL</button>
+    </section>
 
-  <!-- 确认执行按钮 -->
-  <section id="confirm-panel" hidden>
-    <input type="hidden" id="candidate-id"/>
-    <input type="hidden" id="confirmation-token"/>
-    <button id="execute-btn" type="button" disabled>确认执行</button>
-  </section>
+    <!-- SQL 候选区 -->
+    <section class="panel" id="candidate-panel" hidden>
+      <h2>SQL 候选</h2>
+      <div class="field-group">
+        <label>SQL</label>
+        <pre id="candidate-sql" class="code-block"></pre>
+      </div>
+      <div class="meta-row">
+        <span><strong>摘要：</strong><span id="candidate-summary"></span></span>
+      </div>
+      <div class="meta-row" id="assumptions-row" hidden>
+        <strong>假设：</strong><span id="candidate-assumptions"></span>
+      </div>
+      <div class="meta-row" id="warnings-row" hidden>
+        <strong>警告：</strong><span id="candidate-warnings"></span>
+      </div>
+    </section>
 
-  <!-- 结果表格 -->
-  <section class="panel" id="result-panel" hidden>
-    <h2>查询结果 <span id="result-row-count" class="badge"></span></h2>
-    <div id="result-truncated" hidden>
-      <span class="badge badge-warn">结果已截断</span>
-    </div>
-    <div class="table-scroll">
-      <table id="result-table">
-        <thead id="result-thead"></thead>
-        <tbody id="result-tbody"></tbody>
+    <!-- Guardrails 区 -->
+    <section class="panel" id="guardrails-panel" hidden>
+      <h2>安全校验</h2>
+      <div id="guardrails-pass" hidden>
+        <span class="badge badge-pass">通过</span>
+        <span>SQL 通过安全校验，可以执行。</span>
+      </div>
+      <div id="guardrails-fail" hidden>
+        <span class="badge badge-fail">失败</span>
+        <ul id="guardrails-violations"></ul>
+      </div>
+    </section>
+
+    <!-- 确认执行按钮 -->
+    <section id="confirm-panel" hidden>
+      <input type="hidden" id="candidate-id"/>
+      <input type="hidden" id="confirmation-token"/>
+      <button id="execute-btn" type="button" disabled>确认执行</button>
+    </section>
+
+    <!-- 结果表格 -->
+    <section class="panel" id="result-panel" hidden>
+      <h2>查询结果 <span id="result-row-count" class="badge"></span></h2>
+      <div id="result-truncated" hidden>
+        <span class="badge badge-warn">结果已截断</span>
+      </div>
+      <div class="table-scroll">
+        <table id="result-table">
+          <thead id="result-thead"></thead>
+          <tbody id="result-tbody"></tbody>
+        </table>
+      </div>
+      <div id="result-empty" hidden class="empty-state">
+        <p>未查询到匹配数据。</p>
+      </div>
+    </section>
+
+    <!-- AI 解释区 -->
+    <section class="panel" id="explanation-panel" hidden>
+      <h2>AI 解释</h2>
+      <p id="explanation-text"></p>
+      <span id="explanation-degraded" class="badge badge-warn" hidden>降级</span>
+    </section>
+
+    <!-- 审计记录预览 -->
+    <section class="panel" id="audit-panel">
+      <h2>最近查询记录</h2>
+      <table id="audit-table">
+        <thead>
+          <tr><th>时间</th><th>问题</th><th>状态</th><th>行数</th></tr>
+        </thead>
+        <tbody id="audit-tbody"></tbody>
       </table>
-    </div>
-    <div id="result-empty" hidden class="empty-state">
-      <p>未查询到匹配数据。</p>
-    </div>
-  </section>
+    </section>
 
-  <!-- AI 解释区 -->
-  <section class="panel" id="explanation-panel" hidden>
-    <h2>AI 解释</h2>
-    <p id="explanation-text"></p>
-    <span id="explanation-degraded" class="badge badge-warn" hidden>降级</span>
-  </section>
+  </div><!-- /tab-data-copilot -->
 
-  <!-- 审计记录预览 -->
-  <section class="panel" id="audit-panel">
-    <h2>最近查询记录</h2>
-    <table id="audit-table">
-      <thead>
-        <tr><th>时间</th><th>问题</th><th>状态</th><th>行数</th></tr>
-      </thead>
-      <tbody id="audit-tbody"></tbody>
-    </table>
-  </section>
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- Knowledge Copilot 面板 -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div id="tab-knowledge-copilot" class="tab-content" hidden>
+
+    <!-- 文档上传 -->
+    <section class="panel" id="kc-upload-panel">
+      <h2>上传知识文档</h2>
+      <div class="upload-form">
+        <div class="field-group">
+          <label for="kc-file-name">文件名</label>
+          <input type="text" id="kc-file-name" placeholder="例如：员工手册.md" class="text-input"/>
+        </div>
+        <div class="field-group">
+          <label for="kc-file-category">分类（可选）</label>
+          <input type="text" id="kc-file-category" placeholder="例如：HR" class="text-input"/>
+        </div>
+        <div class="field-group">
+          <label for="kc-file-content">文档内容（Markdown / 纯文本）</label>
+          <textarea id="kc-file-content" rows="8" placeholder="粘贴文档内容…"></textarea>
+        </div>
+        <button id="kc-upload-btn" type="button">上传文档</button>
+        <span id="kc-upload-status" class="inline-status" hidden></span>
+      </div>
+    </section>
+
+    <!-- 文档列表 -->
+    <section class="panel" id="kc-docs-panel">
+      <h2>已上传文档 <span id="kc-docs-count" class="badge"></span></h2>
+      <div id="kc-docs-empty" class="empty-state" hidden>
+        <p>暂无文档，请先上传。</p>
+      </div>
+      <div class="table-scroll">
+        <table id="kc-docs-table">
+          <thead>
+            <tr><th>ID</th><th>标题</th><th>分类</th><th>来源</th><th>启用</th><th>上传时间</th><th>操作</th></tr>
+          </thead>
+          <tbody id="kc-docs-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 问答区 -->
+    <section class="panel" id="kc-qa-panel">
+      <h2>知识问答</h2>
+      <label for="kc-question-input">输入问题</label>
+      <textarea id="kc-question-input" rows="3" placeholder="例如：公司年假政策是什么？"></textarea>
+      <button id="kc-ask-btn" type="button">提问</button>
+    </section>
+
+    <!-- 答案区 -->
+    <section class="panel" id="kc-answer-panel" hidden>
+      <h2>
+        答案
+        <span id="kc-answer-status-badge" class="badge"></span>
+      </h2>
+      <div id="kc-answer-text" class="answer-text"></div>
+      <div id="kc-answer-no-evidence" class="empty-state" hidden>
+        <p>知识库中没有足够的信息来回答此问题。</p>
+      </div>
+    </section>
+
+    <!-- 引用区 -->
+    <section class="panel" id="kc-citations-panel" hidden>
+      <h2>引用来源</h2>
+      <ul id="kc-citations-list" class="citation-list"></ul>
+    </section>
+
+    <!-- 警告区 -->
+    <section class="panel" id="kc-warnings-panel" hidden>
+      <h2>警告</h2>
+      <ul id="kc-warnings-list" class="warnings-list"></ul>
+    </section>
+
+    <!-- 审计日志 -->
+    <section class="panel" id="kc-audit-panel">
+      <h2>最近问答记录</h2>
+      <div class="table-scroll">
+        <table id="kc-audit-table">
+          <thead>
+            <tr><th>时间</th><th>问题</th><th>状态</th><th>模型</th></tr>
+          </thead>
+          <tbody id="kc-audit-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+  </div><!-- /tab-knowledge-copilot -->
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- Support Copilot 面板 -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div id="tab-support-copilot" class="tab-content" hidden>
+
+    <!-- 工单输入区 -->
+    <section class="panel" id="sc-ticket-panel">
+      <h2>客服工单分析</h2>
+      <div class="field-group">
+        <label for="sc-ticket-input">客户消息</label>
+        <textarea id="sc-ticket-input" rows="4" placeholder="粘贴客户消息..."></textarea>
+      </div>
+      <div class="field-group">
+        <label for="sc-channel-select">渠道</label>
+        <select id="sc-channel-select" class="text-input">
+          <option value="sample">示例（sample）</option>
+          <option value="web">网页（web）</option>
+          <option value="email">邮件（email）</option>
+          <option value="chat">在线客服（chat）</option>
+        </select>
+      </div>
+      <button id="sc-analyze-btn" type="button">分析工单</button>
+    </section>
+
+    <!-- 示例工单快捷填充 -->
+    <section class="panel" id="sc-samples-panel">
+      <h2>示例工单</h2>
+      <div class="sample-buttons" id="sc-sample-buttons">
+        <button class="sample-btn" data-category="refund">退款咨询</button>
+        <button class="sample-btn" data-category="activation">开通问题</button>
+        <button class="sample-btn" data-category="incident">故障反馈</button>
+        <button class="sample-btn" data-category="security">账号安全</button>
+      </div>
+    </section>
+
+    <!-- 分类结果 -->
+    <section class="panel" id="sc-classification-panel" hidden>
+      <h2>工单分类</h2>
+      <div class="meta-grid">
+        <div class="meta-item">
+          <span class="meta-label">分类</span>
+          <span id="sc-classification-category" class="badge"></span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">情绪</span>
+          <span id="sc-classification-sentiment" class="badge"></span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">紧急程度</span>
+          <span id="sc-classification-urgency" class="badge"></span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">转人工</span>
+          <span id="sc-classification-needs-human" class="badge"></span>
+        </div>
+      </div>
+      <div class="field-group">
+        <label>摘要</label>
+        <p id="sc-classification-summary"></p>
+      </div>
+      <div id="sc-classification-reasons" class="field-group" hidden>
+        <label>原因</label>
+        <ul id="sc-classification-reasons-list"></ul>
+      </div>
+    </section>
+
+    <!-- 知识依据 -->
+    <section class="panel" id="sc-evidence-panel" hidden>
+      <h2>知识依据</h2>
+      <div id="sc-evidence-empty" class="empty-state" hidden>
+        <p>未找到相关依据，建议转人工处理。</p>
+      </div>
+      <ul id="sc-evidence-list" class="citation-list"></ul>
+    </section>
+
+    <!-- 回复草稿 -->
+    <section class="panel" id="sc-draft-panel" hidden>
+      <h2>
+        回复草稿
+        <span id="sc-draft-risk-badge" class="badge"></span>
+      </h2>
+      <div id="sc-draft-text" class="answer-text"></div>
+      <div id="sc-draft-needs-human" hidden>
+        <span class="badge badge-warn">建议转人工</span>
+        <ul id="sc-draft-risk-reasons"></ul>
+      </div>
+      <div id="sc-draft-citations" class="field-group" hidden>
+        <label>引用</label>
+        <ul id="sc-draft-citations-list"></ul>
+      </div>
+      <div id="sc-draft-actions" class="action-buttons" hidden>
+        <input type="hidden" id="sc-draft-id"/>
+        <input type="hidden" id="sc-confirmation-token"/>
+        <button id="sc-confirm-btn" type="button" class="btn-primary">确认草稿</button>
+        <button id="sc-cancel-btn" type="button" class="btn-secondary">取消草稿</button>
+      </div>
+    </section>
+
+    <!-- 审计记录 -->
+    <section class="panel" id="sc-audit-panel">
+      <h2>最近处理记录</h2>
+      <div class="table-scroll">
+        <table id="sc-audit-table">
+          <thead>
+            <tr><th>时间</th><th>事件</th><th>分类</th><th>紧急程度</th><th>风险</th></tr>
+          </thead>
+          <tbody id="sc-audit-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+  </div><!-- /tab-support-copilot -->
 
   <!-- 错误提示 -->
   <div id="error-toast" hidden></div>
@@ -104,6 +320,9 @@
   </div>
 
 </div>
+
 <script th:src="@{/js/app.js}"></script>
+<script th:src="@{/js/knowledge-copilot.js}"></script>
+<script th:src="@{/js/support-copilot.js}"></script>
 </body>
 </html>
