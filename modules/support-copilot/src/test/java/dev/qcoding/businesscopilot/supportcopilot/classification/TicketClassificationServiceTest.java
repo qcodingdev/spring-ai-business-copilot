@@ -10,6 +10,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * Unit tests for {@link TicketClassificationService}.
@@ -21,6 +25,7 @@ class TicketClassificationServiceTest {
 
     private TicketClassificationService service;
     private SensitiveTextMasker masker;
+    private AiChatService aiChatService;
 
     @BeforeEach
     void setUp() {
@@ -33,10 +38,8 @@ class TicketClassificationServiceTest {
         // Use a real PromptTemplateService — the prompt template is loaded from classpath
         var promptService = new PromptTemplateService();
 
-        // AiChatService is not mocked here; tests that don't call the model validate pre-flight checks.
-        // For model-calling tests, use integration tests with a real or wiremocked endpoint.
-
-        service = new TicketClassificationService(null, promptService, masker, properties);
+        aiChatService = mock(AiChatService.class);
+        service = new TicketClassificationService(aiChatService, promptService, masker, properties);
     }
 
     @Test
@@ -60,24 +63,16 @@ class TicketClassificationServiceTest {
 
     @Test
     void shouldAllowMessageWithinLengthLimit() {
-        // This test is expected to fail on model call (AiChatService is null),
-        // not on validation.
         String validMsg = "我的订单还没有发货，请问什么时候能到？";
         var request = new TicketClassificationRequest(validMsg, "web");
-        // We expect a NullPointerException / BusinessException from the null chat service,
-        // not a validation error.
-        try {
-            service.classify(request);
-            fail("Expected exception due to null AiChatService");
-        } catch (BusinessException e) {
-            // VALIDATION_ERROR means validation failed — this would be a test failure
-            if ("BIZ_0002".equals(e.errorCode().code())) {
-                fail("Should not reject a valid message: " + e.getMessage());
-            }
-            // AI_MODEL_ERROR or NPE is expected
-        } catch (NullPointerException e) {
-            // Also acceptable — the null AiChatService causes NPE before model call
-        }
+        when(aiChatService.generateJson(anyString(), eq(LlmClassificationOutput.class)))
+                .thenReturn(new LlmClassificationOutput(
+                        "PRODUCT_USAGE", "NEUTRAL", "LOW", "物流状态咨询", false, java.util.List.of()));
+
+        TicketClassificationResponse response = service.classify(request);
+
+        assertEquals("PRODUCT_USAGE", response.category());
+        assertFalse(response.needsHuman());
     }
 
     @Test

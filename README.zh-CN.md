@@ -92,7 +92,7 @@ SPRING_AI_MODEL_EMBEDDING=none \
 | 领域 | 当前 | 计划加固 |
 |---|---|---|
 | 运行时 | Java 21、Spring Boot 4.1.0 | 保留 |
-| AI | Spring AI 2.0.0 | 使用原生结构化输出并统一 Jackson 3 |
+| AI | Spring AI 2.0.0，已使用 schema 校验的结构化输出 | 应用代码使用 Jackson 3；OpenAI SDK 仍会传递引入 Jackson 2 兼容依赖 |
 | 持久层 | Spring JDBC | 稳定 CRUD 引入 MyBatis-Plus 3.5.16；动态 SQL、元数据和 pgvector 保留 JDBC |
 | 数据库 | PostgreSQL 16、pgvector、Flyway | Flyway 继续作为唯一 DDL 来源 |
 | Web | Spring MVC、Thymeleaf、原生 JavaScript | 保留 |

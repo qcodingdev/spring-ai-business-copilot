@@ -1,10 +1,20 @@
 package dev.qcoding.businesscopilot.knowledgecopilot;
 
+import dev.qcoding.businesscopilot.aicore.AiChatService;
+import dev.qcoding.businesscopilot.aicore.AiEmbeddingService;
+import dev.qcoding.businesscopilot.aicore.PromptTemplateService;
+import dev.qcoding.businesscopilot.guardrails.SensitiveTextMasker;
+import dev.qcoding.businesscopilot.knowledgecopilot.answer.KnowledgeQuestionService;
 import dev.qcoding.businesscopilot.knowledgecopilot.chunking.ChunkingProperties;
+import dev.qcoding.businesscopilot.knowledgecopilot.document.KnowledgeDocumentRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 /**
  * Tests for {@link KnowledgeCopilotAutoConfiguration}.
@@ -12,6 +22,14 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>验证 AutoConfiguration 能被加载，Properties 能正确构建默认值。</p>
  */
 class KnowledgeCopilotAutoConfigurationTest {
+
+    private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
+            .withConfiguration(AutoConfigurations.of(KnowledgeCopilotAutoConfiguration.class))
+            .withBean(JdbcTemplate.class, () -> mock(JdbcTemplate.class))
+            .withBean(AiChatService.class, () -> mock(AiChatService.class))
+            .withBean(AiEmbeddingService.class, () -> mock(AiEmbeddingService.class))
+            .withBean(PromptTemplateService.class, PromptTemplateService::new)
+            .withBean(SensitiveTextMasker.class, SensitiveTextMasker::new);
 
     @Test
     @DisplayName("AutoConfiguration 类存在且可实例化")
@@ -51,5 +69,22 @@ class KnowledgeCopilotAutoConfigurationTest {
     void propertiesNegativeOverlapCorrected() {
         ChunkingProperties chunking = new ChunkingProperties(800, -1);
         assertThat(chunking.chunkOverlap()).isZero();
+    }
+
+    @Test
+    void isNotRegisteredWhenDisabled() {
+        contextRunner.run(context -> {
+            assertThat(context).doesNotHaveBean(KnowledgeQuestionService.class);
+            assertThat(context).doesNotHaveBean(KnowledgeDocumentRepository.class);
+        });
+    }
+
+    @Test
+    void isRegisteredWhenEnabled() {
+        contextRunner.withPropertyValues("business-copilot.knowledge.enabled=true")
+                .run(context -> {
+                    assertThat(context).hasSingleBean(KnowledgeQuestionService.class);
+                    assertThat(context).hasSingleBean(KnowledgeDocumentRepository.class);
+                });
     }
 }

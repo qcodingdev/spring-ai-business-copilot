@@ -2,7 +2,6 @@ package dev.qcoding.businesscopilot.audit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
 
 import java.util.List;
 
@@ -13,7 +12,6 @@ import java.util.List;
  * 关键原则：审计日志不记录完整查询结果，也不记录敏感字段明文值——
  * 调用方传入 {@link AuditEvent} 时必须保证不含敏感数据。</p>
  */
-@Service
 public class AuditService {
 
     private static final Logger log = LoggerFactory.getLogger(AuditService.class);

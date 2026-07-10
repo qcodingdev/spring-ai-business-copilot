@@ -20,9 +20,10 @@ import dev.qcoding.businesscopilot.supportcopilot.ticket.SupportTicketRepository
 import dev.qcoding.businesscopilot.supportcopilot.ticket.TicketAnalysisService;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
@@ -31,7 +32,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * <p>Support Copilot 自动装配。注册模块配置、工单/草稿/审计仓库、脱敏器等组件。
  * 业务 service（分类、检索、草稿生成等）将在后续步骤补充。</p>
  */
-@Configuration
+@AutoConfiguration
+@ConditionalOnProperty(prefix = "business-copilot.support-copilot", name = "enabled", havingValue = "true")
 public class SupportCopilotAutoConfiguration {
 
     @Bean

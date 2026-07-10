@@ -92,7 +92,7 @@ When both model switches are `none`, the workbench and database infrastructure c
 | Area | Current | Planned hardening |
 |---|---|---|
 | Runtime | Java 21, Spring Boot 4.1.0 | Keep |
-| AI | Spring AI 2.0.0 | Adopt native structured output and Jackson 3 |
+| AI | Spring AI 2.0.0 with schema-validated structured output | Application code uses Jackson 3; the OpenAI SDK still brings a transitive Jackson 2 compatibility dependency |
 | Persistence | Spring JDBC | Add MyBatis-Plus 3.5.16 for stable CRUD; keep JDBC for dynamic SQL, metadata, and pgvector |
 | Database | PostgreSQL 16, pgvector, Flyway | Keep Flyway as the only DDL authority |
 | Web | Spring MVC, Thymeleaf, vanilla JavaScript | Keep |

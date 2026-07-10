@@ -1,7 +1,6 @@
 package dev.qcoding.businesscopilot.supportcopilot.classification;
 
 import dev.qcoding.businesscopilot.aicore.AiChatService;
-import dev.qcoding.businesscopilot.aicore.JsonOutputParser;
 import dev.qcoding.businesscopilot.aicore.PromptTemplateService;
 import dev.qcoding.businesscopilot.commonweb.api.BusinessException;
 import dev.qcoding.businesscopilot.commonweb.api.ErrorCode;

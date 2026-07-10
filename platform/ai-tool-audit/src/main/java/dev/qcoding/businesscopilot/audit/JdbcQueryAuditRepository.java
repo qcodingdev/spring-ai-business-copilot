@@ -2,7 +2,6 @@ package dev.qcoding.businesscopilot.audit;
 
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
-import org.springframework.stereotype.Repository;
 
 import java.sql.Timestamp;
 import java.util.List;
@@ -16,7 +15,6 @@ import java.util.List;
  * <p>安全说明：审计日志只记录元信息（用户问题、SQL、状态、行数、耗时、错误），
  * 不记录完整查询结果，也不记录敏感字段的明文值。</p>
  */
-@Repository
 public class JdbcQueryAuditRepository implements QueryAuditRepository {
 
     private static final String INSERT_SQL = """

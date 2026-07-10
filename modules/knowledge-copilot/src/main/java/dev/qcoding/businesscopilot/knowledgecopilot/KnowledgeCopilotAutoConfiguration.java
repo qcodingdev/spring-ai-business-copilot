@@ -20,9 +20,10 @@ import dev.qcoding.businesscopilot.knowledgecopilot.embedding.JdbcKnowledgeEmbed
 import dev.qcoding.businesscopilot.knowledgecopilot.embedding.KnowledgeEmbeddingRepository;
 import dev.qcoding.businesscopilot.knowledgecopilot.embedding.KnowledgeEmbeddingService;
 import dev.qcoding.businesscopilot.knowledgecopilot.retrieval.KnowledgeRetrievalService;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
@@ -31,7 +32,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * <p>Knowledge Copilot 自动装配。注册模块配置、文档/分片仓库、解析器、分片服务、
  * 上传服务等组件。embedding 调用和问答 API 将在后续步骤补充。</p>
  */
-@Configuration
+@AutoConfiguration
+@ConditionalOnProperty(prefix = "business-copilot.knowledge", name = "enabled", havingValue = "true")
 public class KnowledgeCopilotAutoConfiguration {
 
     @Bean

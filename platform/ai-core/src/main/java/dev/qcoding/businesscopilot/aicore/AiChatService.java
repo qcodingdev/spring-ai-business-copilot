@@ -7,30 +7,25 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.stereotype.Service;
 
 /**
- * Thin wrapper around Spring AI {@link ChatClient} that provides text and JSON generation,
+ * Thin wrapper around Spring AI {@link ChatClient} that provides text and structured generation,
  * translating model failures into business-understandable exceptions.
  *
  * <p>封装 Spring AI ChatClient，对外提供 {@link #generateText(String)} 与
  * {@link #generateJson(String, Class)} 两类方法。当 chat model 未启用（例如
  * {@code spring.ai.model.chat=none}）时调用会抛出清晰错误，而不是空指针。</p>
  */
-@Service
 public class AiChatService {
 
     private static final Logger log = LoggerFactory.getLogger(AiChatService.class);
 
     private final ObjectProvider<ChatClient.Builder> chatClientBuilderProvider;
-    private final JsonOutputParser jsonOutputParser;
     private final AiModelProperties properties;
 
     public AiChatService(ObjectProvider<ChatClient.Builder> chatClientBuilderProvider,
-                         JsonOutputParser jsonOutputParser,
                          AiModelProperties properties) {
         this.chatClientBuilderProvider = chatClientBuilderProvider;
-        this.jsonOutputParser = jsonOutputParser;
         this.properties = properties;
     }
 
@@ -72,11 +67,26 @@ public class AiChatService {
     }
 
     /**
-     * Send {@code prompt} to the chat model, then parse the response into {@code type}.
+     * Send {@code prompt} to the chat model and let Spring AI map the response to {@code type}.
+     *
+     * <p>{@code validateSchema()} keeps provider-agnostic prompt-based structured output while
+     * retrying malformed responses. Native provider structured output is intentionally opt-in
+     * because OpenAI-compatible providers do not all implement it consistently.</p>
      */
     public <T> T generateJson(String prompt, Class<T> type) {
-        String raw = generateText(prompt);
-        return jsonOutputParser.parse(raw, type);
+        ChatClient chatClient = requireChatClient();
+        try {
+            return chatClient.prompt()
+                    .user(prompt)
+                    .call()
+                    .entity(type, spec -> spec.validateSchema());
+        } catch (BusinessException ex) {
+            throw ex;
+        } catch (RuntimeException ex) {
+            log.error("Chat model structured generation failed", ex);
+            throw new BusinessException(ErrorCode.AI_OUTPUT_PARSE_ERROR,
+                    "AI model output could not be mapped to the expected schema", ex);
+        }
     }
 
     private ChatClient requireChatClient() {

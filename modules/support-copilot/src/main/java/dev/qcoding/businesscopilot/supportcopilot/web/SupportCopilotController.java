@@ -12,6 +12,7 @@ import dev.qcoding.businesscopilot.supportcopilot.ticket.TicketAnalysisService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -37,6 +38,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/support-copilot")
+@ConditionalOnProperty(prefix = "business-copilot.support-copilot", name = "enabled", havingValue = "true")
 public class SupportCopilotController {
 
     private final TicketAnalysisService analysisService;

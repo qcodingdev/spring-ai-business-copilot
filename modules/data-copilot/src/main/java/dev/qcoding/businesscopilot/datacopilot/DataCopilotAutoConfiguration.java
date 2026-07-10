@@ -18,9 +18,9 @@ import dev.qcoding.businesscopilot.guardrails.GuardrailsProperties;
 import dev.qcoding.businesscopilot.guardrails.SensitiveDataMasker;
 import dev.qcoding.businesscopilot.guardrails.SqlGuardrailService;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -30,7 +30,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * <p>Data Copilot 自动装配。注册 schema 配置、确认机制组件、查询执行组件、结果解释组件。
  * 第一版确认机制使用内存存储，不引入 Redis，不做集群会话一致性。</p>
  */
-@Configuration
+@AutoConfiguration
 public class DataCopilotAutoConfiguration {
 
     @Bean

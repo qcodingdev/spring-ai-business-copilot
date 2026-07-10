@@ -2,7 +2,6 @@ package dev.qcoding.businesscopilot.aicore;
 
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
-import org.springframework.stereotype.Component;
 import org.springframework.util.StreamUtils;
 
 import java.io.IOException;
@@ -15,7 +14,6 @@ import java.util.Map;
  * <p>从 classpath 加载 prompt 模板并替换占位符。模板集中放在 resources 中，
  * service 代码不再散落大段 prompt 文本。</p>
  */
-@Component
 public class PromptTemplateService {
 
     private static final String PROMPTS_PREFIX = "classpath:prompts/";

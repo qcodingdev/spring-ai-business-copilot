@@ -15,6 +15,7 @@ import dev.qcoding.businesscopilot.knowledgecopilot.document.KnowledgeDocumentRe
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -44,6 +45,7 @@ import java.util.UUID;
  */
 @RestController
 @RequestMapping("/api/knowledge-copilot")
+@ConditionalOnProperty(prefix = "business-copilot.knowledge", name = "enabled", havingValue = "true")
 public class KnowledgeCopilotController {
 
     private final DocumentUploadService documentUploadService;

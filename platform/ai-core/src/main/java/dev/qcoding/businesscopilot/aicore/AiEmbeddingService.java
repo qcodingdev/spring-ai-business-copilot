@@ -7,7 +7,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.stereotype.Service;
 
 /**
  * Thin wrapper around Spring AI {@link EmbeddingModel} that provides text embedding,
@@ -20,7 +19,6 @@ import org.springframework.stereotype.Service;
  * <p>设计上与 {@link AiChatService} 完全对称，使用 {@link ObjectProvider} 优雅处理
  * embedding model 不可用的场景。</p>
  */
-@Service
 public class AiEmbeddingService {
 
     private static final Logger log = LoggerFactory.getLogger(AiEmbeddingService.class);
