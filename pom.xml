@@ -20,6 +20,7 @@
         <module>modules/data-copilot</module>
         <module>modules/knowledge-copilot</module>
         <module>modules/support-copilot</module>
+        <module>modules/report-copilot</module>
         <module>app/business-copilot-app</module>
     </modules>
 
@@ -27,6 +28,7 @@
         <java.version>21</java.version>
         <spring-boot.version>4.1.0</spring-boot.version>
         <spring-ai.version>2.0.0</spring-ai.version>
+        <mybatis-plus.version>3.5.16</mybatis-plus.version>
         <!-- Keep aligned with the Spring Boot dependency BOM when Boot is upgraded. -->
         <mockito.version>5.23.0</mockito.version>
         <maven.compiler.release>${java.version}</maven.compiler.release>

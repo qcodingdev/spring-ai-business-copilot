@@ -75,3 +75,13 @@ business-copilot:
     high-risk-categories: REFUND,ACCOUNT_SECURITY,INCIDENT
     auto-human-handoff-enabled: true
     knowledge-top-k: 5
+  # ── Report Copilot 配置 ──────────────────────────────────────
+  # 报表模块当前提供脱敏后的示例来源预览；后续报告草稿仍需人工确认才可导出。
+  report-copilot:
+    enabled: true
+    max-period-days: 31
+    max-source-count: 50
+    max-source-length: 4000
+    draft-ttl: 30m
+    allowed-report-types: TEAM_WEEKLY,BUSINESS_WEEKLY,PROJECT_STATUS
+    markdown-export-enabled: true

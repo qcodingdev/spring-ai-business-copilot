@@ -6,7 +6,7 @@ Spring AI Business Copilot 是一个面向个人开发者、中小团队和企�
 
 它不是另一个 AI 框架，而是一组可以直接运行、学习、改造和接入真实业务的 Spring AI 应用模块。
 
-> **当前状态：** Data Copilot、Knowledge Copilot 和 Support Copilot 已实现。第四模块规划为 Report Copilot，第五模块规划为 Resume Copilot；V4 开始前先完成框架加固。
+> **当前状态：** Data Copilot、Knowledge Copilot 和 Support Copilot 已实现。Report Copilot V4 已进入开发，模块基础和脱敏来源预览功能已可用；第五模块 Resume Copilot 仍处于规划阶段。
 
 ![Data Copilot 工作台](img.png)
 
@@ -93,7 +93,7 @@ SPRING_AI_MODEL_EMBEDDING=none \
 |---|---|---|
 | 运行时 | Java 21、Spring Boot 4.1.0 | 保留 |
 | AI | Spring AI 2.0.0，已使用 schema 校验的结构化输出 | 应用代码使用 Jackson 3；OpenAI SDK 仍会传递引入 Jackson 2 兼容依赖 |
-| 持久层 | Spring JDBC | 稳定 CRUD 引入 MyBatis-Plus 3.5.16；动态 SQL、元数据和 pgvector 保留 JDBC |
+| 持久层 | Spring JDBC，Report Copilot 已接入 MyBatis-Plus 3.5.16 | 稳定 CRUD 使用 MyBatis-Plus；动态 SQL、元数据和 pgvector 保留 JDBC |
 | 数据库 | PostgreSQL 16、pgvector、Flyway | Flyway 继续作为唯一 DDL 来源 |
 | Web | Spring MVC、Thymeleaf、原生 JavaScript | 保留 |
 
@@ -168,9 +168,9 @@ Support Copilot 是第三个业务模块，定位为智能客服助手，帮助�
 
 ---
 
-## 后续规划模块
+## V4 开发中
 
-**V4 Report Copilot** 将基于可信指标快照、任务进展和会议记录生成有来源的周报与经营简报草稿。事实和 AI 建议明确分离，每项可验证内容都带来源，只有人工确认后的草稿可以导出 Markdown。它不会执行任意 SQL、修改任务或自动发布报告。
+**V4 Report Copilot** 当前提供 `GET /api/report-copilot/sample-sources`，返回可直接进入报告流程的虚构指标、任务和会议记录证据包。每条来源在返回前都会脱敏、由服务端生成 ID 并计算哈希。结构化报告生成、复核、确认和 Markdown 导出将在后续 V4 切片实现。它不会执行任意 SQL、修改任务或自动发布报告。
 
 **V5 Resume Copilot** 将对单个已确认 JD 和单份脱敏简历进行逐条证据匹配，输出信息缺口和面试核验问题。它不会对候选人评分或排名，不提供录用或淘汰建议，不推断受保护属性，也不改变招聘流程状态。
 
@@ -192,6 +192,7 @@ Support Copilot 是第三个业务模块，定位为智能客服助手，帮助�
 | 数据查询助手 | [data-copilot](modules/data-copilot/README.md) |
 | 知识库助手 | [knowledge-copilot](modules/knowledge-copilot/README.md) |
 | 智能客服助手 | [support-copilot](modules/support-copilot/README.md) |
+| 报表助手 | [report-copilot](modules/report-copilot/README.md) |
 spring-ai-business-copilot/
 ├── app/business-copilot-app/       # Spring Boot 应用入口
 ├── platform/
@@ -202,7 +203,8 @@ spring-ai-business-copilot/
 ├── modules/
 │   ├── data-copilot/               # Data Copilot 模块（V1）
 │   ├── knowledge-copilot/          # Knowledge Copilot 模块（V2）
-│   └── support-copilot/            # Support Copilot 模块（V3）
+│   ├── support-copilot/            # Support Copilot 模块（V3）
+│   └── report-copilot/             # Report Copilot 模块（V4，开发中）
 ├── examples/
 │   ├── docker-compose.yml          # 一键启动（PostgreSQL + pgvector）
 │   └── .env.example                # 环境变量模板
@@ -219,7 +221,7 @@ spring-ai-business-copilot/
 - Spring Boot 4.1
 - Spring AI 2.0
 - Spring JDBC + PostgreSQL（当前）
-- MyBatis-Plus 3.5.16，用于稳定 CRUD（计划）
+- MyBatis-Plus 3.5.16，用于稳定的 Report Copilot CRUD
 - Flyway 数据库迁移
 - Thymeleaf（工作台 UI）
 - Maven 多模块

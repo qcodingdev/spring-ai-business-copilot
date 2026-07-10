@@ -32,6 +32,11 @@
             <version>${project.version}</version>
         </dependency>
         <dependency>
+            <groupId>dev.qcoding</groupId>
+            <artifactId>report-copilot</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webmvc</artifactId>
         </dependency>

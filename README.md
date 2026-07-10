@@ -6,7 +6,7 @@ Spring AI Business Copilot is an open-source Java AI business application suite 
 
 It provides ready-to-run business modules that teams can clone, run, learn from, and adapt to real business systems. The goal is not to provide another AI framework, but to provide practical Spring AI applications.
 
-> **Current status:** Data Copilot, Knowledge Copilot, and Support Copilot are implemented. Report Copilot is planned as the fourth module, followed by Resume Copilot as the fifth module. A framework-hardening phase is scheduled before V4.
+> **Current status:** Data Copilot, Knowledge Copilot, and Support Copilot are implemented. Report Copilot V4 is in development: its module foundation and sanitized source-preview feature are available. Resume Copilot remains planned as the fifth module.
 
 ![Data Copilot workbench](img.png)
 
@@ -93,7 +93,7 @@ When both model switches are `none`, the workbench and database infrastructure c
 |---|---|---|
 | Runtime | Java 21, Spring Boot 4.1.0 | Keep |
 | AI | Spring AI 2.0.0 with schema-validated structured output | Application code uses Jackson 3; the OpenAI SDK still brings a transitive Jackson 2 compatibility dependency |
-| Persistence | Spring JDBC | Add MyBatis-Plus 3.5.16 for stable CRUD; keep JDBC for dynamic SQL, metadata, and pgvector |
+| Persistence | Spring JDBC plus MyBatis-Plus 3.5.16 in Report Copilot | Use MyBatis-Plus for stable CRUD; keep JDBC for dynamic SQL, metadata, and pgvector |
 | Database | PostgreSQL 16, pgvector, Flyway | Keep Flyway as the only DDL authority |
 | Web | Spring MVC, Thymeleaf, vanilla JavaScript | Keep |
 
@@ -168,9 +168,9 @@ Support Copilot is the third business module. It is an intelligent customer serv
 
 ---
 
-## Planned Modules
+## V4 In Progress
 
-**V4 Report Copilot** will generate evidence-backed weekly and business report drafts from trusted metric snapshots, task updates, and meeting notes. Facts and AI suggestions remain separate, every verifiable item cites a source, and only human-confirmed drafts can be exported as Markdown. It will not execute arbitrary SQL, modify tasks, or publish reports automatically.
+**V4 Report Copilot** now exposes `GET /api/report-copilot/sample-sources`: a request-ready evidence pack of fictional metrics, task updates, and meeting notes. Each source is sanitized, assigned a server-generated ID, and hashed before it is exposed. Structured generation, review, confirmation, and Markdown export follow in later V4 slices. It will not execute arbitrary SQL, modify tasks, or publish reports automatically.
 
 **V5 Resume Copilot** will compare one confirmed job description with one sanitized resume and produce criterion-by-criterion evidence, information gaps, and interview verification questions. It will not score or rank candidates, recommend hiring or rejection, infer protected attributes, or change any recruitment workflow state.
 
@@ -192,6 +192,7 @@ Each Maven module contains its own bilingual README with responsibilities, depen
 | Database assistant | [data-copilot](modules/data-copilot/README.md) |
 | Knowledge assistant | [knowledge-copilot](modules/knowledge-copilot/README.md) |
 | Support assistant | [support-copilot](modules/support-copilot/README.md) |
+| Report assistant | [report-copilot](modules/report-copilot/README.md) |
 spring-ai-business-copilot/
 ├── app/business-copilot-app/       # Spring Boot application entry point
 ├── platform/
@@ -202,7 +203,8 @@ spring-ai-business-copilot/
 ├── modules/
 │   ├── data-copilot/               # Data Copilot module (v1)
 │   ├── knowledge-copilot/          # Knowledge Copilot module (v2)
-│   └── support-copilot/            # Support Copilot module (v3)
+│   ├── support-copilot/            # Support Copilot module (v3)
+│   └── report-copilot/             # Report Copilot module (v4, in progress)
 ├── examples/
 │   ├── docker-compose.yml          # One-command startup (PostgreSQL + pgvector)
 │   └── .env.example                # Environment variable template
@@ -219,7 +221,7 @@ spring-ai-business-copilot/
 - Spring Boot 4.1
 - Spring AI 2.0
 - Spring JDBC + PostgreSQL (current)
-- MyBatis-Plus 3.5.16 for stable CRUD (planned)
+- MyBatis-Plus 3.5.16 for stable Report Copilot CRUD
 - Flyway database migrations
 - Thymeleaf (workbench UI)
 - Maven multi-module
