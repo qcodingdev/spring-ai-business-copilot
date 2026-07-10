@@ -28,11 +28,6 @@
         </dependency>
         <dependency>
             <groupId>dev.qcoding</groupId>
-            <artifactId>ai-tool-audit</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>dev.qcoding</groupId>
             <artifactId>common-web</artifactId>
             <version>${project.version}</version>
         </dependency>

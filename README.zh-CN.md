@@ -6,7 +6,7 @@ Spring AI Business Copilot 是一个面向个人开发者、中小团队和企�
 
 它不是另一个 AI 框架，而是一组可以直接运行、学习、改造和接入真实业务的 Spring AI 应用模块。
 
-> **V3 状态：** Data Copilot 已实现且稳定。Knowledge Copilot（企业知识库助手）已作为第二模块实现。Support Copilot（智能客服助手）已作为第三模块实现。Resume Copilot 和 Report Copilot 仍作为后续候选。
+> **当前状态：** Data Copilot、Knowledge Copilot 和 Support Copilot 已实现。第四模块规划为 Report Copilot，第五模块规划为 Resume Copilot；V4 开始前先完成框架加固。
 
 ![Data Copilot 工作台](img.png)
 
@@ -19,15 +19,15 @@ Spring AI Business Copilot 是一个面向个人开发者、中小团队和企�
 - Java 21（也可以运行 `./scripts/install-jdk21.sh`，安装到当前项目的 `.jdk/`）
 - Maven 3.9+
 - PostgreSQL 16（或 Docker）
-- OpenAI 兼容模型 API Key（可选；无 Key 时应用仍可启动，AI 功能不可用）
+- 仅在启用 chat 或 embedding 时需要 OpenAI 兼容模型 API Key
 
 ### 方式一：Docker Compose（推荐）
 
 ```bash
 cd examples
 cp .env.example .env
-# 如果有 API Key，编辑 .env 添加：
-#   SPRING_AI_OPENAI_API_KEY=<your-api-key>
+# 默认关闭 chat 和 embedding，可直接验证基础设施。
+# 启用 AI 时，把对应模型开关改为 openai 并填写 API Key。
 docker compose up --build
 ```
 
@@ -53,18 +53,20 @@ CREATE USER copilot WITH PASSWORD 'copilot';
 CREATE DATABASE business_copilot OWNER copilot;
 ```
 
-3. 运行应用：
+3. 先构建整个 reactor，再运行应用：
 
 ```bash
-./mvnw spring-boot:run -pl app/business-copilot-app \
-  -DSPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/business_copilot \
-  -DSPRING_DATASOURCE_USERNAME=copilot \
-  -DSPRING_DATASOURCE_PASSWORD=copilot \
-  -DSPRING_AI_MODEL_CHAT=openai \
-  -DSPRING_AI_OPENAI_API_KEY=<your-api-key> \
-  -DSPRING_AI_OPENAI_BASE_URL=https://api.deepseek.com \
-  -DSPRING_AI_OPENAI_CHAT_OPTIONS_MODEL=deepseek-v4-flash
+./mvnw -q -DskipTests install
+
+SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/business_copilot \
+SPRING_DATASOURCE_USERNAME=copilot \
+SPRING_DATASOURCE_PASSWORD=copilot \
+SPRING_AI_MODEL_CHAT=none \
+SPRING_AI_MODEL_EMBEDDING=none \
+./mvnw -pl app/business-copilot-app spring-boot:run
 ```
+
+启用 OpenAI 兼容服务时，按需修改两个模型开关，并配置 `SPRING_AI_OPENAI_API_KEY`、`SPRING_AI_OPENAI_BASE_URL` 和模型名称。
 
 4. 浏览器打开 **http://localhost:8080**。
 
@@ -74,12 +76,28 @@ CREATE DATABASE business_copilot OWNER copilot;
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
-| `SPRING_AI_MODEL_CHAT` | `openai` | 设为 `none` 可关闭 AI 功能 |
+| `SPRING_AI_MODEL_CHAT` | `none` | 设为 `openai` 启用对话模型 |
+| `SPRING_AI_MODEL_EMBEDDING` | `none` | 设为 `openai` 启用向量模型 |
 | `SPRING_AI_OPENAI_API_KEY` | _(空)_ | API Key |
 | `SPRING_AI_OPENAI_BASE_URL` | `https://api.deepseek.com` | API 基础地址（可替换为兼容服务商） |
 | `SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL` | `deepseek-v4-flash` | 模型名称 |
+| `SPRING_AI_OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | 向量模型名称 |
 
-`SPRING_AI_MODEL_CHAT=none`（默认）时 AI 功能关闭，工作台可正常加载但 SQL 生成会报错。适合无 Key 时验证基础设施。
+两个模型开关均为 `none` 时，无需 API Key 即可启动工作台和数据库基础设施；AI 生成、向量化和检索会返回清晰的模型未启用错误。
+
+---
+
+## 架构基线
+
+| 领域 | 当前 | 计划加固 |
+|---|---|---|
+| 运行时 | Java 21、Spring Boot 4.1.0 | 保留 |
+| AI | Spring AI 2.0.0 | 使用原生结构化输出并统一 Jackson 3 |
+| 持久层 | Spring JDBC | 稳定 CRUD 引入 MyBatis-Plus 3.5.16；动态 SQL、元数据和 pgvector 保留 JDBC |
+| 数据库 | PostgreSQL 16、pgvector、Flyway | Flyway 继续作为唯一 DDL 来源 |
+| Web | Spring MVC、Thymeleaf、原生 JavaScript | 保留 |
+
+这是一轮分阶段加固，不是重写；Data Copilot 的动态只读 SQL executor 不会迁移到 ORM。
 
 ---
 
@@ -103,8 +121,6 @@ Data Copilot 是数据库查询助手。用户用自然语言提问，系统生�
 - **审计日志** — 查询全生命周期（成功、失败、校验失败、用户取消）均记录审计
 - **结果截断** — 默认最多返回 100 行
 
-完整模块文档见 [docs/data-copilot.md](docs/data-copilot.md)。
-
 ---
 
 ## 第二模块：Knowledge Copilot
@@ -123,8 +139,6 @@ Knowledge Copilot 是第二个业务模块，用于基于企业内部文档进�
 - 文档启用/停用控制检索范围
 
 **Prompt 约束：** LLM 被指示只能基于提供的知识片段回答，不得使用模型常识补充企业内部事实。每个关键结论必须对应引用。不确定时输出 `NO_EVIDENCE`。
-
-完整模块文档见 [docs/knowledge-copilot.md](docs/knowledge-copilot.md)。
 
 ---
 
@@ -152,13 +166,32 @@ Support Copilot 是第三个业务模块，定位为智能客服助手，帮助�
 - 不实现多渠道聚合、排班、SLA 流转
 - 不存储或训练未脱敏客户数据
 
-完整模块文档见 [docs/support-copilot.md](docs/support-copilot.md)。
+---
+
+## 后续规划模块
+
+**V4 Report Copilot** 将基于可信指标快照、任务进展和会议记录生成有来源的周报与经营简报草稿。事实和 AI 建议明确分离，每项可验证内容都带来源，只有人工确认后的草稿可以导出 Markdown。它不会执行任意 SQL、修改任务或自动发布报告。
+
+**V5 Resume Copilot** 将对单个已确认 JD 和单份脱敏简历进行逐条证据匹配，输出信息缺口和面试核验问题。它不会对候选人评分或排名，不提供录用或淘汰建议，不推断受保护属性，也不改变招聘流程状态。
 
 ---
 
 ## 项目结构
 
 ```
+
+每个 Maven 模块都有独立双语 README，说明职责、依赖、入口、测试命令和框架改造边界。
+
+| 模块 | 说明 |
+|---|---|
+| 可执行应用 | [business-copilot-app](app/business-copilot-app/README.md) |
+| AI 集成 | [ai-core](platform/ai-core/README.md) |
+| 安全校验 | [ai-guardrails](platform/ai-guardrails/README.md) |
+| 查询审计 | [ai-tool-audit](platform/ai-tool-audit/README.md) |
+| Web 公共契约 | [common-web](platform/common-web/README.md) |
+| 数据查询助手 | [data-copilot](modules/data-copilot/README.md) |
+| 知识库助手 | [knowledge-copilot](modules/knowledge-copilot/README.md) |
+| 智能客服助手 | [support-copilot](modules/support-copilot/README.md) |
 spring-ai-business-copilot/
 ├── app/business-copilot-app/       # Spring Boot 应用入口
 ├── platform/
@@ -175,11 +208,7 @@ spring-ai-business-copilot/
 │   └── .env.example                # 环境变量模板
 ├── scripts/
 │   └── install-jdk21.sh            # 当前项目专用 JDK 安装脚本
-├── Dockerfile                       # 多阶段构建
-└── docs/
-    ├── data-copilot.md             # Data Copilot 文档
-    ├── knowledge-copilot.md        # Knowledge Copilot 文档
-    └── support-copilot.md          # Support Copilot 规划
+└── Dockerfile                       # 多阶段构建
 ```
 
 ---
@@ -189,7 +218,8 @@ spring-ai-business-copilot/
 - Java 21
 - Spring Boot 4.1
 - Spring AI 2.0
-- Spring JDBC + PostgreSQL
+- Spring JDBC + PostgreSQL（当前）
+- MyBatis-Plus 3.5.16，用于稳定 CRUD（计划）
 - Flyway 数据库迁移
 - Thymeleaf（工作台 UI）
 - Maven 多模块

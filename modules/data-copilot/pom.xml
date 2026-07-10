@@ -13,7 +13,7 @@
 
     <artifactId>data-copilot</artifactId>
     <name>data-copilot</name>
-    <description>Data Copilot module boundary. Business implementation will be added later.</description>
+    <description>Natural-language database query assistant with read-only SQL guardrails, confirmation, execution, and audit.</description>
 
     <dependencies>
         <dependency>

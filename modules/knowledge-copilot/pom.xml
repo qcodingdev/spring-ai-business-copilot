@@ -13,7 +13,7 @@
 
     <artifactId>knowledge-copilot</artifactId>
     <name>knowledge-copilot</name>
-    <description>Knowledge Copilot module boundary: enterprise knowledge base assistant backed by pgvector. Business implementation will be added in later steps.</description>
+    <description>Enterprise knowledge assistant with document ingestion, pgvector retrieval, citations, refusal, and audit.</description>
 
     <dependencies>
         <dependency>
@@ -24,11 +24,6 @@
         <dependency>
             <groupId>dev.qcoding</groupId>
             <artifactId>ai-guardrails</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>dev.qcoding</groupId>
-            <artifactId>ai-tool-audit</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
