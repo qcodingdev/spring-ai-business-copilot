@@ -2,6 +2,7 @@ package dev.qcoding.businesscopilot.reportcopilot;
 
 import dev.qcoding.businesscopilot.guardrails.SensitiveTextMasker;
 import dev.qcoding.businesscopilot.reportcopilot.source.ReportSourcePreviewService;
+import dev.qcoding.businesscopilot.reportcopilot.request.ReportRequestPreparationService;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -28,6 +29,7 @@ class ReportCopilotAutoConfigurationTest {
                         "business-copilot.report-copilot.allowed-report-types=TEAM_WEEKLY,BUSINESS_WEEKLY")
                 .run(context -> {
                     assertThat(context).hasSingleBean(ReportSourcePreviewService.class);
+                    assertThat(context).hasSingleBean(ReportRequestPreparationService.class);
                     assertThat(context.getBean(ReportCopilotProperties.class).maxSourceCount()).isEqualTo(4);
                     assertThat(context.getBean(ReportSourcePreviewService.class).preview().sources()).hasSize(4);
                 });

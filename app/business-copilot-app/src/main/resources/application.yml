@@ -82,6 +82,9 @@ business-copilot:
     max-period-days: 31
     max-source-count: 50
     max-source-length: 4000
+    max-metric-sources: 20
+    max-task-sources: 20
+    max-meeting-note-sources: 10
     draft-ttl: 30m
     allowed-report-types: TEAM_WEEKLY,BUSINESS_WEEKLY,PROJECT_STATUS
     markdown-export-enabled: true

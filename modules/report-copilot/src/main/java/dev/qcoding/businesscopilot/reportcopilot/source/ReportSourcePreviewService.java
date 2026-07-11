@@ -6,10 +6,10 @@ import java.util.List;
 /** Builds a request-ready, source-grounded evidence pack from the demo provider. */
 public class ReportSourcePreviewService {
 
-    private final SampleReportDataProvider dataProvider;
+    private final ReportDataProvider dataProvider;
     private final ReportSourceNormalizer normalizer;
 
-    public ReportSourcePreviewService(SampleReportDataProvider dataProvider, ReportSourceNormalizer normalizer) {
+    public ReportSourcePreviewService(ReportDataProvider dataProvider, ReportSourceNormalizer normalizer) {
         this.dataProvider = dataProvider;
         this.normalizer = normalizer;
     }

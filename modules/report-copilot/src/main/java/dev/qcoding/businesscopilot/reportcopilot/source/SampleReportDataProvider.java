@@ -9,8 +9,9 @@ import java.util.Map;
  * <p>The source provider is intentionally narrow. Later integrations may implement the same
  * boundary without allowing model-generated or client-provided SQL to enter this module.</p>
  */
-public class SampleReportDataProvider {
+public class SampleReportDataProvider implements ReportDataProvider {
 
+    @Override
     public List<RawReportSource> loadSources() {
         return List.of(
                 new RawReportSource(ReportSourceType.METRIC, "Weekly business metrics",

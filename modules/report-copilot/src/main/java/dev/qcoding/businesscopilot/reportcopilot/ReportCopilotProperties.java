@@ -15,6 +15,9 @@ public record ReportCopilotProperties(
         int maxPeriodDays,
         int maxSourceCount,
         int maxSourceLength,
+        int maxMetricSources,
+        int maxTaskSources,
+        int maxMeetingNoteSources,
         Duration draftTtl,
         Set<ReportType> allowedReportTypes,
         boolean markdownExportEnabled) {
@@ -28,6 +31,15 @@ public record ReportCopilotProperties(
         }
         if (maxSourceLength <= 0) {
             maxSourceLength = 4000;
+        }
+        if (maxMetricSources <= 0) {
+            maxMetricSources = 20;
+        }
+        if (maxTaskSources <= 0) {
+            maxTaskSources = 20;
+        }
+        if (maxMeetingNoteSources <= 0) {
+            maxMeetingNoteSources = 10;
         }
         if (draftTtl == null || draftTtl.isNegative() || draftTtl.isZero()) {
             draftTtl = Duration.ofMinutes(30);

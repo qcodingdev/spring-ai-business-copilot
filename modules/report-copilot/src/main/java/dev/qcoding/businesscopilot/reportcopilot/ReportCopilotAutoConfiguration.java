@@ -2,8 +2,12 @@ package dev.qcoding.businesscopilot.reportcopilot;
 
 import dev.qcoding.businesscopilot.guardrails.SensitiveTextMasker;
 import dev.qcoding.businesscopilot.reportcopilot.source.ReportSourceNormalizer;
+import dev.qcoding.businesscopilot.reportcopilot.source.ReportSourceMapper;
 import dev.qcoding.businesscopilot.reportcopilot.source.ReportSourcePreviewService;
+import dev.qcoding.businesscopilot.reportcopilot.source.ReportDataProvider;
 import dev.qcoding.businesscopilot.reportcopilot.source.SampleReportDataProvider;
+import dev.qcoding.businesscopilot.reportcopilot.request.ReportRequestPreparationService;
+import dev.qcoding.businesscopilot.reportcopilot.request.ReportRequestValidator;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -36,8 +40,28 @@ public class ReportCopilotAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public ReportSourcePreviewService reportSourcePreviewService(SampleReportDataProvider dataProvider,
+    public ReportSourcePreviewService reportSourcePreviewService(ReportDataProvider dataProvider,
                                                                   ReportSourceNormalizer normalizer) {
         return new ReportSourcePreviewService(dataProvider, normalizer);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public ReportRequestValidator reportRequestValidator(ReportCopilotProperties properties) {
+        return new ReportRequestValidator(properties);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public ReportSourceMapper reportSourceMapper() {
+        return new ReportSourceMapper();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public ReportRequestPreparationService reportRequestPreparationService(ReportRequestValidator validator,
+                                                                            ReportSourceMapper sourceMapper,
+                                                                            ReportSourceNormalizer normalizer) {
+        return new ReportRequestPreparationService(validator, sourceMapper, normalizer);
     }
 }

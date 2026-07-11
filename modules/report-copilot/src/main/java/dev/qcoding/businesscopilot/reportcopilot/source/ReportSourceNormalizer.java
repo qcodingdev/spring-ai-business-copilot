@@ -9,9 +9,12 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Objects;
+import java.util.Comparator;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /** Sanitizes, bounds, hashes, and assigns request-scoped IDs to report evidence. */
 public class ReportSourceNormalizer {
@@ -44,9 +47,31 @@ public class ReportSourceNormalizer {
                     "A report source exceeds the configured length limit.");
         }
         String title = sensitiveTextMasker.mask(rawSource.title().trim());
-        String normalized = rawSource.sourceType() + "\n" + title + "\n" + sanitizedContent;
+        if (title.length() > properties.maxSourceLength()) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR,
+                    "A report source title exceeds the configured length limit.");
+        }
+        var sanitizedAttributes = sanitizeAttributes(rawSource.attributes());
+        String normalized = rawSource.sourceType() + "\n" + title + "\n" + sanitizedContent
+                + "\n" + stableAttributes(sanitizedAttributes);
         return new ReportSource(UUID.randomUUID().toString(), rawSource.sourceType(), title,
-                sanitizedContent, sha256(normalized), rawSource.attributes());
+                sanitizedContent, sha256(normalized), sanitizedAttributes);
+    }
+
+    private java.util.Map<String, String> sanitizeAttributes(java.util.Map<String, String> attributes) {
+        var sanitized = new LinkedHashMap<String, String>();
+        attributes.entrySet().stream()
+                .sorted(Comparator.comparing(java.util.Map.Entry::getKey))
+                .forEach(entry -> sanitized.put(sensitiveTextMasker.mask(entry.getKey()),
+                        sensitiveTextMasker.mask(entry.getValue())));
+        return java.util.Map.copyOf(sanitized);
+    }
+
+    private String stableAttributes(java.util.Map<String, String> attributes) {
+        return attributes.entrySet().stream()
+                .sorted(java.util.Map.Entry.comparingByKey())
+                .map(entry -> entry.getKey() + "=" + entry.getValue())
+                .collect(Collectors.joining("\n"));
     }
 
     private String sha256(String value) {
