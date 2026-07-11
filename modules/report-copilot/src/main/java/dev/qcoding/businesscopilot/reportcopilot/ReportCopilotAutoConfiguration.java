@@ -17,6 +17,7 @@ import dev.qcoding.businesscopilot.reportcopilot.draft.ReportDraftRepository;
 import dev.qcoding.businesscopilot.reportcopilot.draft.ReportDraftPersistenceService;
 import dev.qcoding.businesscopilot.reportcopilot.draft.ReportDraftConfirmationService;
 import dev.qcoding.businesscopilot.reportcopilot.audit.ReportAuditService;
+import dev.qcoding.businesscopilot.reportcopilot.export.ReportMarkdownExportService;
 import dev.qcoding.businesscopilot.aicore.AiChatService;
 import dev.qcoding.businesscopilot.aicore.PromptTemplateService;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -120,6 +121,13 @@ public class ReportCopilotAutoConfiguration {
     public ReportDraftConfirmationService reportDraftConfirmationService(ReportDraftRepository draftRepository,
                                                                          ReportAuditService auditService) {
         return new ReportDraftConfirmationService(draftRepository, auditService);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public ReportMarkdownExportService reportMarkdownExportService(ReportDraftRepository draftRepository,
+                                                                   ReportCopilotProperties properties) {
+        return new ReportMarkdownExportService(draftRepository, properties);
     }
 
     @Bean

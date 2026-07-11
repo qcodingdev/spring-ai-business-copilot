@@ -6,10 +6,13 @@ import dev.qcoding.businesscopilot.reportcopilot.request.ReportRequestPreparatio
 import dev.qcoding.businesscopilot.reportcopilot.generation.ReportDraftResponse;
 import dev.qcoding.businesscopilot.reportcopilot.generation.ReportGenerationService;
 import dev.qcoding.businesscopilot.reportcopilot.draft.ReportDraftConfirmationService;
+import dev.qcoding.businesscopilot.reportcopilot.export.ReportMarkdownExportService;
 import dev.qcoding.businesscopilot.reportcopilot.source.ReportSourcePreviewService;
 import jakarta.validation.Valid;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -27,15 +30,18 @@ public class ReportCopilotController {
     private final ReportRequestPreparationService requestPreparationService;
     private final ReportGenerationService generationService;
     private final ReportDraftConfirmationService confirmationService;
+    private final ReportMarkdownExportService markdownExportService;
 
     public ReportCopilotController(ReportSourcePreviewService sourcePreviewService,
                                    ReportRequestPreparationService requestPreparationService,
                                    ReportGenerationService generationService,
-                                   ReportDraftConfirmationService confirmationService) {
+                                   ReportDraftConfirmationService confirmationService,
+                                   ReportMarkdownExportService markdownExportService) {
         this.sourcePreviewService = sourcePreviewService;
         this.requestPreparationService = requestPreparationService;
         this.generationService = generationService;
         this.confirmationService = confirmationService;
+        this.markdownExportService = markdownExportService;
     }
 
     /** Returns sanitized fictional metrics, tasks, and meeting notes for a report preview. */
@@ -70,6 +76,15 @@ public class ReportCopilotController {
     public ResponseEntity<ApiResponse<ReportDraftConfirmationService.ConfirmationResult>> cancelReport(
             @PathVariable Long draftId, @Valid @RequestBody ConfirmationRequest request) {
         return ResponseEntity.ok(ApiResponse.ok(confirmationService.cancel(draftId, request.confirmationToken())));
+    }
+
+    /** Exports only a confirmed draft as server-rendered Markdown. */
+    @GetMapping(value = "/reports/{draftId}/markdown", produces = "text/markdown")
+    public ResponseEntity<String> exportMarkdown(@PathVariable Long draftId) {
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=report-" + draftId + ".md")
+                .contentType(MediaType.parseMediaType("text/markdown"))
+                .body(markdownExportService.export(draftId));
     }
 
     public record ConfirmationRequest(

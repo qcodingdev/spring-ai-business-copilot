@@ -23,12 +23,6 @@ import java.util.stream.Collectors;
 /** JDBC implementation for the small, transactional Report Copilot draft lifecycle. */
 public class JdbcReportDraftRepository implements ReportDraftRepository {
 
-    private static final RowMapper<ReportDraft> DRAFT_ROW_MAPPER = (rs, rowNum) -> new ReportDraft(
-            rs.getLong("id"), rs.getLong("request_id"), null,
-            ReportDraftStatus.valueOf(rs.getString("status")), rs.getString("review_reasons"),
-            rs.getString("confirmation_token"), toInstant(rs.getTimestamp("expires_at")),
-            toInstant(rs.getTimestamp("created_at")), toInstant(rs.getTimestamp("updated_at")));
-
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -70,9 +64,14 @@ public class JdbcReportDraftRepository implements ReportDraftRepository {
 
     @Override
     public Optional<ReportDraft> findByConfirmationToken(String confirmationToken) {
-        List<ReportDraft> drafts = jdbcTemplate.query(
-                "SELECT id, request_id, status, review_reasons, confirmation_token, expires_at, created_at, updated_at "
-                        + "FROM report_drafts WHERE confirmation_token = ?", DRAFT_ROW_MAPPER, confirmationToken);
+        List<ReportDraft> drafts = jdbcTemplate.query(selectDraftSql() + " WHERE confirmation_token = ?",
+                this::mapDraft, confirmationToken);
+        return drafts.isEmpty() ? Optional.empty() : Optional.of(drafts.getFirst());
+    }
+
+    @Override
+    public Optional<ReportDraft> findById(Long draftId) {
+        List<ReportDraft> drafts = jdbcTemplate.query(selectDraftSql() + " WHERE id = ?", this::mapDraft, draftId);
         return drafts.isEmpty() ? Optional.empty() : Optional.of(drafts.getFirst());
     }
 
@@ -113,6 +112,25 @@ public class JdbcReportDraftRepository implements ReportDraftRepository {
         } catch (JacksonException ex) {
             throw new IllegalStateException("Unable to serialize report draft content", ex);
         }
+    }
+
+    private ReportDraft mapDraft(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException {
+        return new ReportDraft(rs.getLong("id"), rs.getLong("request_id"), deserialize(rs.getString("structured_content")),
+                ReportDraftStatus.valueOf(rs.getString("status")), rs.getString("review_reasons"),
+                rs.getString("confirmation_token"), toInstant(rs.getTimestamp("expires_at")),
+                toInstant(rs.getTimestamp("created_at")), toInstant(rs.getTimestamp("updated_at")));
+    }
+
+    private LlmReportOutput deserialize(String contentJson) {
+        try {
+            return objectMapper.readValue(contentJson, LlmReportOutput.class);
+        } catch (JacksonException ex) {
+            throw new IllegalStateException("Unable to deserialize report draft content", ex);
+        }
+    }
+
+    private String selectDraftSql() {
+        return "SELECT id, request_id, structured_content, status, review_reasons, confirmation_token, expires_at, created_at, updated_at FROM report_drafts";
     }
 
     private static Instant toInstant(Timestamp timestamp) {

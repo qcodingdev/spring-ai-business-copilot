@@ -14,5 +14,7 @@ public interface ReportDraftRepository {
 
     Optional<ReportDraft> findByConfirmationToken(String confirmationToken);
 
+    Optional<ReportDraft> findById(Long draftId);
+
     boolean transitionStatus(Long draftId, ReportDraftStatus expected, ReportDraftStatus target);
 }
