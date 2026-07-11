@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -73,6 +74,20 @@ class ReportGenerationServiceTest {
         assertThat(response.reviewReasons()).isNotEmpty();
         assertThat(response.confirmationToken()).isEqualTo("review-token");
         verify(draftPersistenceService).createNeedsReviewDraft(any(), any(), eq("test-model"));
+    }
+
+    @Test
+    void recordsMetadataOnlyFailureWhenTheModelCallFails() {
+        ReportRequestPreparationService.ReportRequestPreview preview = preview();
+        when(preparationService.prepare(org.mockito.ArgumentMatchers.any())).thenReturn(preview);
+        when(aiChatService.modelName()).thenReturn("test-model");
+        when(aiChatService.generateJson(anyString(), eq(LlmReportOutput.class))).thenThrow(new IllegalStateException("model offline"));
+
+        assertThatThrownBy(() -> service.generate(new ReportGenerateRequest(null, null, null, null, null, null)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("model offline");
+
+        verify(draftPersistenceService).recordGenerationFailure(preview, "test-model");
     }
 
     private ReportRequestPreparationService.ReportRequestPreview preview() {

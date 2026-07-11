@@ -43,4 +43,9 @@ public class ReportDraftPersistenceService {
                 "", modelName, ReportDraftStatus.NEEDS_REVIEW.name(), "Evidence validation requires manual review."));
         return draft;
     }
+
+    public void recordGenerationFailure(ReportRequestPreparationService.ReportRequestPreview preview, String modelName) {
+        auditService.record(new ReportAuditLog(null, null, "FAILED", preview.sources().size(), "", modelName,
+                ReportDraftStatus.FAILED.name(), "Model generation failed."));
+    }
 }
