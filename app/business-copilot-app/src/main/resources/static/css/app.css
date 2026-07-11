@@ -222,6 +222,83 @@ tbody tr:hover { background: #fafbfc; }
   font-size: 14px;
   font-family: inherit;
 }
+
+/* ── Report Copilot ───────────────────────────────────────── */
+.report-request-grid,
+.report-source-grid,
+.report-inline-fields {
+  display: grid;
+  gap: 12px;
+}
+
+.report-request-grid {
+  grid-template-columns: minmax(0, 1.3fr) repeat(2, minmax(0, 1fr));
+}
+
+.report-source-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 16px;
+}
+
+.report-inline-fields {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.report-source-fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.report-source-fieldset legend {
+  padding: 0 4px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.report-note-source {
+  grid-column: 1 / -1;
+}
+
+.report-meta {
+  margin: 0 0 14px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.report-review-reasons {
+  margin-bottom: 16px;
+}
+
+.report-content > section {
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+
+.report-content h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.report-content p,
+.report-content ul {
+  margin: 0;
+}
+
+.report-content li {
+  margin-bottom: 6px;
+}
+
+.report-source-id {
+  display: inline-block;
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-family: "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 12px;
+  word-break: break-all;
+}
 .text-input:focus { outline: 2px solid var(--primary); border-color: var(--primary); }
 
 /* ── Upload Form ───────────────────────────────────────────── */
@@ -425,5 +502,13 @@ tbody tr:hover { background: #fafbfc; }
   .sample-btn {
     width: 100%;
     text-align: center;
+  }
+  .report-request-grid,
+  .report-source-grid,
+  .report-inline-fields {
+    grid-template-columns: 1fr;
+  }
+  .report-note-source {
+    grid-column: auto;
   }
 }

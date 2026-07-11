@@ -13,7 +13,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * <p>显式注册审计组件。JdbcQueryAuditRepository 需要 JdbcTemplate bean，
  * 由 app 模块的 Spring Boot auto-configuration 提供。</p>
  */
-@AutoConfiguration
+@AutoConfiguration(afterName = "org.springframework.boot.jdbc.autoconfigure.JdbcTemplateAutoConfiguration")
 @ConditionalOnClass(JdbcTemplate.class)
 @ConditionalOnBean(JdbcTemplate.class)
 public class AuditAutoConfiguration {

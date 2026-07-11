@@ -76,7 +76,7 @@ business-copilot:
     auto-human-handoff-enabled: true
     knowledge-top-k: 5
   # ── Report Copilot 配置 ──────────────────────────────────────
-  # 报表模块当前提供脱敏后的示例来源预览；后续报告草稿仍需人工确认才可导出。
+  # 报表草稿必须人工确认；只有 CONFIRMED 状态可导出 Markdown。
   report-copilot:
     enabled: true
     max-period-days: 31

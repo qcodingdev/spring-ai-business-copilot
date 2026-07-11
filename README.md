@@ -6,7 +6,7 @@ Spring AI Business Copilot is an open-source Java AI business application suite 
 
 It provides ready-to-run business modules that teams can clone, run, learn from, and adapt to real business systems. The goal is not to provide another AI framework, but to provide practical Spring AI applications.
 
-> **Current status:** Data Copilot, Knowledge Copilot, and Support Copilot are implemented. Report Copilot V4 is in development: its module foundation and sanitized source-preview feature are available. Resume Copilot remains planned as the fifth module.
+> **Current status:** Data Copilot, Knowledge Copilot, and Support Copilot are implemented. Report Copilot V4 now includes a source-grounded draft lifecycle and workbench; external source integrations remain in development. Resume Copilot remains planned as the fifth module.
 
 ![Data Copilot workbench](img.png)
 
@@ -93,7 +93,7 @@ When both model switches are `none`, the workbench and database infrastructure c
 |---|---|---|
 | Runtime | Java 21, Spring Boot 4.1.0 | Keep |
 | AI | Spring AI 2.0.0 with schema-validated structured output | Application code uses Jackson 3; the OpenAI SDK still brings a transitive Jackson 2 compatibility dependency |
-| Persistence | Spring JDBC plus MyBatis-Plus 3.5.16 in Report Copilot | Use MyBatis-Plus for stable CRUD; keep JDBC for dynamic SQL, metadata, and pgvector |
+| Persistence | Spring JDBC; MyBatis-Plus 3.5.16 starter is available for Report Copilot | Introduce MyBatis-Plus only for stable CRUD that warrants a mapper; keep JDBC for dynamic SQL, metadata, and pgvector |
 | Database | PostgreSQL 16, pgvector, Flyway | Keep Flyway as the only DDL authority |
 | Web | Spring MVC, Thymeleaf, vanilla JavaScript | Keep |
 
@@ -170,7 +170,7 @@ Support Copilot is the third business module. It is an intelligent customer serv
 
 ## V4 In Progress
 
-**V4 Report Copilot** now exposes a fictional evidence pack at `GET /api/report-copilot/sample-sources`, a client-evidence preparation API at `POST /api/report-copilot/source-previews`, and a structured generation endpoint at `POST /api/report-copilot/reports/generate`. Valid output becomes a persisted `DRAFTED` report with a server-generated confirmation token; only `/confirm` or `/cancel` may consume it. `GET /api/report-copilot/reports/{draftId}/markdown` exports only confirmed drafts using server-rendered, escaped Markdown. Every factual section needs a valid source ID, metric values must exactly match a cited metric source, AI suggestions remain separate, and output is masked again. It will not execute arbitrary SQL, modify tasks, or publish reports automatically.
+**V4 Report Copilot** is available from the shared workbench. It lets users enter a report period and typed metric, task, and meeting evidence; preview the normalized, masked evidence; generate a structured report; review its `DRAFTED` state; confirm or cancel it with a server-generated token; and export only a confirmed draft as Markdown. The backing APIs are `GET /api/report-copilot/sample-sources`, `POST /api/report-copilot/source-previews`, `POST /api/report-copilot/reports/generate`, `/confirm`, `/cancel`, and `GET /api/report-copilot/reports/{draftId}/markdown`. Every factual section needs a valid source ID, metric values must exactly match a cited metric source, AI suggestions remain separate, and output is masked again. It will not execute arbitrary SQL, modify tasks, or publish reports automatically.
 
 **V5 Resume Copilot** will compare one confirmed job description with one sanitized resume and produce criterion-by-criterion evidence, information gaps, and interview verification questions. It will not score or rank candidates, recommend hiring or rejection, infer protected attributes, or change any recruitment workflow state.
 
@@ -221,7 +221,7 @@ spring-ai-business-copilot/
 - Spring Boot 4.1
 - Spring AI 2.0
 - Spring JDBC + PostgreSQL (current)
-- MyBatis-Plus 3.5.16 for stable Report Copilot CRUD
+- MyBatis-Plus 3.5.16 starter, reserved for future stable Report Copilot CRUD
 - Flyway database migrations
 - Thymeleaf (workbench UI)
 - Maven multi-module

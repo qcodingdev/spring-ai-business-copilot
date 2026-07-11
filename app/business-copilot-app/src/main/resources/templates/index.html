@@ -19,6 +19,7 @@
     <button class="tab active" data-tab="data-copilot">Data Copilot</button>
     <button class="tab" data-tab="knowledge-copilot">Knowledge Copilot</button>
     <button class="tab" data-tab="support-copilot">Support Copilot</button>
+    <button class="tab" data-tab="report-copilot">Report Copilot</button>
   </nav>
 
   <!-- ═══════════════════════════════════════════════════════════ -->
@@ -310,6 +311,148 @@
 
   </div><!-- /tab-support-copilot -->
 
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- Report Copilot 面板 -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div id="tab-report-copilot" class="tab-content" hidden>
+
+    <section class="panel" id="rc-request-panel">
+      <h2>报告范围与来源</h2>
+      <div class="report-request-grid">
+        <div class="field-group">
+          <label for="rc-report-type">报告类型</label>
+          <select id="rc-report-type" class="text-input">
+            <option value="TEAM_WEEKLY">团队周报</option>
+            <option value="BUSINESS_WEEKLY">业务周报</option>
+            <option value="PROJECT_STATUS">项目状态</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <label for="rc-period-start">开始日期</label>
+          <input id="rc-period-start" type="date" class="text-input"/>
+        </div>
+        <div class="field-group">
+          <label for="rc-period-end">结束日期</label>
+          <input id="rc-period-end" type="date" class="text-input"/>
+        </div>
+      </div>
+      <div class="field-group">
+        <label for="rc-title">报告标题</label>
+        <input id="rc-title" type="text" class="text-input" value="本周业务进展" maxlength="300"/>
+      </div>
+
+      <div class="report-source-grid">
+        <fieldset class="report-source-fieldset">
+          <legend>指标来源</legend>
+          <div class="field-group">
+            <label for="rc-metric-name">指标名称</label>
+            <input id="rc-metric-name" type="text" class="text-input" value="支付订单数"/>
+          </div>
+          <div class="report-inline-fields">
+            <div class="field-group">
+              <label for="rc-metric-value">数值</label>
+              <input id="rc-metric-value" type="number" class="text-input" value="1284" step="any"/>
+            </div>
+            <div class="field-group">
+              <label for="rc-metric-unit">单位</label>
+              <input id="rc-metric-unit" type="text" class="text-input" value="单"/>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="report-source-fieldset">
+          <legend>任务来源</legend>
+          <div class="field-group">
+            <label for="rc-task-title">任务标题</label>
+            <input id="rc-task-title" type="text" class="text-input" value="支付失败监控"/>
+          </div>
+          <div class="report-inline-fields">
+            <div class="field-group">
+              <label for="rc-task-status">状态</label>
+              <select id="rc-task-status" class="text-input">
+                <option value="COMPLETED">已完成</option>
+                <option value="IN_PROGRESS">进行中</option>
+                <option value="BLOCKED">受阻</option>
+              </select>
+            </div>
+            <div class="field-group">
+              <label for="rc-task-assignee">负责人别名</label>
+              <input id="rc-task-assignee" type="text" class="text-input" value="产品团队"/>
+            </div>
+          </div>
+          <div class="field-group">
+            <label for="rc-task-source">来源说明</label>
+            <input id="rc-task-source" type="text" class="text-input" value="本周任务看板"/>
+          </div>
+        </fieldset>
+
+        <fieldset class="report-source-fieldset report-note-source">
+          <legend>会议纪要</legend>
+          <div class="field-group">
+            <label for="rc-note-title">纪要标题</label>
+            <input id="rc-note-title" type="text" class="text-input" value="本周交付同步会"/>
+          </div>
+          <div class="field-group">
+            <label for="rc-note-content">纪要内容</label>
+            <textarea id="rc-note-content" rows="3">支付失败监控已上线，本周继续观察稳定性；下周二复盘灰度发布指标。</textarea>
+          </div>
+        </fieldset>
+      </div>
+
+      <div class="action-buttons">
+        <button id="rc-preview-btn" type="button" class="btn-secondary">预览来源</button>
+        <button id="rc-generate-btn" type="button">生成报告草稿</button>
+      </div>
+    </section>
+
+    <section class="panel" id="rc-sources-panel" hidden>
+      <h2>证据预览 <span id="rc-sources-count" class="badge"></span></h2>
+      <ul id="rc-sources-list" class="citation-list"></ul>
+    </section>
+
+    <section class="panel" id="rc-draft-panel" hidden>
+      <h2>报告草稿 <span id="rc-status-badge" class="badge"></span></h2>
+      <p id="rc-draft-meta" class="report-meta"></p>
+      <div id="rc-review-reasons" class="report-review-reasons" hidden>
+        <ul id="rc-review-reasons-list" class="warnings-list"></ul>
+      </div>
+      <div id="rc-report-content" class="report-content" hidden>
+        <section>
+          <h3>执行摘要</h3>
+          <p id="rc-executive-summary"></p>
+        </section>
+        <section id="rc-metrics-section" hidden>
+          <h3>指标亮点</h3>
+          <ul id="rc-metrics-list"></ul>
+        </section>
+        <section id="rc-completed-section" hidden>
+          <h3>已完成事项</h3>
+          <ul id="rc-completed-list"></ul>
+        </section>
+        <section id="rc-risks-section" hidden>
+          <h3>风险与阻塞</h3>
+          <ul id="rc-risks-list"></ul>
+        </section>
+        <section id="rc-actions-section" hidden>
+          <h3>来源行动项</h3>
+          <ul id="rc-actions-list"></ul>
+        </section>
+        <section id="rc-suggestions-section" hidden>
+          <h3>AI 建议</h3>
+          <ul id="rc-suggestions-list"></ul>
+        </section>
+      </div>
+      <div id="rc-draft-actions" class="action-buttons" hidden>
+        <button id="rc-confirm-btn" type="button" class="btn-primary">确认草稿</button>
+        <button id="rc-cancel-btn" type="button" class="btn-secondary">取消草稿</button>
+      </div>
+      <div id="rc-export-actions" class="action-buttons" hidden>
+        <button id="rc-export-btn" type="button" class="btn-primary">导出 Markdown</button>
+      </div>
+    </section>
+
+  </div><!-- /tab-report-copilot -->
+
   <!-- 错误提示 -->
   <div id="error-toast" hidden></div>
 
@@ -324,5 +467,6 @@
 <script th:src="@{/js/app.js}"></script>
 <script th:src="@{/js/knowledge-copilot.js}"></script>
 <script th:src="@{/js/support-copilot.js}"></script>
+<script th:src="@{/js/report-copilot.js}"></script>
 </body>
 </html>
