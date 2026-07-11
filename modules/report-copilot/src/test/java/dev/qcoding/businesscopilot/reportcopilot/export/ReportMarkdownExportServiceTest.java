@@ -2,6 +2,8 @@ package dev.qcoding.businesscopilot.reportcopilot.export;
 
 import dev.qcoding.businesscopilot.commonweb.api.BusinessException;
 import dev.qcoding.businesscopilot.reportcopilot.ReportCopilotProperties;
+import dev.qcoding.businesscopilot.reportcopilot.audit.ReportAuditLog;
+import dev.qcoding.businesscopilot.reportcopilot.audit.ReportAuditService;
 import dev.qcoding.businesscopilot.reportcopilot.draft.ReportDraft;
 import dev.qcoding.businesscopilot.reportcopilot.draft.ReportDraftRepository;
 import dev.qcoding.businesscopilot.reportcopilot.draft.ReportDraftStatus;
@@ -9,6 +11,7 @@ import dev.qcoding.businesscopilot.reportcopilot.generation.LlmReportOutput;
 import dev.qcoding.businesscopilot.reportcopilot.generation.ReportItem;
 import dev.qcoding.businesscopilot.reportcopilot.request.ReportType;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -19,12 +22,14 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class ReportMarkdownExportServiceTest {
 
     private final ReportDraftRepository repository = mock(ReportDraftRepository.class);
-    private final ReportMarkdownExportService service = new ReportMarkdownExportService(repository, properties());
+    private final ReportAuditService auditService = mock(ReportAuditService.class);
+    private final ReportMarkdownExportService service = new ReportMarkdownExportService(repository, properties(), auditService);
 
     @Test
     void rendersOnlyConfirmedDraftsAndEscapesModelMarkdown() {
@@ -35,6 +40,10 @@ class ReportMarkdownExportServiceTest {
         assertThat(markdown).contains("## Executive Summary");
         assertThat(markdown).contains("\\[untrusted\\]");
         assertThat(markdown).contains("&lt;script&gt;");
+        ArgumentCaptor<ReportAuditLog> audit = ArgumentCaptor.forClass(ReportAuditLog.class);
+        verify(auditService).record(audit.capture());
+        assertThat(audit.getValue().eventType()).isEqualTo("EXPORTED");
+        assertThat(audit.getValue().status()).isEqualTo("CONFIRMED");
     }
 
     @Test

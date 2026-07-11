@@ -71,7 +71,7 @@ public class ReportCopilotController {
         return ResponseEntity.ok(ApiResponse.ok(confirmationService.confirm(draftId, request.confirmationToken())));
     }
 
-    /** Cancels a server-generated DRAFTED report and invalidates its confirmation token. */
+    /** Cancels a server-generated DRAFTED or NEEDS_REVIEW report and invalidates its token. */
     @PostMapping("/reports/{draftId}/cancel")
     public ResponseEntity<ApiResponse<ReportDraftConfirmationService.ConfirmationResult>> cancelReport(
             @PathVariable Long draftId, @Valid @RequestBody ConfirmationRequest request) {

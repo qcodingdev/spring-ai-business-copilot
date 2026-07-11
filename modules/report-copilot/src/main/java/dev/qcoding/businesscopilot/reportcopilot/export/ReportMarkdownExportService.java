@@ -3,6 +3,8 @@ package dev.qcoding.businesscopilot.reportcopilot.export;
 import dev.qcoding.businesscopilot.commonweb.api.BusinessException;
 import dev.qcoding.businesscopilot.commonweb.api.ErrorCode;
 import dev.qcoding.businesscopilot.reportcopilot.ReportCopilotProperties;
+import dev.qcoding.businesscopilot.reportcopilot.audit.ReportAuditLog;
+import dev.qcoding.businesscopilot.reportcopilot.audit.ReportAuditService;
 import dev.qcoding.businesscopilot.reportcopilot.draft.ReportDraft;
 import dev.qcoding.businesscopilot.reportcopilot.draft.ReportDraftRepository;
 import dev.qcoding.businesscopilot.reportcopilot.draft.ReportDraftStatus;
@@ -16,10 +18,13 @@ public class ReportMarkdownExportService {
 
     private final ReportDraftRepository draftRepository;
     private final ReportCopilotProperties properties;
+    private final ReportAuditService auditService;
 
-    public ReportMarkdownExportService(ReportDraftRepository draftRepository, ReportCopilotProperties properties) {
+    public ReportMarkdownExportService(ReportDraftRepository draftRepository, ReportCopilotProperties properties,
+                                       ReportAuditService auditService) {
         this.draftRepository = draftRepository;
         this.properties = properties;
+        this.auditService = auditService;
     }
 
     public String export(Long draftId) {
@@ -31,7 +36,10 @@ public class ReportMarkdownExportService {
         if (draft.status() != ReportDraftStatus.CONFIRMED) {
             throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Only CONFIRMED report drafts can be exported.");
         }
-        return render(draft);
+        String markdown = render(draft);
+        auditService.record(new ReportAuditLog(draft.requestId(), draft.id(), "EXPORTED", 0, "", null,
+                ReportDraftStatus.CONFIRMED.name(), null));
+        return markdown;
     }
 
     private String render(ReportDraft draft) {

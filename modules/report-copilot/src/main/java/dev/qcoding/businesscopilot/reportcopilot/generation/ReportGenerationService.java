@@ -39,20 +39,23 @@ public class ReportGenerationService {
 
     public ReportDraftResponse generate(ReportGenerateRequest request) {
         var preview = preparationService.prepare(request);
+        String modelName = aiChatService.modelName();
         if (preview.sources().isEmpty()) {
             return new ReportDraftResponse(null, preview.reportType(), preview.period(), preview.title(), "REJECTED", null,
-                    List.of("At least one source is required to generate a report."), null, null, aiChatService.modelName());
+                    List.of("At least one source is required to generate a report."), null, null, modelName);
         }
         String prompt = promptTemplateService.render(PROMPT_LOCATION, promptContextFactory.create(preview));
         LlmReportOutput output = aiChatService.generateJson(prompt, LlmReportOutput.class);
         ReportGenerationOutputValidator.ValidationResult validation = outputValidator.validate(output, preview.sources());
         if (!validation.valid()) {
-            return new ReportDraftResponse(null, preview.reportType(), preview.period(), preview.title(), "REJECTED", null,
-                    validation.violations(), null, null, aiChatService.modelName());
+            var draft = draftPersistenceService.createNeedsReviewDraft(preview, validation.violations(), modelName);
+            return new ReportDraftResponse(draft.id(), preview.reportType(), preview.period(), preview.title(),
+                    draft.status().name(), null, validation.violations(), draft.confirmationToken(),
+                    draft.expiresAt().toString(), modelName);
         }
         LlmReportOutput sanitizedOutput = outputSanitizer.sanitize(output);
-        var draft = draftPersistenceService.createDraft(preview, sanitizedOutput, aiChatService.modelName());
+        var draft = draftPersistenceService.createDraft(preview, sanitizedOutput, modelName);
         return new ReportDraftResponse(draft.id(), preview.reportType(), preview.period(), preview.title(), draft.status().name(),
-                sanitizedOutput, List.of(), draft.confirmationToken(), draft.expiresAt().toString(), aiChatService.modelName());
+                sanitizedOutput, List.of(), draft.confirmationToken(), draft.expiresAt().toString(), modelName);
     }
 }

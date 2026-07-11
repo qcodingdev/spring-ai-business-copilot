@@ -21,6 +21,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -55,16 +56,23 @@ class ReportGenerationServiceTest {
     }
 
     @Test
-    void rejectsOutputThatCitesAnUnknownSource() {
+    void storesOnlyReviewReasonsWhenOutputCitesAnUnknownSource() {
         when(preparationService.prepare(org.mockito.ArgumentMatchers.any())).thenReturn(preview());
         when(aiChatService.modelName()).thenReturn("test-model");
         when(aiChatService.generateJson(anyString(), eq(LlmReportOutput.class))).thenReturn(validOutput("invented-source"));
+        when(draftPersistenceService.createNeedsReviewDraft(any(), any(), eq("test-model")))
+                .thenReturn(new ReportDraft(11L, 21L, null, ReportDraftStatus.NEEDS_REVIEW,
+                        "Citation refers to a source outside the current request.", "review-token",
+                        Instant.parse("2026-07-11T12:00:00Z"), Instant.now(), Instant.now()));
 
         ReportDraftResponse response = service.generate(new ReportGenerateRequest(null, null, null, null, null, null));
 
-        assertThat(response.status()).isEqualTo("REJECTED");
+        assertThat(response.status()).isEqualTo("NEEDS_REVIEW");
+        assertThat(response.draftId()).isEqualTo(11L);
         assertThat(response.content()).isNull();
         assertThat(response.reviewReasons()).isNotEmpty();
+        assertThat(response.confirmationToken()).isEqualTo("review-token");
+        verify(draftPersistenceService).createNeedsReviewDraft(any(), any(), eq("test-model"));
     }
 
     private ReportRequestPreparationService.ReportRequestPreview preview() {

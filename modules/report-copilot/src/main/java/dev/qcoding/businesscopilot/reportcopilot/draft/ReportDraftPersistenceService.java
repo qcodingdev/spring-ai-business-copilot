@@ -8,8 +8,9 @@ import dev.qcoding.businesscopilot.reportcopilot.request.ReportRequestPreparatio
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.stream.Collectors;
+import java.util.List;
 
-/** Creates a request, its sanitized evidence, and a DRAFTED report as one database transaction. */
+/** Creates a request, its sanitized evidence, and a draft state as one database transaction. */
 public class ReportDraftPersistenceService {
 
     private final ReportDraftRepository draftRepository;
@@ -31,6 +32,15 @@ public class ReportDraftPersistenceService {
                 .collect(Collectors.joining(","));
         auditService.record(new ReportAuditLog(draft.requestId(), draft.id(), "DRAFTED", preview.sources().size(),
                 citedSourceIds, modelName, ReportDraftStatus.DRAFTED.name(), null));
+        return draft;
+    }
+
+    @Transactional
+    public ReportDraft createNeedsReviewDraft(ReportRequestPreparationService.ReportRequestPreview preview,
+                                              List<String> reviewReasons, String modelName) {
+        ReportDraft draft = draftRepository.saveNeedsReview(preview, reviewReasons, modelName, properties.draftTtl());
+        auditService.record(new ReportAuditLog(draft.requestId(), draft.id(), "NEEDS_REVIEW", preview.sources().size(),
+                "", modelName, ReportDraftStatus.NEEDS_REVIEW.name(), "Evidence validation requires manual review."));
         return draft;
     }
 }

@@ -23,6 +23,9 @@ import java.util.stream.Collectors;
 /** JDBC implementation for the small, transactional Report Copilot draft lifecycle. */
 public class JdbcReportDraftRepository implements ReportDraftRepository {
 
+    private static final LlmReportOutput EMPTY_REVIEW_CONTENT = new LlmReportOutput(null, List.of(), List.of(),
+            List.of(), List.of(), List.of(), List.of(), List.of());
+
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -33,6 +36,18 @@ public class JdbcReportDraftRepository implements ReportDraftRepository {
     @Override
     public ReportDraft save(ReportRequestPreparationService.ReportRequestPreview preview, LlmReportOutput content,
                             String modelName, Duration draftTtl) {
+        return saveDraft(preview, content, ReportDraftStatus.DRAFTED, null, draftTtl);
+    }
+
+    @Override
+    public ReportDraft saveNeedsReview(ReportRequestPreparationService.ReportRequestPreview preview,
+                                       List<String> reviewReasons, String modelName, Duration draftTtl) {
+        return saveDraft(preview, EMPTY_REVIEW_CONTENT, ReportDraftStatus.NEEDS_REVIEW,
+                joinReviewReasons(reviewReasons), draftTtl);
+    }
+
+    private ReportDraft saveDraft(ReportRequestPreparationService.ReportRequestPreview preview, LlmReportOutput content,
+                                  ReportDraftStatus status, String reviewReasons, Duration draftTtl) {
         Instant now = Instant.now();
         long requestId = insertRequest(preview, now);
         insertSources(requestId, preview.sources(), now);
@@ -50,16 +65,16 @@ public class JdbcReportDraftRepository implements ReportDraftRepository {
             statement.setLong(1, requestId);
             statement.setString(2, contentJson);
             statement.setString(3, citedSourceIds);
-            statement.setString(4, ReportDraftStatus.DRAFTED.name());
-            statement.setString(5, null);
+            statement.setString(4, status.name());
+            statement.setString(5, reviewReasons);
             statement.setString(6, token);
             statement.setTimestamp(7, Timestamp.from(expiresAt));
             statement.setTimestamp(8, Timestamp.from(now));
             statement.setTimestamp(9, Timestamp.from(now));
             return statement;
         }, keyHolder);
-        return new ReportDraft(keyHolder.getKey().longValue(), requestId, content, ReportDraftStatus.DRAFTED,
-                null, token, expiresAt, now, now);
+        return new ReportDraft(keyHolder.getKey().longValue(), requestId, content, status,
+                reviewReasons, token, expiresAt, now, now);
     }
 
     @Override
@@ -112,6 +127,14 @@ public class JdbcReportDraftRepository implements ReportDraftRepository {
         } catch (JacksonException ex) {
             throw new IllegalStateException("Unable to serialize report draft content", ex);
         }
+    }
+
+    private String joinReviewReasons(List<String> reviewReasons) {
+        if (reviewReasons == null || reviewReasons.isEmpty()) {
+            return "Report output requires manual evidence review.";
+        }
+        return reviewReasons.stream().filter(reason -> reason != null && !reason.isBlank()).limit(20)
+                .collect(Collectors.joining("\n"));
     }
 
     private ReportDraft mapDraft(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException {

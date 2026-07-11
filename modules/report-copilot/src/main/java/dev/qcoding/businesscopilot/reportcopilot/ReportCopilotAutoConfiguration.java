@@ -126,8 +126,9 @@ public class ReportCopilotAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public ReportMarkdownExportService reportMarkdownExportService(ReportDraftRepository draftRepository,
-                                                                   ReportCopilotProperties properties) {
-        return new ReportMarkdownExportService(draftRepository, properties);
+                                                                   ReportCopilotProperties properties,
+                                                                   ReportAuditService auditService) {
+        return new ReportMarkdownExportService(draftRepository, properties, auditService);
     }
 
     @Bean

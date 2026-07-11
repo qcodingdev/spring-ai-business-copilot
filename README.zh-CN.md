@@ -170,7 +170,7 @@ Support Copilot 是第三个业务模块，定位为智能客服助手，帮助�
 
 ## V4 开发中
 
-**V4 Report Copilot** 已接入共享工作台。用户可录入报告周期及结构化指标、任务、会议纪要来源，预览归一化与脱敏后的证据，生成结构化报告，审阅 `DRAFTED` 草稿，并使用服务端生成的 token 确认或取消；只有已确认草稿才能导出 Markdown。后端接口包括 `GET /api/report-copilot/sample-sources`、`POST /api/report-copilot/source-previews`、`POST /api/report-copilot/reports/generate`、`/confirm`、`/cancel` 和 `GET /api/report-copilot/reports/{draftId}/markdown`。每个事实项必须引用本次来源，指标名称/值/单位必须与引用指标严格一致，AI 建议与来源行动项分离，模型输出也会再次脱敏。它不会执行任意 SQL、修改任务或自动发布报告。
+**V4 Report Copilot** 已接入共享工作台。用户可录入报告周期及结构化指标、任务、会议纪要来源，预览归一化与脱敏后的证据，生成结构化报告，审阅 `DRAFTED` 草稿，并使用服务端生成的 token 确认或取消；只有已确认草稿才能导出 Markdown。模型输出证据不完整时会进入 `NEEDS_REVIEW`：只持久化确定性复核原因，不能确认，也绝不回显不可信模型正文。后端接口包括 `GET /api/report-copilot/sample-sources`、`POST /api/report-copilot/source-previews`、`POST /api/report-copilot/reports/generate`、`/confirm`、`/cancel` 和 `GET /api/report-copilot/reports/{draftId}/markdown`。每个事实项必须引用本次来源，指标名称/值/单位必须与引用指标严格一致，AI 建议与来源行动项分离，模型输出也会再次脱敏。生成、状态流转和导出均记录不含报告正文的审计元数据。它不会执行任意 SQL、修改任务或自动发布报告。
 
 **V5 Resume Copilot** 将对单个已确认 JD 和单份脱敏简历进行逐条证据匹配，输出信息缺口和面试核验问题。它不会对候选人评分或排名，不提供录用或淘汰建议，不推断受保护属性，也不改变招聘流程状态。
 

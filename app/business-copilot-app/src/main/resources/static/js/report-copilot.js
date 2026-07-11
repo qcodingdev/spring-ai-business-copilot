@@ -20,6 +20,7 @@
     taskSource: $('rc-task-source'),
     noteTitle: $('rc-note-title'),
     noteContent: $('rc-note-content'),
+    sampleSourcesBtn: $('rc-sample-sources-btn'),
     previewBtn: $('rc-preview-btn'),
     generateBtn: $('rc-generate-btn'),
     sourcesPanel: $('rc-sources-panel'),
@@ -50,6 +51,7 @@
   };
 
   initializePeriod();
+  els.sampleSourcesBtn.addEventListener('click', loadSampleSources);
   els.previewBtn.addEventListener('click', previewSources);
   els.generateBtn.addEventListener('click', generateReport);
   els.confirmBtn.addEventListener('click', () => updateDraft('confirm'));
@@ -71,6 +73,21 @@
     await submitRequest('/source-previews', '正在整理来源…', (data) => {
       renderSources(data.sources || []);
     });
+  }
+
+  async function loadSampleSources() {
+    setLoading('正在加载示例来源…');
+    clearError();
+    try {
+      const response = await fetch(API_BASE + '/sample-sources');
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok || !body.success) throw new Error(formatError(body));
+      renderSources(body.data.sources || []);
+    } catch (error) {
+      showError(error.message || '示例来源加载失败');
+    } finally {
+      setLoading(null);
+    }
   }
 
   async function generateReport() {
@@ -200,8 +217,10 @@
     els.reviewReasons.hidden = !(data.reviewReasons && data.reviewReasons.length);
     renderContent(data.content);
 
-    const canConfirm = status === 'DRAFTED' && data.draftId && data.confirmationToken;
-    els.draftActions.hidden = !canConfirm;
+    const canCancel = (status === 'DRAFTED' || status === 'NEEDS_REVIEW') && data.draftId && data.confirmationToken;
+    els.draftActions.hidden = !canCancel;
+    els.confirmBtn.hidden = status !== 'DRAFTED';
+    els.cancelBtn.hidden = !canCancel;
     els.exportActions.hidden = status !== 'CONFIRMED' || !data.draftId;
   }
 
