@@ -12,6 +12,11 @@ import dev.qcoding.businesscopilot.reportcopilot.generation.ReportGenerationOutp
 import dev.qcoding.businesscopilot.reportcopilot.generation.ReportGenerationService;
 import dev.qcoding.businesscopilot.reportcopilot.generation.ReportPromptContextFactory;
 import dev.qcoding.businesscopilot.reportcopilot.generation.ReportOutputSanitizer;
+import dev.qcoding.businesscopilot.reportcopilot.draft.JdbcReportDraftRepository;
+import dev.qcoding.businesscopilot.reportcopilot.draft.ReportDraftRepository;
+import dev.qcoding.businesscopilot.reportcopilot.draft.ReportDraftPersistenceService;
+import dev.qcoding.businesscopilot.reportcopilot.draft.ReportDraftConfirmationService;
+import dev.qcoding.businesscopilot.reportcopilot.audit.ReportAuditService;
 import dev.qcoding.businesscopilot.aicore.AiChatService;
 import dev.qcoding.businesscopilot.aicore.PromptTemplateService;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -19,6 +24,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * Auto-configuration for the Report Copilot module.
@@ -91,13 +97,41 @@ public class ReportCopilotAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
+    public ReportDraftRepository reportDraftRepository(JdbcTemplate jdbcTemplate) {
+        return new JdbcReportDraftRepository(jdbcTemplate);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public ReportAuditService reportAuditService(JdbcTemplate jdbcTemplate) {
+        return new ReportAuditService(jdbcTemplate);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public ReportDraftPersistenceService reportDraftPersistenceService(ReportDraftRepository draftRepository,
+                                                                       ReportAuditService auditService,
+                                                                       ReportCopilotProperties properties) {
+        return new ReportDraftPersistenceService(draftRepository, auditService, properties);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public ReportDraftConfirmationService reportDraftConfirmationService(ReportDraftRepository draftRepository,
+                                                                         ReportAuditService auditService) {
+        return new ReportDraftConfirmationService(draftRepository, auditService);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
     public ReportGenerationService reportGenerationService(ReportRequestPreparationService preparationService,
                                                            AiChatService aiChatService,
                                                            PromptTemplateService promptTemplateService,
                                                            ReportPromptContextFactory promptContextFactory,
                                                            ReportGenerationOutputValidator outputValidator,
-                                                           ReportOutputSanitizer outputSanitizer) {
+                                                           ReportOutputSanitizer outputSanitizer,
+                                                           ReportDraftPersistenceService draftPersistenceService) {
         return new ReportGenerationService(preparationService, aiChatService, promptTemplateService,
-                promptContextFactory, outputValidator, outputSanitizer);
+                promptContextFactory, outputValidator, outputSanitizer, draftPersistenceService);
     }
 }

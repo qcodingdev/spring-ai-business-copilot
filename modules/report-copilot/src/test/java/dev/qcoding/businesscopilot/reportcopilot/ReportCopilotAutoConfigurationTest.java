@@ -8,6 +8,7 @@ import dev.qcoding.businesscopilot.reportcopilot.request.ReportRequestPreparatio
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -17,7 +18,8 @@ class ReportCopilotAutoConfigurationTest {
             .withConfiguration(AutoConfigurations.of(ReportCopilotAutoConfiguration.class))
             .withBean(SensitiveTextMasker.class, SensitiveTextMasker::new)
             .withBean(AiChatService.class, () -> org.mockito.Mockito.mock(AiChatService.class))
-            .withBean(PromptTemplateService.class, PromptTemplateService::new);
+            .withBean(PromptTemplateService.class, PromptTemplateService::new)
+            .withBean(JdbcTemplate.class, () -> org.mockito.Mockito.mock(JdbcTemplate.class));
 
     @Test
     void doesNotRegisterPreviewFeatureWhenDisabled() {

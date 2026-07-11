@@ -170,7 +170,7 @@ Support Copilot 是第三个业务模块，定位为智能客服助手，帮助�
 
 ## V4 开发中
 
-**V4 Report Copilot** 当前提供 `GET /api/report-copilot/sample-sources` 返回虚构证据包、`POST /api/report-copilot/source-previews` 校验并归一化客户端来源，以及 `POST /api/report-copilot/reports/generate` 生成结构化报告候选。生成结果仅为 `REVIEW_REQUIRED`：每个事实项必须引用本次来源，指标名称/值/单位必须与引用指标严格一致，AI 建议与来源行动项分离，模型输出也会再次脱敏。确认和 Markdown 导出将在后续 V4 切片实现。它不会执行任意 SQL、修改任务或自动发布报告。
+**V4 Report Copilot** 当前提供 `GET /api/report-copilot/sample-sources` 返回虚构证据包、`POST /api/report-copilot/source-previews` 校验并归一化客户端来源，以及 `POST /api/report-copilot/reports/generate` 生成并持久化 `DRAFTED` 结构化报告。服务端生成确认 token，只有 `/confirm` 或 `/cancel` 能消费该 token。每个事实项必须引用本次来源，指标名称/值/单位必须与引用指标严格一致，AI 建议与来源行动项分离，模型输出也会再次脱敏。Markdown 导出将在后续 V4 切片实现。它不会执行任意 SQL、修改任务或自动发布报告。
 
 **V5 Resume Copilot** 将对单个已确认 JD 和单份脱敏简历进行逐条证据匹配，输出信息缺口和面试核验问题。它不会对候选人评分或排名，不提供录用或淘汰建议，不推断受保护属性，也不改变招聘流程状态。
 

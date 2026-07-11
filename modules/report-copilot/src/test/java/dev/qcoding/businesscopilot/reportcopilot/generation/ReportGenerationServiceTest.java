@@ -9,9 +9,13 @@ import dev.qcoding.businesscopilot.reportcopilot.request.ReportType;
 import dev.qcoding.businesscopilot.reportcopilot.source.ReportSource;
 import dev.qcoding.businesscopilot.reportcopilot.source.ReportSourceType;
 import dev.qcoding.businesscopilot.guardrails.SensitiveTextMasker;
+import dev.qcoding.businesscopilot.reportcopilot.draft.ReportDraft;
+import dev.qcoding.businesscopilot.reportcopilot.draft.ReportDraftPersistenceService;
+import dev.qcoding.businesscopilot.reportcopilot.draft.ReportDraftStatus;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -26,9 +30,10 @@ class ReportGenerationServiceTest {
 
     private final ReportRequestPreparationService preparationService = mock(ReportRequestPreparationService.class);
     private final AiChatService aiChatService = mock(AiChatService.class);
+    private final ReportDraftPersistenceService draftPersistenceService = mock(ReportDraftPersistenceService.class);
     private final ReportGenerationService service = new ReportGenerationService(preparationService, aiChatService,
             new PromptTemplateService(), new ReportPromptContextFactory(), new ReportGenerationOutputValidator(),
-            new ReportOutputSanitizer(new SensitiveTextMasker()));
+            new ReportOutputSanitizer(new SensitiveTextMasker()), draftPersistenceService);
 
     @Test
     void returnsReviewOnlyCandidateWhenEveryFactHasValidEvidence() {
@@ -36,10 +41,15 @@ class ReportGenerationServiceTest {
         when(preparationService.prepare(org.mockito.ArgumentMatchers.any())).thenReturn(preview);
         when(aiChatService.modelName()).thenReturn("test-model");
         when(aiChatService.generateJson(anyString(), eq(LlmReportOutput.class))).thenReturn(validOutput("source-1"));
+        when(draftPersistenceService.createDraft(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), eq("test-model")))
+                .thenReturn(new ReportDraft(10L, 20L, validOutput("source-1"), ReportDraftStatus.DRAFTED, null,
+                        "confirm-token", Instant.parse("2026-07-11T12:00:00Z"), Instant.now(), Instant.now()));
 
         ReportDraftResponse response = service.generate(new ReportGenerateRequest(null, null, null, null, null, null));
 
-        assertThat(response.status()).isEqualTo("REVIEW_REQUIRED");
+        assertThat(response.status()).isEqualTo("DRAFTED");
+        assertThat(response.draftId()).isEqualTo(10L);
+        assertThat(response.confirmationToken()).isEqualTo("confirm-token");
         assertThat(response.content().executiveSummary()).isEqualTo("Orders remained stable.");
         verify(aiChatService).generateJson(org.mockito.ArgumentMatchers.contains("sourceId=source-1"), eq(LlmReportOutput.class));
     }
