@@ -170,7 +170,7 @@ Support Copilot is the third business module. It is an intelligent customer serv
 
 ## V4 In Progress
 
-**V4 Report Copilot** now exposes a fictional evidence pack at `GET /api/report-copilot/sample-sources` and a client-evidence preparation API at `POST /api/report-copilot/source-previews`. The latter validates report type, period, source limits, and required metric/task/meeting fields before sanitizing, assigning a server-generated ID, and hashing each source. Structured generation, review, confirmation, and Markdown export follow in later V4 slices. It will not execute arbitrary SQL, modify tasks, or publish reports automatically.
+**V4 Report Copilot** now exposes a fictional evidence pack at `GET /api/report-copilot/sample-sources`, a client-evidence preparation API at `POST /api/report-copilot/source-previews`, and a structured generation endpoint at `POST /api/report-copilot/reports/generate`. Generation produces a `REVIEW_REQUIRED` candidate only: every factual section needs a valid source ID, metric values must exactly match a cited metric source, AI suggestions remain separate, and output is masked again. Confirmation and Markdown export follow in later V4 slices. It will not execute arbitrary SQL, modify tasks, or publish reports automatically.
 
 **V5 Resume Copilot** will compare one confirmed job description with one sanitized resume and produce criterion-by-criterion evidence, information gaps, and interview verification questions. It will not score or rank candidates, recommend hiring or rejection, infer protected attributes, or change any recruitment workflow state.
 

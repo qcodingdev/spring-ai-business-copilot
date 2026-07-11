@@ -1,6 +1,8 @@
 package dev.qcoding.businesscopilot.reportcopilot;
 
 import dev.qcoding.businesscopilot.guardrails.SensitiveTextMasker;
+import dev.qcoding.businesscopilot.aicore.AiChatService;
+import dev.qcoding.businesscopilot.aicore.PromptTemplateService;
 import dev.qcoding.businesscopilot.reportcopilot.source.ReportSourcePreviewService;
 import dev.qcoding.businesscopilot.reportcopilot.request.ReportRequestPreparationService;
 import org.junit.jupiter.api.Test;
@@ -13,7 +15,9 @@ class ReportCopilotAutoConfigurationTest {
 
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(ReportCopilotAutoConfiguration.class))
-            .withBean(SensitiveTextMasker.class, SensitiveTextMasker::new);
+            .withBean(SensitiveTextMasker.class, SensitiveTextMasker::new)
+            .withBean(AiChatService.class, () -> org.mockito.Mockito.mock(AiChatService.class))
+            .withBean(PromptTemplateService.class, PromptTemplateService::new);
 
     @Test
     void doesNotRegisterPreviewFeatureWhenDisabled() {

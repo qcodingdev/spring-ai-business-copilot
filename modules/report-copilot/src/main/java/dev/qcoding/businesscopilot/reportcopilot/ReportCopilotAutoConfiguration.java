@@ -8,6 +8,12 @@ import dev.qcoding.businesscopilot.reportcopilot.source.ReportDataProvider;
 import dev.qcoding.businesscopilot.reportcopilot.source.SampleReportDataProvider;
 import dev.qcoding.businesscopilot.reportcopilot.request.ReportRequestPreparationService;
 import dev.qcoding.businesscopilot.reportcopilot.request.ReportRequestValidator;
+import dev.qcoding.businesscopilot.reportcopilot.generation.ReportGenerationOutputValidator;
+import dev.qcoding.businesscopilot.reportcopilot.generation.ReportGenerationService;
+import dev.qcoding.businesscopilot.reportcopilot.generation.ReportPromptContextFactory;
+import dev.qcoding.businesscopilot.reportcopilot.generation.ReportOutputSanitizer;
+import dev.qcoding.businesscopilot.aicore.AiChatService;
+import dev.qcoding.businesscopilot.aicore.PromptTemplateService;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -63,5 +69,35 @@ public class ReportCopilotAutoConfiguration {
                                                                             ReportSourceMapper sourceMapper,
                                                                             ReportSourceNormalizer normalizer) {
         return new ReportRequestPreparationService(validator, sourceMapper, normalizer);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public ReportPromptContextFactory reportPromptContextFactory() {
+        return new ReportPromptContextFactory();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public ReportGenerationOutputValidator reportGenerationOutputValidator() {
+        return new ReportGenerationOutputValidator();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public ReportOutputSanitizer reportOutputSanitizer(SensitiveTextMasker sensitiveTextMasker) {
+        return new ReportOutputSanitizer(sensitiveTextMasker);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public ReportGenerationService reportGenerationService(ReportRequestPreparationService preparationService,
+                                                           AiChatService aiChatService,
+                                                           PromptTemplateService promptTemplateService,
+                                                           ReportPromptContextFactory promptContextFactory,
+                                                           ReportGenerationOutputValidator outputValidator,
+                                                           ReportOutputSanitizer outputSanitizer) {
+        return new ReportGenerationService(preparationService, aiChatService, promptTemplateService,
+                promptContextFactory, outputValidator, outputSanitizer);
     }
 }

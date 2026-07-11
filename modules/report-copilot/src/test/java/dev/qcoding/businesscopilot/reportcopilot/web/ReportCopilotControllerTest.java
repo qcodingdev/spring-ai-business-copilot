@@ -7,6 +7,7 @@ import dev.qcoding.businesscopilot.reportcopilot.request.ReportRequestPreparatio
 import dev.qcoding.businesscopilot.reportcopilot.request.ReportGenerateRequest;
 import dev.qcoding.businesscopilot.reportcopilot.request.ReportPeriod;
 import dev.qcoding.businesscopilot.reportcopilot.request.ReportType;
+import dev.qcoding.businesscopilot.reportcopilot.generation.ReportGenerationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
@@ -29,12 +30,13 @@ class ReportCopilotControllerTest {
 
     private final ReportSourcePreviewService previewService = mock(ReportSourcePreviewService.class);
     private final ReportRequestPreparationService requestPreparationService = mock(ReportRequestPreparationService.class);
+    private final ReportGenerationService generationService = mock(ReportGenerationService.class);
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.standaloneSetup(
-                new ReportCopilotController(previewService, requestPreparationService)).build();
+                new ReportCopilotController(previewService, requestPreparationService, generationService)).build();
     }
 
     @Test
