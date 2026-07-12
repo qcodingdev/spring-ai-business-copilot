@@ -31,5 +31,5 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Kept risky actions behind single-use confirmation tokens and explicit human review.
 - Excluded local AI-agent settings, internal planning documents, and generated review evidence from the public repository.
 
-[Unreleased]: https://gitee.com/qcodingdev/spring-ai-business-copilot/compare/v1.0.0...master
-[1.0.0]: https://gitee.com/qcodingdev/spring-ai-business-copilot/releases/tag/v1.0.0
+[Unreleased]: https://github.com/qcodingdev/spring-ai-business-copilot/compare/v1.0.0...main
+[1.0.0]: https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v1.0.0
