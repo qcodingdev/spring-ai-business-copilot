@@ -20,7 +20,7 @@ FROM eclipse-temurin:21-jre-jammy
 WORKDIR /app
 
 # 拷贝构建产物
-COPY --from=builder /build/app/business-copilot-app/target/*-SNAPSHOT.jar app.jar
+COPY --from=builder /build/app/business-copilot-app/target/business-copilot-app-*.jar app.jar
 
 # 通过环境变量读取配置（datasource、Spring AI 等）
 ENV JAVA_OPTS=""
