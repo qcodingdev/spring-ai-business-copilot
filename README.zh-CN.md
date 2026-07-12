@@ -28,7 +28,7 @@
 
 | 模块 | 业务流程 | 安全默认值 |
 |---|---|---|
-| [Data Copilot](modules/data-copilot/README.md) | 自然语言查询数据库 | 只读 SQL、表白名单、执行前确认 |
+| [Data Copilot](modules/data-copilot/README.md) | 自然语言查询数据库（Text to SQL） | 只读 SQL、表白名单、执行前确认 |
 | [Knowledge Copilot](modules/knowledge-copilot/README.md) | 企业文档问答 | 强制引用、无依据拒答 |
 | [Support Copilot](modules/support-copilot/README.md) | 工单分类与回复草稿 | 高风险转人工，不自动发送或退款 |
 | [Report Copilot](modules/report-copilot/README.md) | 有来源的周报与经营简报 | 指标严格比对，确认后才可导出 |
