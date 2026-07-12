@@ -5,7 +5,7 @@
 ![Java 21](https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&logoColor=white)
 ![Spring Boot 4.1](https://img.shields.io/badge/Spring%20Boot-4.1-6DB33F?logo=springboot&logoColor=white)
 ![Spring AI 2.0](https://img.shields.io/badge/Spring%20AI-2.0-6DB33F)
-![License](https://img.shields.io/badge/License-Apache--2.0-blue)
+![License](https://img.shields.io/badge/License-MIT-blue)
 
 Five runnable Spring AI business applications for real internal workflows, with deterministic guardrails, human confirmation, evidence citations, audit metadata, PostgreSQL, and one workbench.
 
@@ -160,4 +160,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow and [SECURITY.md
 
 ## License
 
-Licensed under the [Apache License 2.0](LICENSE).
+Licensed under the [MIT License](LICENSE).

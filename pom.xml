@@ -12,6 +12,14 @@
     <name>Spring AI Business Copilot</name>
     <description>Ready-to-run Spring AI business copilot modules for real-world internal systems.</description>
 
+    <licenses>
+        <license>
+            <name>MIT License</name>
+            <url>https://opensource.org/license/mit</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
     <modules>
         <module>platform/common-web</module>
         <module>platform/ai-core</module>

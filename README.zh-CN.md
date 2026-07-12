@@ -5,7 +5,7 @@
 ![Java 21](https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&logoColor=white)
 ![Spring Boot 4.1](https://img.shields.io/badge/Spring%20Boot-4.1-6DB33F?logo=springboot&logoColor=white)
 ![Spring AI 2.0](https://img.shields.io/badge/Spring%20AI-2.0-6DB33F)
-![License](https://img.shields.io/badge/License-Apache--2.0-blue)
+![License](https://img.shields.io/badge/License-MIT-blue)
 
 五个面向真实内部业务流程、可以直接运行和改造的 Spring AI 应用：具备确定性 guardrails、人工确认、证据引用、审计元数据、PostgreSQL 和统一工作台。
 
@@ -160,4 +160,4 @@ examples/                       Docker Compose 与环境变量模板
 
 ## 许可证
 
-项目使用 [Apache License 2.0](LICENSE)。
+项目使用 [MIT License](LICENSE)。
