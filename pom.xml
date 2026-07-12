@@ -21,6 +21,7 @@
         <module>modules/knowledge-copilot</module>
         <module>modules/support-copilot</module>
         <module>modules/report-copilot</module>
+        <module>modules/resume-copilot</module>
         <module>app/business-copilot-app</module>
     </modules>
 

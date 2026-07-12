@@ -20,6 +20,7 @@
     <button class="tab" data-tab="knowledge-copilot">Knowledge Copilot</button>
     <button class="tab" data-tab="support-copilot">Support Copilot</button>
     <button class="tab" data-tab="report-copilot">Report Copilot</button>
+    <button class="tab" data-tab="resume-copilot">Resume Copilot</button>
   </nav>
 
   <!-- ═══════════════════════════════════════════════════════════ -->
@@ -454,6 +455,87 @@
 
   </div><!-- /tab-report-copilot -->
 
+  <!-- Resume Copilot 面板 -->
+  <div id="tab-resume-copilot" class="tab-content" hidden>
+    <div class="compliance-notice">辅助评估，不代表录用或淘汰决定。系统不提供总分、排名或通过率。</div>
+
+    <section class="panel">
+      <h2>第一步：确认职位标准</h2>
+      <div class="field-group">
+        <label for="rsc-job-title">职位名称</label>
+        <input id="rsc-job-title" class="text-input" value="Java 后端工程师" maxlength="300"/>
+      </div>
+      <div class="field-group">
+        <label for="rsc-job-description">职位描述</label>
+        <textarea id="rsc-job-description" rows="7">必选：3 年以上 Java 后端开发经验。
+必选：使用 Spring Boot 构建 REST API 的实践经验。
+必选：具备 PostgreSQL 或其他关系型数据库经验。
+加分：有容器化服务实践。</textarea>
+      </div>
+      <button id="rsc-extract-btn" type="button">解析评估标准</button>
+    </section>
+
+    <section id="rsc-criteria-panel" class="panel" hidden>
+      <h2>评估标准 <span id="rsc-criteria-status" class="badge"></span></h2>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>类型</th><th>要求</th><th>标准</th><th>JD 原文</th></tr></thead>
+          <tbody id="rsc-criteria-tbody"></tbody>
+        </table>
+      </div>
+      <button id="rsc-confirm-criteria-btn" type="button" class="btn-primary">确认标准</button>
+    </section>
+
+    <section id="rsc-resume-panel" class="panel" hidden>
+      <h2>第二步：分析单份简历</h2>
+      <div class="field-group">
+        <label for="rsc-resume-text">简历文本（TXT / Markdown）</label>
+        <textarea id="rsc-resume-text" rows="10">姓名：演示候选人
+邮箱：demo.candidate@example.com
+手机：13800009999
+性别：女
+年龄：29
+
+# 工作经历
+2022 至 2025 年，为虚构零售平台开发 Java 与 Spring Boot 服务。
+设计订单流程的 REST API 和 PostgreSQL 数据模型。
+
+# 项目经历
+使用 Docker 容器化两个测试环境服务，未说明生产运维职责。</textarea>
+      </div>
+      <button id="rsc-assess-btn" type="button">生成证据化评估</button>
+    </section>
+
+    <section id="rsc-assessment-panel" class="panel" hidden>
+      <h2>评估草稿 <span id="rsc-assessment-status" class="badge"></span></h2>
+      <div id="rsc-review-reasons" class="report-review-reasons" hidden>
+        <ul id="rsc-review-reasons-list" class="warnings-list"></ul>
+      </div>
+      <div id="rsc-assessment-content" hidden>
+        <div class="field-group">
+          <label>匿名摘要</label>
+          <p id="rsc-summary"></p>
+        </div>
+        <h3 class="compact-heading">标准匹配</h3>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>标准</th><th>状态</th><th>说明</th><th>证据</th></tr></thead>
+            <tbody id="rsc-matches-tbody"></tbody>
+          </table>
+        </div>
+        <div class="resume-result-grid">
+          <section><h3>证据缺口</h3><ul id="rsc-gaps-list"></ul></section>
+          <section><h3>面试核验问题</h3><ul id="rsc-questions-list"></ul></section>
+          <section><h3>限制说明</h3><ul id="rsc-limitations-list"></ul></section>
+        </div>
+      </div>
+      <div id="rsc-assessment-actions" class="action-buttons" hidden>
+        <button id="rsc-review-btn" type="button" class="btn-primary">标记已复核</button>
+        <button id="rsc-cancel-btn" type="button" class="btn-secondary">取消评估</button>
+      </div>
+    </section>
+  </div><!-- /tab-resume-copilot -->
+
   <!-- 错误提示 -->
   <div id="error-toast" hidden></div>
 
@@ -469,5 +551,6 @@
 <script th:src="@{/js/knowledge-copilot.js}"></script>
 <script th:src="@{/js/support-copilot.js}"></script>
 <script th:src="@{/js/report-copilot.js}"></script>
+<script th:src="@{/js/resume-copilot.js}"></script>
 </body>
 </html>

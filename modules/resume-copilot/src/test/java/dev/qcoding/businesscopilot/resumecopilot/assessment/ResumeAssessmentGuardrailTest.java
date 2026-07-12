@@ -1,0 +1,54 @@
+package dev.qcoding.businesscopilot.resumecopilot.assessment;
+
+import dev.qcoding.businesscopilot.resumecopilot.ResumeModels;
+import org.junit.jupiter.api.Test;
+
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+class ResumeAssessmentGuardrailTest {
+    private final ResumeAssessmentGuardrail guardrail = new ResumeAssessmentGuardrail();
+    private final List<ResumeModels.JobCriterion> criteria = List.of(new ResumeModels.JobCriterion("criterion-1",
+            ResumeModels.CriterionCategory.SKILL, ResumeModels.RequirementType.REQUIRED, "Java", List.of("Java"), "Java"));
+    private final List<ResumeModels.ResumeEvidence> evidence = List.of(
+            new ResumeModels.ResumeEvidence("evidence-1", "EXPERIENCE", "Built Java services", 0));
+
+    @Test
+    void acceptsEvidenceGroundedAssessmentAndNormalizesNotFoundLanguage() {
+        var content = new ResumeModels.AssessmentContent("匿名候选人具有后端经历", List.of(
+                new ResumeModels.CriterionAssessment("criterion-1", ResumeModels.MatchStatus.SUPPORTED,
+                        "简历明确提及 Java 服务", List.of("evidence-1"))), List.of(), List.of(), List.of());
+
+        assertThat(guardrail.validate(content, criteria, evidence).valid()).isTrue();
+    }
+
+    @Test
+    void blocksScoresDecisionsUnknownEvidenceAndProtectedQuestions() {
+        var content = new ResumeModels.AssessmentContent("总分 90，建议录用", List.of(
+                new ResumeModels.CriterionAssessment("criterion-1", ResumeModels.MatchStatus.SUPPORTED,
+                        "强匹配", List.of("other-resume-evidence"))), List.of(), List.of(
+                new ResumeModels.InterviewQuestion("criterion-1", "请说明年龄和婚育情况", List.of())), List.of());
+
+        var result = guardrail.validate(content, criteria, evidence);
+
+        assertThat(result.valid()).isFalse();
+        assertThat(result.reasons()).anyMatch(reason -> reason.contains("decision"));
+        assertThat(result.reasons()).anyMatch(reason -> reason.contains("protected"));
+        assertThat(result.reasons()).anyMatch(reason -> reason.contains("outside"));
+    }
+
+    @Test
+    void rejectsDuplicateCriteriaAndNullModelItemsWithoutThrowing() {
+        var assessment = new ResumeModels.CriterionAssessment("criterion-1", ResumeModels.MatchStatus.SUPPORTED,
+                "Java evidence", List.of("evidence-1"));
+        var content = new ResumeModels.AssessmentContent("anonymous", List.of(assessment, assessment),
+                List.of(), List.of(new ResumeModels.InterviewQuestion("criterion-1", null, List.of())), List.of());
+
+        var result = guardrail.validate(content, criteria, evidence);
+
+        assertThat(result.valid()).isFalse();
+        assertThat(result.reasons()).anyMatch(reason -> reason.contains("more than once"));
+        assertThat(result.reasons()).anyMatch(reason -> reason.contains("incomplete"));
+    }
+}

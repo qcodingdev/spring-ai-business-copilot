@@ -1,233 +1,163 @@
 # Spring AI Business Copilot
 
-English | [简体中文](README.zh-CN.md)
+[简体中文](README.zh-CN.md)
 
-Spring AI Business Copilot is an open-source Java AI business application suite for individuals, small teams, and internal enterprise systems.
+![Java 21](https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&logoColor=white)
+![Spring Boot 4.1](https://img.shields.io/badge/Spring%20Boot-4.1-6DB33F?logo=springboot&logoColor=white)
+![Spring AI 2.0](https://img.shields.io/badge/Spring%20AI-2.0-6DB33F)
+![License](https://img.shields.io/badge/License-Apache--2.0-blue)
 
-It provides ready-to-run business modules that teams can clone, run, learn from, and adapt to real business systems. The goal is not to provide another AI framework, but to provide practical Spring AI applications.
+Five runnable Spring AI business applications for real internal workflows, with deterministic guardrails, human confirmation, evidence citations, audit metadata, PostgreSQL, and one workbench.
 
-> **Current status:** Data Copilot, Knowledge Copilot, and Support Copilot are implemented. Report Copilot V4 now includes a source-grounded draft lifecycle and workbench; external source integrations remain in development. Resume Copilot remains planned as the fifth module.
+This repository is an application suite, not another AI framework. Clone it, run it, inspect the boundaries, and adapt one module to your own system.
 
-![Data Copilot workbench](img.png)
+![Business Copilot workbench demo](assets/workbench-demo.gif)
 
----
+## Why This Project
+
+AI demos often stop at a chat box. Business systems need a little more discipline:
+
+- model output is structured and validated before it becomes a business action;
+- sensitive input is masked before model calls and persistence;
+- facts are tied to current evidence IDs;
+- risky actions require a server-generated token and explicit human confirmation;
+- audit logs store metadata, not sensitive payloads or full model responses;
+- each module has a narrow scope and can explain its business value independently.
+
+## Included Copilots
+
+| Module | Business workflow | Safety default |
+|---|---|---|
+| [Data Copilot](modules/data-copilot/README.md) | Natural language to SQL and query explanation | Read-only SQL, allowlisted schema, confirm before execution |
+| [Knowledge Copilot](modules/knowledge-copilot/README.md) | Internal document Q&A | Mandatory citations and `NO_EVIDENCE` refusal |
+| [Support Copilot](modules/support-copilot/README.md) | Ticket classification and reply drafting | Human handoff, no automatic sending or refunds |
+| [Report Copilot](modules/report-copilot/README.md) | Source-grounded weekly reports | Exact metric evidence, confirm before Markdown export |
+| [Resume Copilot](modules/resume-copilot/README.md) | One JD and one resume evidence review | No raw resume storage, score, rank, or hiring decision |
 
 ## Quick Start
 
-### Prerequisites
+### Docker Compose
 
-- Java 21 (or run `./scripts/install-jdk21.sh` to install a project-local JDK under `.jdk/`)
-- Maven 3.9+
-- PostgreSQL 16 (or Docker)
-- An OpenAI-compatible API key only when chat or embedding is enabled
-
-### Option 1: Docker Compose (Recommended)
+Requirements: Docker with Compose support.
 
 ```bash
 cd examples
 cp .env.example .env
-# The default starts with chat and embedding disabled.
-# To enable AI, set the relevant model switch to openai and add an API key.
 docker compose up --build
 ```
 
-The app starts at **http://localhost:8080**. PostgreSQL is exposed on port 5432.
+Open [http://localhost:8080](http://localhost:8080). PostgreSQL is available on `localhost:5432`, and Flyway creates all sample and Copilot tables automatically.
 
-Flyway automatically creates sample business tables (customers, products, orders, etc.) and the audit log table on first run.
+The default `.env` starts with chat and embedding models disabled, so infrastructure and non-AI previews can run without an API key. To use AI workflows:
 
-### Option 2: Local Development
-
-1. Install the project-local JDK 21:
-
-```bash
-./scripts/install-jdk21.sh
-./mvnw -version
+```dotenv
+SPRING_AI_MODEL_CHAT=openai
+SPRING_AI_OPENAI_CHAT_API_KEY=your-chat-key
+SPRING_AI_OPENAI_CHAT_BASE_URL=https://api.deepseek.com
+SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL=deepseek-v4-flash
 ```
 
-`./mvnw` uses the JDK under `.jdk/` only for this project. It does not change your global `JAVA_HOME`.
+Knowledge ingestion and semantic retrieval additionally need an embedding model:
 
-2. Start a PostgreSQL instance and create a database:
-
-```sql
-CREATE USER copilot WITH PASSWORD 'copilot';
-CREATE DATABASE business_copilot OWNER copilot;
+```dotenv
+SPRING_AI_MODEL_EMBEDDING=openai
+SPRING_AI_OPENAI_EMBEDDING_API_KEY=your-embedding-key
+SPRING_AI_OPENAI_EMBEDDING_BASE_URL=https://api.openai.com
+SPRING_AI_OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 ```
 
-3. Build the reactor once, then run the application:
+Chat and embedding endpoints are intentionally separate: many OpenAI-compatible chat providers do not expose a compatible embedding model.
+
+### Local Development
+
+Requirements: Java 21 and PostgreSQL 16 with pgvector.
 
 ```bash
-./mvnw -q -DskipTests install
-
-SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/business_copilot \
-SPRING_DATASOURCE_USERNAME=copilot \
-SPRING_DATASOURCE_PASSWORD=copilot \
-SPRING_AI_MODEL_CHAT=none \
-SPRING_AI_MODEL_EMBEDDING=none \
+./scripts/install-jdk21.sh       # optional project-local JDK
+./mvnw -q -DskipTests install   # install reactor modules once
 ./mvnw -pl app/business-copilot-app spring-boot:run
 ```
 
-To enable the OpenAI-compatible provider, change the two model switches as needed and set `SPRING_AI_OPENAI_API_KEY`, `SPRING_AI_OPENAI_BASE_URL`, and the model names.
+Default database settings are `jdbc:postgresql://localhost:5432/business_copilot`, user `copilot`, password `copilot`. Override them with `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, and `SPRING_DATASOURCE_PASSWORD`.
 
-4. Open **http://localhost:8080** in your browser.
+## Try the Workflows
 
-### Spring AI / OpenAI-Compatible Model Configuration
+1. **Data:** ask a business question, inspect the generated SQL, then confirm the read-only query.
+2. **Knowledge:** upload Markdown/TXT content, index it, and ask a question with citations.
+3. **Support:** paste a fictional ticket, inspect classification and evidence, then confirm or cancel the reply draft.
+4. **Report:** preview typed sources, generate a report, confirm it, and export server-rendered Markdown.
+5. **Resume:** parse a fictional JD, confirm the extracted criteria, then analyze one fictional resume and mark the evidence review as read.
 
-The app uses Spring AI with an OpenAI-compatible API. Configure via environment variables or `application.yml`:
+All sample data is fictional. Do not paste production credentials, customer data, internal documents, or real resumes into a demo deployment.
 
-| Variable | Default | Description |
-|---|---|---|
-| `SPRING_AI_MODEL_CHAT` | `none` | Set to `openai` to enable chat |
-| `SPRING_AI_MODEL_EMBEDDING` | `none` | Set to `openai` to enable embeddings |
-| `SPRING_AI_OPENAI_API_KEY` | _(empty)_ | Your API key |
-| `SPRING_AI_OPENAI_BASE_URL` | `https://api.deepseek.com` | Base URL (change for compatible providers) |
-| `SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL` | `deepseek-v4-flash` | Model name |
-| `SPRING_AI_OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | Embedding model name |
+## Architecture
 
-When both model switches are `none`, the workbench and database infrastructure can start without an API key. AI generation, embedding, and retrieval operations return explicit model-disabled errors.
-
----
-
-## Architecture Baseline
-
-| Area | Current | Planned hardening |
-|---|---|---|
-| Runtime | Java 21, Spring Boot 4.1.0 | Keep |
-| AI | Spring AI 2.0.0 with schema-validated structured output | Application code uses Jackson 3; the OpenAI SDK still brings a transitive Jackson 2 compatibility dependency |
-| Persistence | Spring JDBC; MyBatis-Plus 3.5.16 starter is available for Report Copilot | Introduce MyBatis-Plus only for stable CRUD that warrants a mapper; keep JDBC for dynamic SQL, metadata, and pgvector |
-| Database | PostgreSQL 16, pgvector, Flyway | Keep Flyway as the only DDL authority |
-| Web | Spring MVC, Thymeleaf, vanilla JavaScript | Keep |
-
-This is a staged refactoring, not a rewrite. The framework plan intentionally avoids replacing Data Copilot's dynamic read-only SQL executor with an ORM.
-
----
-
-## First Module: Data Copilot
-
-Data Copilot is a natural-language database query assistant. Users ask business questions and get safe, explainable SQL query results.
-
-**Core flow:**
-
-1. User types a business question (e.g. "What was last month's total revenue?")
-2. System generates a SQL candidate and runs it through guardrails
-3. User reviews the SQL and confirms execution
-4. System executes the read-only SQL, masks sensitive fields, and returns results with an AI explanation
-
-**Safety defaults:**
-
-- **Read-only by default** — only `SELECT` and `WITH ... SELECT` are allowed; `INSERT`, `UPDATE`, `DELETE`, `DROP`, etc. are blocked
-- **Confirmation required** — SQL is shown to the user before execution; only server-stored SQL is executed (client-side SQL is never trusted)
-- **Guardrails enforced twice** — at generation time and again at execution time
-- **Sensitive field masking** — phone and email are partially masked in results; password, token, secret, and id_card are blocked from queries entirely
-- **Audit logging** — every query lifecycle event (success, failure, validation failure, user cancellation) is recorded
-- **Result truncation** — queries are capped at 100 rows by default
-
----
-
-## Second Module: Knowledge Copilot
-
-Knowledge Copilot is the second business module. It helps teams ask questions over internal documents and receive answers with source citations.
-
-**Key capabilities:**
-
-- Document upload (Markdown, TXT) with automatic chunking and embedding
-- pgvector-based semantic retrieval with configurable topK and similarity thresholds
-- LLM-powered answer generation with mandatory source citations
-- Citation guardrail validation — answers without citations are rejected
-- "No evidence" refusal when knowledge base lacks relevant content
-- Sensitive content masking (phone, email, token, secret, password, id_card)
-- Question answering audit logs
-- Document enable/disable for retrieval control
-
-**Prompt constraints:** The LLM is instructed to answer only based on provided chunks, never from model "common sense" about internal company facts. Every key conclusion must have a corresponding citation. Uncertain output defaults to `NO_EVIDENCE`.
-
----
-
-## Third Module: Support Copilot
-
-Support Copilot is the third business module. It is an intelligent customer service assistant that helps support teams classify tickets, identify urgency and sentiment, retrieve knowledge-base evidence, and draft replies for human confirmation.
-
-**Key capabilities:**
-
-- Ticket classification (REFUND, ACCOUNT_ACTIVATION, INCIDENT, ACCOUNT_SECURITY, BILLING, PRODUCT_USAGE, OTHER)
-- Sentiment detection (NEUTRAL, CONFUSED, FRUSTRATED, ANGRY)
-- Urgency assessment (LOW, MEDIUM, HIGH, CRITICAL)
-- Knowledge-base evidence retrieval via Knowledge Copilot integration
-- AI-generated reply drafts with mandatory evidence citations
-- High-risk ticket auto-escalation (refund, compensation, security, incidents)
-- Reply draft risk guardrails — forbidden commitments (refund promises, specific timelines) are blocked
-- Server-side confirmation token mechanism — client-supplied draft text is never trusted
-- Full audit trail (CLASSIFIED, DRAFTED, NEEDS_HUMAN, CONFIRMED, CANCELED, FAILED)
-- Sensitive information masking on all inputs and outputs
-
-**Important boundaries:**
-- Does NOT auto-send messages — all replies require human confirmation
-- Does NOT execute real refund, order, account, compensation, or contract operations
-- Does NOT connect to real customer service platforms
-- Does NOT implement multi-channel session aggregation, shift scheduling, or SLA workflows
-- Does NOT train on or store unmasked customer data
-
----
-
-## V4 In Progress
-
-**V4 Report Copilot** is available from the shared workbench. It lets users enter a report period and typed metric, task, and meeting evidence; preview the normalized, masked evidence; generate a structured report; review its `DRAFTED` state; confirm or cancel it with a server-generated token; and export only a confirmed draft as Markdown. Evidence-invalid model output becomes `NEEDS_REVIEW`: it stores only deterministic review reasons, cannot be confirmed, and never exposes the untrusted model body. The backing APIs are `GET /api/report-copilot/sample-sources`, `POST /api/report-copilot/source-previews`, `POST /api/report-copilot/reports/generate`, `/confirm`, `/cancel`, and `GET /api/report-copilot/reports/{draftId}/markdown`. Every factual section needs a valid source ID, metric values must exactly match a cited metric source, AI suggestions remain separate, and output is masked again. Generation, state transitions, and exports are audited without report bodies. It will not execute arbitrary SQL, modify tasks, or publish reports automatically.
-
-**V5 Resume Copilot** will compare one confirmed job description with one sanitized resume and produce criterion-by-criterion evidence, information gaps, and interview verification questions. It will not score or rank candidates, recommend hiring or rejection, infer protected attributes, or change any recruitment workflow state.
-
----
-
-## Project Structure
-
+```mermaid
+flowchart LR
+    UI["Thymeleaf + Vanilla JS Workbench"] --> APP["business-copilot-app"]
+    APP --> DATA["Data"] & KNOW["Knowledge"] & SUPPORT["Support"] & REPORT["Report"] & RESUME["Resume"]
+    DATA & KNOW & SUPPORT & REPORT & RESUME --> AI["ai-core"]
+    DATA & KNOW & SUPPORT & REPORT & RESUME --> GUARD["ai-guardrails"]
+    DATA & KNOW & SUPPORT & REPORT & RESUME --> WEB["common-web"]
+    APP --> DB[("PostgreSQL + pgvector")]
 ```
 
-Each Maven module contains its own bilingual README with responsibilities, dependencies, entry points, test commands, and planned framework changes.
+| Layer | Technology | Rule |
+|---|---|---|
+| Runtime | Java 21, Spring Boot 4.1 | One executable app, explicit module auto-configuration |
+| AI | Spring AI 2.0, Jackson 3 | Central prompts and typed output before guardrails |
+| Persistence | JDBC + MyBatis-Plus 3.5.16 | MyBatis-Plus for stable CRUD; JDBC for dynamic or batch-specific access |
+| Database | PostgreSQL 16, pgvector, Flyway | Flyway is the only DDL authority |
+| Web | Spring MVC, Thymeleaf, vanilla JS | One operational workbench, no frontend build toolchain |
 
-| Module | Guide |
+## Project Layout
+
+```text
+app/business-copilot-app/       executable app, migrations, workbench
+platform/ai-core/               model calls, embeddings, prompt templates
+platform/ai-guardrails/         reusable deterministic safety rules
+platform/ai-tool-audit/         Data Copilot query audit boundary
+platform/common-web/            API responses and exception handling
+modules/data-copilot/           database query assistant
+modules/knowledge-copilot/      cited knowledge assistant
+modules/support-copilot/        support reply assistant
+modules/report-copilot/         source-grounded report assistant
+modules/resume-copilot/         privacy-first resume review assistant
+examples/                       Docker Compose and environment template
+```
+
+Every Maven module has its own README with architecture, flow, boundaries, API, and test command.
+
+## API Overview
+
+| Base path | Purpose |
 |---|---|
-| Executable app | [business-copilot-app](app/business-copilot-app/README.md) |
-| AI integration | [ai-core](platform/ai-core/README.md) |
-| Guardrails | [ai-guardrails](platform/ai-guardrails/README.md) |
-| Query audit | [ai-tool-audit](platform/ai-tool-audit/README.md) |
-| Web contracts | [common-web](platform/common-web/README.md) |
-| Database assistant | [data-copilot](modules/data-copilot/README.md) |
-| Knowledge assistant | [knowledge-copilot](modules/knowledge-copilot/README.md) |
-| Support assistant | [support-copilot](modules/support-copilot/README.md) |
-| Report assistant | [report-copilot](modules/report-copilot/README.md) |
-spring-ai-business-copilot/
-├── app/business-copilot-app/       # Spring Boot application entry point
-├── platform/
-│   ├── ai-core/                    # LLM integration, prompt templates
-│   ├── ai-guardrails/              # SQL safety, sensitive-field policies
-│   ├── ai-tool-audit/              # Query audit logging
-│   └── common-web/                 # Unified API response, error handling
-├── modules/
-│   ├── data-copilot/               # Data Copilot module (v1)
-│   ├── knowledge-copilot/          # Knowledge Copilot module (v2)
-│   ├── support-copilot/            # Support Copilot module (v3)
-│   └── report-copilot/             # Report Copilot module (v4, in progress)
-├── examples/
-│   ├── docker-compose.yml          # One-command startup (PostgreSQL + pgvector)
-│   └── .env.example                # Environment variable template
-├── scripts/
-│   └── install-jdk21.sh            # Project-local JDK installer
-└── Dockerfile                       # Multi-stage build
+| `/api/data-copilot` | SQL candidates, execution, audit logs |
+| `/api/knowledge-copilot` | Documents and cited Q&A |
+| `/api/support-copilot` | Ticket analysis and reply-draft lifecycle |
+| `/api/report-copilot` | Source preview, report lifecycle, Markdown export |
+| `/api/resume-copilot` | JD criteria confirmation and evidence review |
+
+## Build and Test
+
+```bash
+./mvnw -q -DskipTests compile
+./mvnw -q test
+./mvnw -q -pl modules/resume-copilot -am test
 ```
 
----
+## Deliberate Non-Goals
 
-## Tech Stack
+- no multi-tenant IAM, workflow platform, or model marketplace;
+- no arbitrary model-generated tool execution;
+- no automatic message sending, report publishing, or recruitment decisions;
+- no batch candidate ranking, ATS integration, or storage of raw resumes;
+- no claim that the demo configuration is production security hardening.
 
-- Java 21
-- Spring Boot 4.1
-- Spring AI 2.0
-- Spring JDBC + PostgreSQL (current)
-- MyBatis-Plus 3.5.16 starter, reserved for future stable Report Copilot CRUD
-- Flyway database migrations
-- Thymeleaf (workbench UI)
-- Maven multi-module
+## Contributing and Security
 
----
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow and [SECURITY.md](SECURITY.md) for responsible vulnerability reporting. Please use only fictional, sanitized sample data in issues, tests, screenshots, and pull requests.
 
 ## License
 
-This project is licensed under the terms found in the [LICENSE](LICENSE) file.
+Licensed under the [Apache License 2.0](LICENSE).

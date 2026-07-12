@@ -191,10 +191,13 @@ tbody tr:hover { background: #fafbfc; }
 .tab-bar {
   display: flex;
   gap: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   border-bottom: 2px solid var(--border);
   margin-bottom: 20px;
 }
 .tab-bar .tab {
+  flex: 0 0 auto;
   padding: 10px 24px;
   border: none;
   border-bottom: 2px solid transparent;
@@ -298,6 +301,40 @@ tbody tr:hover { background: #fafbfc; }
   font-family: "SF Mono", "Menlo", "Consolas", monospace;
   font-size: 12px;
   word-break: break-all;
+}
+
+/* ── Resume Copilot ───────────────────────────────────────── */
+.compliance-notice {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border-left: 4px solid var(--warn);
+  background: #fff7ed;
+  color: #7c2d12;
+  font-size: 13px;
+}
+
+.compact-heading {
+  margin: 16px 0 8px;
+  font-size: 14px;
+}
+
+.resume-result-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+  margin-top: 18px;
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+}
+
+.resume-result-grid h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.resume-result-grid ul {
+  margin: 0;
+  padding-left: 20px;
 }
 .text-input:focus { outline: 2px solid var(--primary); border-color: var(--primary); }
 
@@ -510,5 +547,8 @@ tbody tr:hover { background: #fafbfc; }
   }
   .report-note-source {
     grid-column: auto;
+  }
+  .resume-result-grid {
+    grid-template-columns: 1fr;
   }
 }

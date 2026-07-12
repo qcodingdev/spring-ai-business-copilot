@@ -2,48 +2,24 @@
 
 English | [简体中文](#简体中文)
 
-## English
+Executable Spring Boot assembly for all Copilot modules. It owns runtime configuration, Flyway migrations, Thymeleaf assets, health endpoints, and the Docker entrypoint; business rules stay in the modules.
 
-The executable Spring Boot application that assembles all implemented Copilot and platform modules.
-
-### Responsibilities
-
-- Own the application entry point and runtime configuration.
-- Assemble Data, Knowledge, Support, and Report Copilot.
-- Host Thymeleaf templates, JavaScript, CSS, and sample resources.
-- Own Flyway migrations and PostgreSQL runtime dependencies.
-- Expose Actuator health information.
-
-### Boundaries
-
-- Business rules belong in `modules/*`, not in the app module.
-- Shared AI and safety capabilities belong in `platform/*` only after real reuse exists.
-- Flyway is the only schema-management mechanism.
-
-### Run
-
-```bash
-../../mvnw -f ../../pom.xml -q -DskipTests install
-../../mvnw -f ../../pom.xml -pl app/business-copilot-app spring-boot:run
+```mermaid
+flowchart LR
+    Browser --> MVC["Spring MVC + Thymeleaf"] --> Modules["Copilot AutoConfigurations"] --> DB[("PostgreSQL + pgvector")]
 ```
 
-Run these commands from this directory. Chat and embedding are disabled by default; enable them through environment variables described in the root README.
+Run from the repository root:
 
-### Framework Plan
+```bash
+./mvnw -q -DskipTests install
+./mvnw -pl app/business-copilot-app spring-boot:run
+```
 
-The app now receives `mybatis-plus-spring-boot4-starter` through Report Copilot. Its initial source-preview feature does not persist data yet; later stable report CRUD may use MyBatis-Plus. Dynamic SQL and pgvector repositories remain JDBC-based.
+The MyBatis-Plus Boot starter is assembled here once. Modules depend only on the core APIs they use. Flyway remains the only DDL authority.
+
+Test: `./mvnw -pl app/business-copilot-app -am test`
 
 ## 简体中文
 
-这是可执行的 Spring Boot 应用，负责装配 Data、Knowledge、Support、Report Copilot 和平台模块。
-
-- 负责启动入口、运行配置、页面静态资源、Flyway 和数据库驱动。
-- 不承载业务规则，业务代码放在 `modules/*`。
-- 默认关闭 chat 和 embedding，通过根 README 中的环境变量显式启用。
-- 当前通过 Report Copilot 引入 MyBatis-Plus Boot 4 starter；来源预览暂不落库，后续稳定报表 CRUD 可使用 MyBatis-Plus，动态 SQL 和 pgvector 仍使用 JDBC。
-
-测试：
-
-```bash
-../../mvnw -f ../../pom.xml -pl app/business-copilot-app -am test
-```
+所有 Copilot 模块的唯一可执行 Spring Boot 装配层，负责运行配置、Flyway、Thymeleaf 工作台、健康检查和 Docker 入口。业务规则保留在对应模块。MyBatis-Plus starter 只在 app 装配一次，Flyway 是唯一 DDL 来源。

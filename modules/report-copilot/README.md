@@ -2,26 +2,21 @@
 
 English | [简体中文](#简体中文)
 
-## English
+Source-grounded weekly report assistant for typed metrics, tasks, and meeting notes.
 
-Source-grounded weekly report assistant. Its shared workbench collects a report period plus typed metric, task, and meeting evidence, previews normalized sources, renders the structured draft for review, and exposes confirmation or export only in the allowed state. `GET /api/report-copilot/sample-sources` exposes a sanitized evidence pack of fictional metrics, task progress, and meeting notes. `POST /api/report-copilot/source-previews` validates and normalizes client-provided metric, task, and meeting evidence. `POST /api/report-copilot/reports/generate` uses Spring AI structured output to create a persisted `DRAFTED` report, while `POST /api/report-copilot/reports/{draftId}/confirm` and `/cancel` require its server-generated token. `GET /api/report-copilot/reports/{draftId}/markdown` exports only confirmed drafts.
-
-Every preview assigns server-generated source IDs and a SHA-256 hash based on sanitized content and metadata. This provides the evidence boundary that later structured generation, review, confirmation, and Markdown export will reuse.
-
-Generated metric highlights must exactly match a cited metric source's name, value, and unit. Factual sections require valid source IDs; AI suggestions are explicitly separate and cannot claim source evidence. Invalid output becomes a persisted `NEEDS_REVIEW` draft containing only deterministic review reasons, never the untrusted model body; it may be canceled but not confirmed. Model output is masked again before it reaches the response. Confirmation only records user approval; it never publishes a report or executes external actions. Markdown is rendered by the server from structured content and escapes model text.
-
-### Current boundary
-
-- No report publication.
-- No user-provided or model-generated SQL.
-- No external task, meeting, or BI integration.
-
-### Test
-
-```bash
-../../mvnw -f ../../pom.xml -pl modules/report-copilot -am test
+```mermaid
+flowchart LR
+    Sources --> MaskNormalizeHash --> StructuredReport --> EvidenceGuardrail
+    EvidenceGuardrail -->|valid| DRAFTED --> CONFIRMED --> Markdown
+    EvidenceGuardrail -->|invalid| NEEDS_REVIEW
 ```
+
+Metric values must exactly match current evidence. `NEEDS_REVIEW` stores deterministic reasons but never exposes untrusted model content. Confirmation does not publish externally.
+
+API: `POST /api/report-copilot/source-previews`, `POST /api/report-copilot/reports/generate`, `POST /reports/{id}/confirm|cancel`, `GET /reports/{id}/markdown`.
+
+Test: `./mvnw -pl modules/report-copilot -am test`
 
 ## 简体中文
 
-Report Copilot 已接入共享工作台：用户可录入报告周期与结构化指标、任务、会议纪要来源，先预览归一化后的证据，再生成并审阅草稿。当前提供 `GET /api/report-copilot/sample-sources` 返回虚构来源；`POST /api/report-copilot/source-previews` 校验并归一化客户端来源；`POST /api/report-copilot/reports/generate` 通过 Spring AI 结构化输出生成并持久化 `DRAFTED` 报告；`GET /api/report-copilot/reports/{draftId}/markdown` 只导出 `CONFIRMED` 草稿。模型输出缺少有效证据时会持久化为 `NEEDS_REVIEW`，只返回确定性复核原因，不返回不可信模型正文；它可以使用服务端 token 取消，但不能确认。确认或取消通过 `/reports/{draftId}/confirm`、`/cancel` 并且只接受服务端生成的 token。每次预览均由服务端生成来源 ID，并针对脱敏内容和元数据计算 SHA-256 哈希。指标亮点必须与其引用指标的名称、值、单位严格一致；事实项必须引用本次来源，AI 建议与来源行动项分离，模型输出也会再次脱敏。Markdown 由服务端根据结构化内容渲染并转义模型文本，确认不触发任何外部发布。
+基于指标、任务和会议纪要的有来源周报助手。指标严格比对来源，无效模型正文不会回显；只有人工确认后的草稿可由服务端导出 Markdown。
