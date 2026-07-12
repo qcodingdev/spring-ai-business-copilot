@@ -6,3 +6,13 @@ target/
 .vscode/
 .jdk/
 docs/
+
+# Local AI-agent and change-review files
+AGENTS.md
+.claude/
+.codex/
+.change-evidence.yml
+
+# Unpublished screenshot sources; README uses the generated GIF only
+img.png
+assets/demo-*.jpg
