@@ -52,6 +52,8 @@ If those host ports are already in use, set `APP_HOST_PORT` and `POSTGRES_HOST_P
 
 The workbench requires login by default. Demo credentials are `admin/admin-change-me`, `operator/operator-change-me`, and `reviewer/reviewer-change-me`. Operators run standard workflows, reviewers inspect audits and may perform confirmations/reviews, and admins have full access. Change every default password through the `BUSINESS_COPILOT_*` environment variables before deploying to a shared environment.
 
+For a shared or production-like deployment, set `SPRING_PROFILES_ACTIVE=prod`. The production profile requires explicit platform database credentials and all three role passwords; startup fails instead of falling back to demo secrets when any required value is missing.
+
 The default `.env` starts with chat and embedding models disabled, so infrastructure and non-AI previews can run without an API key. To use AI workflows:
 
 ```dotenv

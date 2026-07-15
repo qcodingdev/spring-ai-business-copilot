@@ -87,6 +87,51 @@ class PostgresPgvectorIntegrationTest {
     }
 
     @Test
+    void upgradesAV1DatabaseWithoutLosingKnowledgeDocumentState() {
+        JdbcTemplate adminJdbcTemplate = new JdbcTemplate(new DriverManagerDataSource(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword()));
+        adminJdbcTemplate.execute("CREATE DATABASE business_copilot_upgrade_test");
+
+        String upgradeJdbcUrl = "jdbc:postgresql://" + POSTGRES.getHost() + ":"
+                + POSTGRES.getFirstMappedPort() + "/business_copilot_upgrade_test";
+        DriverManagerDataSource upgradeDataSource = new DriverManagerDataSource(
+                upgradeJdbcUrl, POSTGRES.getUsername(), POSTGRES.getPassword());
+        Flyway.configure().dataSource(upgradeDataSource).target("7").load().migrate();
+        JdbcTemplate upgradeJdbcTemplate = new JdbcTemplate(upgradeDataSource);
+
+        Long indexedDocumentId = insertDocument(upgradeJdbcTemplate, "Indexed document", "b".repeat(64));
+        Long indexedChunkId = insertChunk(upgradeJdbcTemplate, indexedDocumentId, 0, "indexed content");
+        new JdbcKnowledgeEmbeddingRepository(upgradeJdbcTemplate).saveAll(List.of(
+                new KnowledgeChunkEmbedding(null, indexedChunkId, "integration-model", vector(0, 1.0f), null)));
+        Long unindexedDocumentId = insertDocument(upgradeJdbcTemplate, "Unindexed document", "c".repeat(64));
+
+        Flyway.configure().dataSource(upgradeDataSource).load().migrate();
+
+        assertThat(upgradeJdbcTemplate.queryForObject(
+                "SELECT enabled FROM knowledge_documents WHERE id = ?", Boolean.class, indexedDocumentId))
+                .isTrue();
+        assertThat(upgradeJdbcTemplate.queryForObject(
+                "SELECT enabled FROM knowledge_documents WHERE id = ?", Boolean.class, unindexedDocumentId))
+                .isFalse();
+        assertThat(upgradeJdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND column_name IN ('http_request_id', 'actor_id')
+                  AND table_name IN (
+                    'query_audit_logs',
+                    'knowledge_qa_audit_logs',
+                    'support_audit_logs',
+                    'report_audit_logs',
+                    'resume_audit_logs'
+                  )
+                """, Integer.class)).isEqualTo(10);
+        assertThat(upgradeJdbcTemplate.queryForObject(
+                "SELECT version FROM flyway_schema_history WHERE success = TRUE ORDER BY installed_rank DESC LIMIT 1",
+                String.class)).isEqualTo("9");
+    }
+
+    @Test
     void pgvectorSimilaritySearchReturnsTheClosestEnabledChunk() {
         Long documentId = jdbcTemplate.queryForObject("""
                 INSERT INTO knowledge_documents (
@@ -142,7 +187,20 @@ class PostgresPgvectorIntegrationTest {
     }
 
     private static Long insertChunk(Long documentId, int index, String content) {
-        return jdbcTemplate.queryForObject("""
+        return insertChunk(jdbcTemplate, documentId, index, content);
+    }
+
+    private static Long insertDocument(JdbcTemplate target, String title, String contentHash) {
+        return target.queryForObject("""
+                INSERT INTO knowledge_documents (
+                    title, source_type, source_name, category, content_hash, enabled
+                ) VALUES (?, 'upload', ?, 'integration-test', ?, TRUE)
+                RETURNING id
+                """, Long.class, title, title + ".txt", contentHash);
+    }
+
+    private static Long insertChunk(JdbcTemplate target, Long documentId, int index, String content) {
+        return target.queryForObject("""
                 INSERT INTO knowledge_chunks (
                     document_id, section_title, chunk_index, content, content_preview, token_count
                 ) VALUES (?, 'test', ?, ?, ?, 2)

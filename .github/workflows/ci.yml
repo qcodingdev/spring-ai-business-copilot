@@ -27,6 +27,14 @@ jobs:
       - name: Verify Maven wrapper
         run: ./mvnw --version
 
+      - name: Set up Node.js for frontend syntax checks
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Check frontend JavaScript syntax
+        run: ./scripts/check-frontend-syntax.sh
+
       - name: Run unit and PostgreSQL integration tests
         run: ./mvnw --batch-mode --no-transfer-progress verify
 

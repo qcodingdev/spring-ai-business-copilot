@@ -6,8 +6,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
-## [1.1.0] - 2026-07-15
-
 ### Added
 
 - Added form login with `ADMIN`, `OPERATOR`, and `REVIEWER` role boundaries and CSRF protection.
@@ -15,7 +13,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Added an optional named, read-only Data Copilot business query datasource separate from the platform database.
 - Added a Docker Compose PostgreSQL read-only role example with default `SELECT` grants for Data Copilot.
 - Added PostgreSQL/pgvector Testcontainers coverage and a GitHub Actions Maven verification workflow.
+- Added v1.0.0-to-v1.1 database upgrade coverage and a frontend JavaScript syntax gate.
 - Added a health, CSRF login, and authenticated-workbench smoke-test script.
+- Added a repeatable real-model release smoke test covering all five Copilot workflows.
 - Exposed authenticated Actuator metrics so Spring AI model latency and provider-reported token usage can be inspected.
 
 ### Changed
@@ -23,6 +23,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Pinned Maven lifecycle plugin versions for reproducible local and CI builds.
 - Added a persistent BuildKit Maven cache and a focused Docker build context for faster, retryable image builds.
 - Removed fixed Compose container names and made host ports configurable so isolated project stacks do not collide.
+- Made deployment smoke tests wait for application health to avoid container-startup races.
 
 ### Fixed
 
@@ -31,6 +32,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Made Support Copilot confirm/cancel tokens expiry-aware, atomic, and single-use.
 - Preserved Knowledge Copilot uploads when embeddings are unavailable, kept unindexed documents disabled, and added a reindex recovery flow.
 - Kept the platform datasource and JDBC template as the default candidates when the optional Data Copilot query datasource is enabled.
+
+### Security
+
+- Denied unlisted API HTTP methods by default and added a production profile that requires explicit database and role credentials.
 
 ## [1.0.0] - 2026-07-12
 
@@ -57,6 +62,5 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Kept risky actions behind single-use confirmation tokens and explicit human review.
 - Excluded local AI-agent settings, internal planning documents, and generated review evidence from the public repository.
 
-[Unreleased]: https://github.com/qcodingdev/spring-ai-business-copilot/compare/v1.1.0...main
-[1.1.0]: https://github.com/qcodingdev/spring-ai-business-copilot/compare/v1.0.0...v1.1.0
+[Unreleased]: https://github.com/qcodingdev/spring-ai-business-copilot/compare/v1.0.0...main
 [1.0.0]: https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v1.0.0

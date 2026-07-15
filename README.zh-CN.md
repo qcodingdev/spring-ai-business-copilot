@@ -52,6 +52,8 @@ docker compose up --build
 
 工作台默认启用登录。演示账号为 `admin/admin-change-me`、`operator/operator-change-me`、`reviewer/reviewer-change-me`。其中 Operator 执行标准业务流程，Reviewer 查看审计并可执行确认/复核，Admin 具备全部权限。共享环境部署前必须通过 `BUSINESS_COPILOT_*` 环境变量修改默认密码。
 
+共享环境或类生产环境应设置 `SPRING_PROFILES_ACTIVE=prod`。生产 profile 强制要求显式提供平台数据库凭据和三个角色密码；任一必填值缺失时应用会启动失败，不会回退到演示密码。
+
 默认关闭 chat 和 embedding，不需要 API Key 即可启动基础设施和非 AI 预览。启用 AI 工作流：
 
 ```dotenv

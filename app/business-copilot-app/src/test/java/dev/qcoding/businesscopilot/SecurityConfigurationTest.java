@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -75,6 +76,24 @@ class SecurityConfigurationTest {
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("SEC_0403"));
+    }
+
+    @Test
+    void stateChangingRequestRequiresCsrf() throws Exception {
+        mockMvc.perform(post("/api/test/actions")
+                        .with(user("operator").roles("OPERATOR"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void unlistedApiMethodsAreDeniedByDefault() throws Exception {
+        mockMvc.perform(delete("/api/test/actions")
+                        .with(user("admin").roles("ADMIN"))
+                        .with(csrf()))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.errorCode").value("SEC_0403"));
     }

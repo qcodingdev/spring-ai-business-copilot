@@ -69,6 +69,7 @@ public class SecurityConfiguration {
                         .requestMatchers(HttpMethod.POST, "/api/**").hasAnyRole("ADMIN", "OPERATOR")
                         .requestMatchers(HttpMethod.PATCH, "/api/**").hasAnyRole("ADMIN", "OPERATOR")
                         .requestMatchers(HttpMethod.GET, "/api/**").authenticated()
+                        .requestMatchers("/api/**").denyAll()
                         .anyRequest().authenticated())
                 .csrf(csrf -> csrf.csrfTokenRepository(csrfRepository))
                 .formLogin(form -> form.loginPage("/login").defaultSuccessUrl("/", true).permitAll())

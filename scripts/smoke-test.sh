@@ -4,6 +4,8 @@ set -Eeuo pipefail
 base_url="${BUSINESS_COPILOT_BASE_URL:-http://localhost:8080}"
 username="${BUSINESS_COPILOT_SMOKE_USERNAME:-operator}"
 password="${BUSINESS_COPILOT_SMOKE_PASSWORD:-operator-change-me}"
+health_attempts="${BUSINESS_COPILOT_SMOKE_HEALTH_ATTEMPTS:-30}"
+health_interval_seconds="${BUSINESS_COPILOT_SMOKE_HEALTH_INTERVAL_SECONDS:-2}"
 cookie_file="$(mktemp)"
 login_page="$(mktemp)"
 
@@ -12,7 +14,19 @@ cleanup() {
 }
 trap cleanup EXIT
 
-curl --fail --silent --show-error "$base_url/actuator/health" >/dev/null
+healthy=false
+for ((attempt = 1; attempt <= health_attempts; attempt++)); do
+  if curl --fail --silent "$base_url/actuator/health" >/dev/null 2>&1; then
+    healthy=true
+    break
+  fi
+  sleep "$health_interval_seconds"
+done
+if [[ "$healthy" != "true" ]]; then
+  echo "Smoke test failed: application health endpoint was not ready after $health_attempts attempts." >&2
+  exit 1
+fi
+
 curl --fail --silent --show-error --cookie-jar "$cookie_file" "$base_url/login" >"$login_page"
 
 csrf_token="$(sed -n 's/.*name="_csrf"[^>]*value="\([^"]*\)".*/\1/p' "$login_page" | head -n 1)"
