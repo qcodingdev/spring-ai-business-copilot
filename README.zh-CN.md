@@ -48,6 +48,10 @@ docker compose up --build
 
 浏览器访问 [http://localhost:8080](http://localhost:8080)。PostgreSQL 暴露在 `localhost:5432`，Flyway 会自动创建全部示例表与模块表。
 
+如果宿主机端口已被占用，可在 `examples/.env` 中修改 `APP_HOST_PORT` 和 `POSTGRES_HOST_PORT`；Compose 内部服务地址不受影响。
+
+工作台默认启用登录。演示账号为 `admin/admin-change-me`、`operator/operator-change-me`、`reviewer/reviewer-change-me`。其中 Operator 执行标准业务流程，Reviewer 查看审计并可执行确认/复核，Admin 具备全部权限。共享环境部署前必须通过 `BUSINESS_COPILOT_*` 环境变量修改默认密码。
+
 默认关闭 chat 和 embedding，不需要 API Key 即可启动基础设施和非 AI 预览。启用 AI 工作流：
 
 ```dotenv
@@ -79,6 +83,10 @@ Chat 与 embedding 端点有意分开配置：很多 OpenAI 兼容的聊天服�
 ```
 
 默认数据库为 `jdbc:postgresql://localhost:5432/business_copilot`，用户名和密码都是 `copilot`。可通过 `SPRING_DATASOURCE_URL`、`SPRING_DATASOURCE_USERNAME`、`SPRING_DATASOURCE_PASSWORD` 覆盖。
+
+Data Copilot 可通过 `BUSINESS_QUERY_DATASOURCE_ENABLED=true` 和 `BUSINESS_QUERY_DATASOURCE_*` 配置连接独立的 PostgreSQL 业务查询库。该账号必须在数据库层仅授予 `SELECT`；Compose 会在首次创建数据卷时生成示例 `business_reader` 只读角色。平台审计、知识向量和其他模块数据仍保留在平台 PostgreSQL 中。MySQL 查询目标将在 v1.2 方言适配后提供，不建议把整个平台迁移到 MySQL。
+
+Admin 和 Reviewer 可访问 `/actuator/metrics`。Spring AI 的模型观察指标会记录调用耗时，并在模型供应商返回 usage 时记录 token 使用量；指标不包含 Prompt 或业务正文。
 
 ## 使用方式
 
@@ -144,6 +152,7 @@ examples/                       Docker Compose 与环境变量模板
 ./mvnw -q -DskipTests compile
 ./mvnw -q test
 ./mvnw -q -pl modules/resume-copilot -am test
+bash scripts/smoke-test.sh  # 应用启动后执行
 ```
 
 ## 明确不做

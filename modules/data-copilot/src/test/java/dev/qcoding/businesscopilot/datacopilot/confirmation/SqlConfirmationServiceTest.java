@@ -43,10 +43,13 @@ class SqlConfirmationServiceTest {
     void validTokenRetrievesCandidate() {
         SqlCandidate saved = service.createExecutableCandidate(SQL);
 
-        SqlCandidate retrieved = service.confirmAndRetrieve(saved.candidateId(), saved.confirmationToken());
+        SqlCandidate retrieved = service.confirmAndConsume(saved.candidateId(), saved.confirmationToken());
 
         assertThat(retrieved.sql()).isEqualTo(SQL);
         assertThat(retrieved.candidateId()).isEqualTo(saved.candidateId());
+        assertThat(store.findById(saved.candidateId())).isNull();
+        assertThatThrownBy(() -> service.confirmAndConsume(saved.candidateId(), saved.confirmationToken()))
+                .isInstanceOf(SqlCandidateNotExecutableException.class);
     }
 
     @Test
@@ -54,7 +57,7 @@ class SqlConfirmationServiceTest {
     void invalidTokenRejected() {
         SqlCandidate saved = service.createExecutableCandidate(SQL);
 
-        assertThatThrownBy(() -> service.confirmAndRetrieve(saved.candidateId(), "wrong-token"))
+        assertThatThrownBy(() -> service.confirmAndConsume(saved.candidateId(), "wrong-token"))
                 .isInstanceOf(SqlCandidateNotExecutableException.class)
                 .hasMessageContaining("Invalid confirmation token");
     }
@@ -62,7 +65,7 @@ class SqlConfirmationServiceTest {
     @Test
     @DisplayName("non-existent candidate rejected")
     void nonExistentCandidateRejected() {
-        assertThatThrownBy(() -> service.confirmAndRetrieve("unknown-id", "any-token"))
+        assertThatThrownBy(() -> service.confirmAndConsume("unknown-id", "any-token"))
                 .isInstanceOf(SqlCandidateNotExecutableException.class)
                 .hasMessageContaining("not found");
     }
@@ -72,7 +75,7 @@ class SqlConfirmationServiceTest {
     void nullTokenRejected() {
         SqlCandidate saved = service.createExecutableCandidate(SQL);
 
-        assertThatThrownBy(() -> service.confirmAndRetrieve(saved.candidateId(), null))
+        assertThatThrownBy(() -> service.confirmAndConsume(saved.candidateId(), null))
                 .isInstanceOf(SqlCandidateNotExecutableException.class)
                 .hasMessageContaining("Invalid confirmation token");
     }
@@ -89,9 +92,10 @@ class SqlConfirmationServiceTest {
                 past.minusSeconds(60), past, true, null, null, null);
         store.save(expired);
 
-        assertThatThrownBy(() -> service.confirmAndRetrieve(expired.candidateId(), expired.confirmationToken()))
+        assertThatThrownBy(() -> service.confirmAndConsume(expired.candidateId(), expired.confirmationToken()))
                 .isInstanceOf(SqlCandidateExpiredException.class)
                 .hasMessageContaining("expired");
+        assertThat(store.findById(expired.candidateId())).isNull();
     }
 
     @Test
@@ -110,7 +114,7 @@ class SqlConfirmationServiceTest {
         SqlCandidate candidate = service.createNotExecutableCandidate(SQL);
 
         // 非 executable 候选没有 token，确认时会因 token 不匹配被拒绝
-        assertThatThrownBy(() -> service.confirmAndRetrieve(candidate.candidateId(), null))
+        assertThatThrownBy(() -> service.confirmAndConsume(candidate.candidateId(), null))
                 .isInstanceOf(SqlCandidateNotExecutableException.class);
     }
 

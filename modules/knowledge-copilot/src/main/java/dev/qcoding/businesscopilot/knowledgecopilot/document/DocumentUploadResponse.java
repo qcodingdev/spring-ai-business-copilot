@@ -9,10 +9,12 @@ package dev.qcoding.businesscopilot.knowledgecopilot.document;
  * @param title      document title (derived from filename or first heading)
  * @param chunkCount number of chunks created from this document
  * @param enabled    whether the document is enabled for retrieval
+ * @param indexed    whether embeddings were created successfully
  */
 public record DocumentUploadResponse(
         Long documentId,
         String title,
         int chunkCount,
-        boolean enabled) {
+        boolean enabled,
+        boolean indexed) {
 }

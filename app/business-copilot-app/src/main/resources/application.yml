@@ -33,11 +33,28 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,metrics
 
 # ── Data Copilot 配置 ──────────────────────────────────────────
 business-copilot:
+  security:
+    admin:
+      username: ${BUSINESS_COPILOT_ADMIN_USERNAME:admin}
+      password: ${BUSINESS_COPILOT_ADMIN_PASSWORD:admin-change-me}
+    operator:
+      username: ${BUSINESS_COPILOT_OPERATOR_USERNAME:operator}
+      password: ${BUSINESS_COPILOT_OPERATOR_PASSWORD:operator-change-me}
+    reviewer:
+      username: ${BUSINESS_COPILOT_REVIEWER_USERNAME:reviewer}
+      password: ${BUSINESS_COPILOT_REVIEWER_PASSWORD:reviewer-change-me}
   data-copilot:
+    datasource:
+      enabled: ${BUSINESS_QUERY_DATASOURCE_ENABLED:false}
+      url: ${BUSINESS_QUERY_DATASOURCE_URL:}
+      username: ${BUSINESS_QUERY_DATASOURCE_USERNAME:}
+      password: ${BUSINESS_QUERY_DATASOURCE_PASSWORD:}
+      driver-class-name: ${BUSINESS_QUERY_DATASOURCE_DRIVER:org.postgresql.Driver}
+      maximum-pool-size: ${BUSINESS_QUERY_DATASOURCE_MAX_POOL_SIZE:5}
     schema:
       queryable-tables:
         - customers

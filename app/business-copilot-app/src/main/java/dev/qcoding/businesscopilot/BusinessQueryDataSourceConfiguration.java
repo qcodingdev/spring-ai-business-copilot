@@ -1,0 +1,43 @@
+package dev.qcoding.businesscopilot;
+
+import com.zaxxer.hikari.HikariDataSource;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.jdbc.DataSourceBuilder;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.jdbc.core.JdbcTemplate;
+
+import javax.sql.DataSource;
+
+/** Creates an optional dedicated read-only connection used only by Data Copilot queries. */
+@Configuration(proxyBeanMethods = false)
+@EnableConfigurationProperties(BusinessQueryDataSourceProperties.class)
+@ConditionalOnProperty(prefix = "business-copilot.data-copilot.datasource", name = "enabled", havingValue = "true")
+public class BusinessQueryDataSourceConfiguration {
+
+    @Bean(name = "businessQueryDataSource", defaultCandidate = false)
+    DataSource businessQueryDataSource(BusinessQueryDataSourceProperties properties) {
+        if (properties.getUrl() == null || properties.getUrl().isBlank()) {
+            throw new IllegalStateException("Business query datasource is enabled but URL is empty");
+        }
+        HikariDataSource dataSource = DataSourceBuilder.create()
+                .type(HikariDataSource.class)
+                .url(properties.getUrl())
+                .username(properties.getUsername())
+                .password(properties.getPassword())
+                .driverClassName(properties.getDriverClassName())
+                .build();
+        dataSource.setPoolName("business-query-pool");
+        dataSource.setReadOnly(true);
+        dataSource.setMaximumPoolSize(properties.getMaximumPoolSize());
+        return dataSource;
+    }
+
+    @Bean(name = "businessQueryJdbcTemplate", defaultCandidate = false)
+    JdbcTemplate businessQueryJdbcTemplate(
+            @Qualifier("businessQueryDataSource") DataSource businessQueryDataSource) {
+        return new JdbcTemplate(businessQueryDataSource);
+    }
+}

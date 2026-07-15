@@ -14,8 +14,8 @@ public interface SqlCandidateStore {
     /** Retrieve a candidate by candidateId, or {@code null} if not found. */
     SqlCandidate findById(String candidateId);
 
-    /** Remove a candidate (e.g. after consumption). */
-    void remove(String candidateId);
+    /** Atomically remove the candidate only if it still matches the expected value. */
+    boolean remove(String candidateId, SqlCandidate expected);
 
     /** Evict expired candidates from the store. */
     void evictExpired();

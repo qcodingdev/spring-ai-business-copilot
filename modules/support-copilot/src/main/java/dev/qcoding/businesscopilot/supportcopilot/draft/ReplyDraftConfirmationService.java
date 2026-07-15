@@ -7,9 +7,9 @@ import dev.qcoding.businesscopilot.supportcopilot.audit.SupportAuditService;
 import dev.qcoding.businesscopilot.supportcopilot.ticket.SupportTicketRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -43,28 +43,12 @@ public class ReplyDraftConfirmationService {
      * @param confirmationToken the server-generated token
      * @return confirmation result
      */
+    @Transactional
     public ConfirmationResult confirm(Long draftId, String confirmationToken) {
-        Optional<SupportReplyDraft> draftOpt = draftRepository.findByConfirmationToken(confirmationToken);
-
-        if (draftOpt.isEmpty()) {
-            throw new BusinessException(ErrorCode.NOT_FOUND,
-                    "无效的确认 token 或草稿已被处理");
+        SupportReplyDraft draft = consume(draftId, confirmationToken);
+        if (!ticketRepository.updateStatus(draft.ticketId(), "CONFIRMED")) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "关联工单不存在");
         }
-
-        SupportReplyDraft draft = draftOpt.get();
-
-        if (!draft.id().equals(draftId)) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR,
-                    "确认 token 与草稿 ID 不匹配");
-        }
-
-        if (draft.expiresAt() != null && draft.expiresAt().isBefore(Instant.now())) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR,
-                    "确认 token 已过期（过期时间: " + draft.expiresAt() + "）");
-        }
-
-        draftRepository.markConfirmed(draftId);
-        ticketRepository.updateStatus(draft.ticketId(), "CONFIRMED");
         auditService.record(new SupportAuditLog(
                 null, UUID.randomUUID().toString(), draft.ticketId(), "CONFIRMED",
                 null, null, draft.riskLevel(), draft.citedChunkIds(), null,
@@ -81,23 +65,12 @@ public class ReplyDraftConfirmationService {
      * @param confirmationToken the server-generated token
      * @return cancellation result
      */
+    @Transactional
     public ConfirmationResult cancel(Long draftId, String confirmationToken) {
-        Optional<SupportReplyDraft> draftOpt = draftRepository.findByConfirmationToken(confirmationToken);
-
-        if (draftOpt.isEmpty()) {
-            throw new BusinessException(ErrorCode.NOT_FOUND,
-                    "无效的确认 token 或草稿已被处理");
+        SupportReplyDraft draft = consume(draftId, confirmationToken);
+        if (!ticketRepository.updateStatus(draft.ticketId(), "CANCELED")) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "关联工单不存在");
         }
-
-        SupportReplyDraft draft = draftOpt.get();
-
-        if (!draft.id().equals(draftId)) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR,
-                    "确认 token 与草稿 ID 不匹配");
-        }
-
-        draftRepository.markCanceled(draftId);
-        ticketRepository.updateStatus(draft.ticketId(), "CANCELED");
         auditService.record(new SupportAuditLog(
                 null, UUID.randomUUID().toString(), draft.ticketId(), "CANCELED",
                 null, null, draft.riskLevel(), draft.citedChunkIds(), null,
@@ -105,6 +78,12 @@ public class ReplyDraftConfirmationService {
         log.info("Reply draft {} canceled via token for ticket {}", draftId, draft.ticketId());
 
         return new ConfirmationResult(draftId, draft.ticketId(), "CANCELED");
+    }
+
+    private SupportReplyDraft consume(Long draftId, String confirmationToken) {
+        return draftRepository.consumeConfirmationToken(draftId, confirmationToken, Instant.now())
+                .orElseThrow(() -> new BusinessException(ErrorCode.VALIDATION_ERROR,
+                        "确认 token 无效、已过期或草稿已被处理"));
     }
 
     /**

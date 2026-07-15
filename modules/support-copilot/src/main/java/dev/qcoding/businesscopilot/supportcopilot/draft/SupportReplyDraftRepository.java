@@ -1,6 +1,7 @@
 package dev.qcoding.businesscopilot.supportcopilot.draft;
 
 import java.util.Optional;
+import java.time.Instant;
 
 /**
  * Repository for {@link SupportReplyDraft} persistence.
@@ -13,11 +14,8 @@ public interface SupportReplyDraftRepository {
 
     Optional<SupportReplyDraft> findById(Long id);
 
-    Optional<SupportReplyDraft> findByConfirmationToken(String token);
-
-    boolean markConfirmed(Long id);
-
-    boolean markCanceled(Long id);
+    /** Atomically consume an unexpired token for the requested draft. */
+    Optional<SupportReplyDraft> consumeConfirmationToken(Long id, String token, Instant now);
 
     long count();
 }

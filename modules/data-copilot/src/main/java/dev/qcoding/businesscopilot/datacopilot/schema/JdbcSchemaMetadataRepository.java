@@ -1,7 +1,6 @@
 package dev.qcoding.businesscopilot.datacopilot.schema;
 
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
@@ -11,7 +10,6 @@ import java.util.List;
  * <p>基于 Spring JDBC 的 schema 元数据读取。只读取白名单内的表结构，
  * 不暴露数据库连接信息或非白名单表。</p>
  */
-@Repository
 public class JdbcSchemaMetadataRepository implements SchemaMetadataRepository {
 
     private static final String FIND_TABLES_SQL = """

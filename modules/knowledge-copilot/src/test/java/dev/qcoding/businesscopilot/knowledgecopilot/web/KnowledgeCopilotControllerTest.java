@@ -11,6 +11,7 @@ import dev.qcoding.businesscopilot.knowledgecopilot.document.DocumentUploadRespo
 import dev.qcoding.businesscopilot.knowledgecopilot.document.DocumentUploadService;
 import dev.qcoding.businesscopilot.knowledgecopilot.document.KnowledgeDocument;
 import dev.qcoding.businesscopilot.knowledgecopilot.document.KnowledgeDocumentRepository;
+import dev.qcoding.businesscopilot.knowledgecopilot.embedding.EmbeddingIndexResult;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -51,7 +52,7 @@ class KnowledgeCopilotControllerTest {
     @DisplayName("POST /documents uploads and returns document response")
     void uploadDocumentReturnsCreatedResponse() {
         DocumentUploadRequest request = new DocumentUploadRequest("test.md", "# Hello", "HR");
-        DocumentUploadResponse uploadResponse = new DocumentUploadResponse(1L, "test", 3, true);
+        DocumentUploadResponse uploadResponse = new DocumentUploadResponse(1L, "test", 3, true, true);
         when(documentUploadService.upload(request)).thenReturn(uploadResponse);
 
         var response = controller.uploadDocument(request);
@@ -99,7 +100,7 @@ class KnowledgeCopilotControllerTest {
     @Test
     @DisplayName("PATCH /documents/{id}/enabled enables a document")
     void enableDocumentReturnsOk() {
-        when(documentRepository.updateEnabled(1L, true)).thenReturn(true);
+        when(documentUploadService.updateEnabled(1L, true)).thenReturn(true);
 
         var request = new KnowledgeCopilotController.DocumentEnabledRequest(true);
         var response = controller.updateDocumentEnabled(1L, request);
@@ -112,7 +113,7 @@ class KnowledgeCopilotControllerTest {
     @Test
     @DisplayName("PATCH /documents/{id}/enabled disables a document")
     void disableDocumentReturnsOk() {
-        when(documentRepository.updateEnabled(1L, false)).thenReturn(true);
+        when(documentUploadService.updateEnabled(1L, false)).thenReturn(true);
 
         var request = new KnowledgeCopilotController.DocumentEnabledRequest(false);
         var response = controller.updateDocumentEnabled(1L, request);
@@ -123,12 +124,25 @@ class KnowledgeCopilotControllerTest {
     @Test
     @DisplayName("PATCH /documents/{id}/enabled returns 404 for non-existent document")
     void updateEnabledReturns404() {
-        when(documentRepository.updateEnabled(999L, true)).thenReturn(false);
+        when(documentUploadService.updateEnabled(999L, true)).thenReturn(false);
 
         var request = new KnowledgeCopilotController.DocumentEnabledRequest(true);
         var response = controller.updateDocumentEnabled(999L, request);
 
         assertThat(response.getStatusCode().value()).isEqualTo(404);
+    }
+
+    @Test
+    @DisplayName("POST /documents/{id}/reindex rebuilds embeddings")
+    void reindexDocumentReturnsIndexResult() {
+        EmbeddingIndexResult result = new EmbeddingIndexResult(1L, 3, "embedding-model", 1536);
+        when(documentUploadService.reindex(1L)).thenReturn(result);
+
+        var response = controller.reindexDocument(1L);
+
+        assertThat(response.getStatusCode().value()).isEqualTo(200);
+        assertThat(response.getBody().data()).isEqualTo(result);
+        verify(documentUploadService).reindex(1L);
     }
 
     // ═══════════════════════════════════════════════════════════════

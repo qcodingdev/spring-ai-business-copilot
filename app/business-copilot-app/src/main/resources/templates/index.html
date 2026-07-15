@@ -5,13 +5,23 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>AI Business Copilot</title>
   <link rel="stylesheet" th:href="@{/css/app.css}"/>
+  <meta name="_csrf" th:content="${_csrf.token}"/>
+  <meta name="_csrf_header" th:content="${_csrf.headerName}"/>
 </head>
 <body>
 <div class="container">
 
   <header>
-    <h1>AI Business Copilot</h1>
-    <p class="subtitle">企业智能助手工作台</p>
+    <div>
+      <h1>AI Business Copilot</h1>
+      <p class="subtitle">企业智能助手工作台</p>
+    </div>
+    <div class="user-actions">
+      <span th:text="${currentUser}">user</span>
+      <form th:action="@{/logout}" method="post">
+        <button type="submit" class="btn-secondary table-action-button">退出</button>
+      </form>
+    </div>
   </header>
 
   <!-- 模块切换 -->

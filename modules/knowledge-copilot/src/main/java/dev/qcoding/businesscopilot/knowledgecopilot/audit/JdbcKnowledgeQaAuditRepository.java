@@ -1,5 +1,6 @@
 package dev.qcoding.businesscopilot.knowledgecopilot.audit;
 
+import dev.qcoding.businesscopilot.commonweb.request.BusinessRequestContextHolder;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
@@ -19,10 +20,10 @@ public class JdbcKnowledgeQaAuditRepository implements KnowledgeQaAuditRepositor
 
     private static final String INSERT_SQL = """
             INSERT INTO knowledge_qa_audit_logs (
-                request_id, question, retrieved_chunk_ids, cited_chunk_ids,
+                request_id, http_request_id, actor_id, question, retrieved_chunk_ids, cited_chunk_ids,
                 answer_status, refusal_reason, model_name, embedding_model,
                 latency_ms, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             RETURNING id
             """;
 
@@ -61,6 +62,8 @@ public class JdbcKnowledgeQaAuditRepository implements KnowledgeQaAuditRepositor
         Timestamp now = Timestamp.from(java.time.Instant.now());
         return jdbcTemplate.queryForObject(INSERT_SQL, Long.class,
                 log.requestId(),
+                BusinessRequestContextHolder.currentRequestId(),
+                BusinessRequestContextHolder.currentActorId(),
                 log.question(),
                 log.retrievedChunkIds(),
                 log.citedChunkIds(),

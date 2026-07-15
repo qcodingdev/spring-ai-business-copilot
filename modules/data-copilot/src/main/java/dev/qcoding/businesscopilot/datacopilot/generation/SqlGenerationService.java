@@ -17,7 +17,6 @@ import dev.qcoding.businesscopilot.guardrails.SqlGuardrailService;
 import dev.qcoding.businesscopilot.guardrails.SqlValidationResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Map;
@@ -29,7 +28,6 @@ import java.util.UUID;
  * <p>SQL 生成服务。流程：校验问题 → 获取 schema → 渲染 prompt → 调用模型 → 解析 JSON → guardrails 校验。
  * 调用失败要写审计。输出 DTO 不包含内部异常堆栈。</p>
  */
-@Service
 public class SqlGenerationService {
 
     private static final Logger log = LoggerFactory.getLogger(SqlGenerationService.class);

@@ -1,5 +1,6 @@
 package dev.qcoding.businesscopilot.resumecopilot.persistence;
 
+import dev.qcoding.businesscopilot.commonweb.request.BusinessRequestContextHolder;
 import dev.qcoding.businesscopilot.resumecopilot.ResumeModels;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
@@ -107,8 +108,10 @@ public class ResumeRepository {
     public void audit(String eventType, Long jobId, Long submissionId, Long assessmentId, int criteriaCount,
                       int evidenceCount, String modelName, String status, String errorMessage) {
         try {
-            jdbcTemplate.update("INSERT INTO resume_audit_logs (request_id, job_id, submission_id, assessment_id, event_type, criteria_count, evidence_count, model_name, status, error_message) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    UUID.randomUUID().toString(), jobId, submissionId, assessmentId, eventType, criteriaCount,
+            jdbcTemplate.update("INSERT INTO resume_audit_logs (request_id, http_request_id, actor_id, job_id, submission_id, assessment_id, event_type, criteria_count, evidence_count, model_name, status, error_message) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    UUID.randomUUID().toString(), BusinessRequestContextHolder.currentRequestId(),
+                    BusinessRequestContextHolder.currentActorId(),
+                    jobId, submissionId, assessmentId, eventType, criteriaCount,
                     evidenceCount, modelName, status, errorMessage);
         } catch (RuntimeException ex) {
             log.warn("Unable to persist Resume Copilot audit event type={} status={}", eventType, status, ex);

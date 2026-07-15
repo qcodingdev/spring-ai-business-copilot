@@ -135,7 +135,7 @@ class DataCopilotControllerTest {
     @DisplayName("GET /audit-logs returns paginated logs")
     void getAuditLogsReturnsPaginated() {
         QueryAuditLog log = new QueryAuditLog(
-                1L, "req-001", "question", "sql", "sql",
+                1L, "req-001", "http-req-001", "operator", "question", "sql", "sql",
                 "EXECUTED", null, true, "QUERY_SUCCESS", 5,
                 null, "gpt-5-mini", 100L, Instant.now());
         when(auditService.findRecent(0, 20)).thenReturn(List.of(log));

@@ -12,6 +12,7 @@ import dev.qcoding.businesscopilot.knowledgecopilot.document.DocumentUploadRespo
 import dev.qcoding.businesscopilot.knowledgecopilot.document.DocumentUploadService;
 import dev.qcoding.businesscopilot.knowledgecopilot.document.KnowledgeDocument;
 import dev.qcoding.businesscopilot.knowledgecopilot.document.KnowledgeDocumentRepository;
+import dev.qcoding.businesscopilot.knowledgecopilot.embedding.EmbeddingIndexResult;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -87,13 +88,20 @@ public class KnowledgeCopilotController {
     public ResponseEntity<ApiResponse<DocumentEnabledResponse>> updateDocumentEnabled(
             @PathVariable("documentId") Long documentId,
             @Valid @RequestBody DocumentEnabledRequest request) {
-        boolean updated = documentRepository.updateEnabled(documentId, request.enabled());
+        boolean updated = documentUploadService.updateEnabled(documentId, request.enabled());
         if (!updated) {
             return ResponseEntity.notFound().build();
         }
         return ResponseEntity.ok(ApiResponse.ok(
                 new DocumentEnabledResponse(documentId, request.enabled()),
                 request.enabled() ? "文档已启用" : "文档已停用"));
+    }
+
+    /** POST /api/knowledge-copilot/documents/{documentId}/reindex — 重建文档向量索引 */
+    @PostMapping("/documents/{documentId}/reindex")
+    public ResponseEntity<ApiResponse<EmbeddingIndexResult>> reindexDocument(
+            @PathVariable("documentId") Long documentId) {
+        return ResponseEntity.ok(ApiResponse.ok(documentUploadService.reindex(documentId), "文档索引已重建"));
     }
 
     // ═══════════════════════════════════════════════════════════════

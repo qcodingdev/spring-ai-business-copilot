@@ -1,0 +1,13 @@
+.git
+.github
+.idea
+.vscode
+.agents
+.codex
+**/target
+**/.DS_Store
+*.iml
+BLOG-CSDN.md
+docs
+examples
+scripts

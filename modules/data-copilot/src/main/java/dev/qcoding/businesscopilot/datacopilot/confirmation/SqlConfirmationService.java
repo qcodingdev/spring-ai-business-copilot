@@ -76,18 +76,18 @@ public class SqlConfirmationService {
     }
 
     /**
-     * Confirm a candidate by candidateId + confirmationToken and return the SQL.
+     * Atomically confirm and consume a candidate by candidateId + confirmationToken.
      *
      * <p>确认候选并取出 SQL。校验 candidateId、confirmationToken、过期时间、executable。
      * 不能信任客户端 SQL，只能使用服务端存储的原始 SQL。</p>
      *
      * @param candidateId       the candidate identifier
      * @param confirmationToken the confirmation token
-     * @return the confirmed SQL candidate
+     * @return the confirmed SQL candidate, removed from the store before execution
      * @throws SqlCandidateNotExecutableException if candidate not found or token mismatch
      * @throws SqlCandidateExpiredException       if candidate has expired
      */
-    public SqlCandidate confirmAndRetrieve(String candidateId, String confirmationToken) {
+    public SqlCandidate confirmAndConsume(String candidateId, String confirmationToken) {
         SqlCandidate candidate = store.findById(candidateId);
 
         // 候选不存在
@@ -110,10 +110,17 @@ public class SqlConfirmationService {
 
         // 校验过期
         if (candidate.isExpired()) {
+            store.remove(candidateId, candidate);
             throw new SqlCandidateExpiredException(candidateId);
         }
 
-        log.info("Confirmed SQL candidate: id={}", candidateId);
+        // 原子消费：并发请求中只有一个能拿到候选，token 不可重放。
+        if (!store.remove(candidateId, candidate)) {
+            throw new SqlCandidateNotExecutableException(
+                    "SQL candidate has already been consumed: " + candidateId);
+        }
+
+        log.info("Confirmed and consumed SQL candidate: id={}", candidateId);
         return candidate;
     }
 

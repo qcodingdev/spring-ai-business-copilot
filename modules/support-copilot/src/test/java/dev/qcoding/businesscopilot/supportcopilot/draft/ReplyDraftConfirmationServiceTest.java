@@ -15,8 +15,8 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ReplyDraftConfirmationServiceTest {
 
@@ -44,7 +44,7 @@ class ReplyDraftConfirmationServiceTest {
 
         assertEquals("CONFIRMED", result.status());
         assertEquals(100L, result.ticketId());
-        assertTrue(draftRepository.confirmed);
+        assertNull(draftRepository.draft.confirmationToken());
         assertEquals("CONFIRMED", ticketRepository.lastStatus);
         assertEquals("CONFIRMED", auditRepository.saved.getFirst().eventType());
         assertEquals(100L, auditRepository.saved.getFirst().ticketId());
@@ -57,7 +57,7 @@ class ReplyDraftConfirmationServiceTest {
         var result = service.cancel(10L, "token-1");
 
         assertEquals("CANCELED", result.status());
-        assertTrue(draftRepository.canceled);
+        assertNull(draftRepository.draft.confirmationToken());
         assertEquals("CANCELED", ticketRepository.lastStatus);
         assertEquals("CANCELED", auditRepository.saved.getFirst().eventType());
         assertEquals(100L, auditRepository.saved.getFirst().ticketId());
@@ -68,6 +68,22 @@ class ReplyDraftConfirmationServiceTest {
         draftRepository.draft = draft("token-1", Instant.now().minusSeconds(1));
 
         assertThrows(BusinessException.class, () -> service.confirm(10L, "token-1"));
+    }
+
+    @Test
+    void cancelShouldRejectExpiredToken() {
+        draftRepository.draft = draft("token-1", Instant.now().minusSeconds(1));
+
+        assertThrows(BusinessException.class, () -> service.cancel(10L, "token-1"));
+    }
+
+    @Test
+    void confirmationTokenCanOnlyBeConsumedOnce() {
+        draftRepository.draft = draft("token-1", Instant.now().plusSeconds(60));
+
+        service.confirm(10L, "token-1");
+
+        assertThrows(BusinessException.class, () -> service.cancel(10L, "token-1"));
     }
 
     @Test
@@ -92,8 +108,6 @@ class ReplyDraftConfirmationServiceTest {
 
     private static class InMemoryDraftRepository implements SupportReplyDraftRepository {
         private SupportReplyDraft draft;
-        private boolean confirmed;
-        private boolean canceled;
 
         @Override
         public SupportReplyDraft save(SupportReplyDraft draft) {
@@ -107,20 +121,15 @@ class ReplyDraftConfirmationServiceTest {
         }
 
         @Override
-        public Optional<SupportReplyDraft> findByConfirmationToken(String token) {
-            return draft != null && token.equals(draft.confirmationToken()) ? Optional.of(draft) : Optional.empty();
-        }
-
-        @Override
-        public boolean markConfirmed(Long id) {
-            confirmed = true;
-            return true;
-        }
-
-        @Override
-        public boolean markCanceled(Long id) {
-            canceled = true;
-            return true;
+        public Optional<SupportReplyDraft> consumeConfirmationToken(Long id, String token, Instant now) {
+            if (draft == null || !draft.id().equals(id) || !token.equals(draft.confirmationToken())
+                    || draft.expiresAt() == null || !draft.expiresAt().isAfter(now)) {
+                return Optional.empty();
+            }
+            SupportReplyDraft consumed = draft;
+            draft = new SupportReplyDraft(draft.id(), draft.ticketId(), draft.draftText(), draft.citedChunkIds(),
+                    draft.riskLevel(), draft.riskReasons(), null, draft.expiresAt(), draft.createdAt());
+            return Optional.of(consumed);
         }
 
         @Override

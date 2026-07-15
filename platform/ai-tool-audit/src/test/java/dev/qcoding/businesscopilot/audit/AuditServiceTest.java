@@ -49,7 +49,7 @@ class AuditServiceTest {
     void findRecentDelegates() {
         QueryAuditRepository repository = mock(QueryAuditRepository.class);
         QueryAuditLog log = new QueryAuditLog(
-                1L, "req", "q", "sql", "sql", "EXECUTED",
+                1L, "req", "http-req", "operator", "q", "sql", "sql", "EXECUTED",
                 null, true, "EXECUTED", 1, null, "model", 1L, null);
         when(repository.findRecent(0, 10)).thenReturn(List.of(log));
         AuditService service = new AuditService(repository);

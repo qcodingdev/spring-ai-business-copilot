@@ -1,5 +1,6 @@
 package dev.qcoding.businesscopilot.supportcopilot.audit;
 
+import dev.qcoding.businesscopilot.commonweb.request.BusinessRequestContextHolder;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
@@ -40,8 +41,8 @@ public class JdbcSupportAuditRepository implements SupportAuditRepository {
 
     @Override
     public SupportAuditLog save(SupportAuditLog log) {
-        String sql = "INSERT INTO support_audit_logs (request_id, ticket_id, event_type, category, urgency, risk_level, cited_chunk_ids, model_name, latency_ms, error_message, created_at) "
-                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        String sql = "INSERT INTO support_audit_logs (request_id, http_request_id, actor_id, ticket_id, event_type, category, urgency, risk_level, cited_chunk_ids, model_name, latency_ms, error_message, created_at) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         KeyHolder keyHolder = new GeneratedKeyHolder();
         Instant now = Instant.now();
@@ -49,24 +50,26 @@ public class JdbcSupportAuditRepository implements SupportAuditRepository {
         jdbcTemplate.update(connection -> {
             PreparedStatement ps = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
             ps.setString(1, log.requestId());
+            ps.setString(2, BusinessRequestContextHolder.currentRequestId());
+            ps.setString(3, BusinessRequestContextHolder.currentActorId());
             if (log.ticketId() != null) {
-                ps.setLong(2, log.ticketId());
+                ps.setLong(4, log.ticketId());
             } else {
-                ps.setNull(2, java.sql.Types.BIGINT);
+                ps.setNull(4, java.sql.Types.BIGINT);
             }
-            ps.setString(3, log.eventType());
-            ps.setString(4, log.category());
-            ps.setString(5, log.urgency());
-            ps.setString(6, log.riskLevel());
-            ps.setString(7, log.citedChunkIds());
-            ps.setString(8, log.modelName());
+            ps.setString(5, log.eventType());
+            ps.setString(6, log.category());
+            ps.setString(7, log.urgency());
+            ps.setString(8, log.riskLevel());
+            ps.setString(9, log.citedChunkIds());
+            ps.setString(10, log.modelName());
             if (log.latencyMs() != null) {
-                ps.setLong(9, log.latencyMs());
+                ps.setLong(11, log.latencyMs());
             } else {
-                ps.setNull(9, java.sql.Types.BIGINT);
+                ps.setNull(11, java.sql.Types.BIGINT);
             }
-            ps.setString(10, log.errorMessage());
-            ps.setTimestamp(11, Timestamp.from(now));
+            ps.setString(12, log.errorMessage());
+            ps.setTimestamp(13, Timestamp.from(now));
             return ps;
         }, keyHolder);
 

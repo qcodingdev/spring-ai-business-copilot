@@ -95,11 +95,12 @@ public class KnowledgeCopilotAutoConfiguration {
             ChunkingService chunkingService,
             SensitiveTextMasker sensitiveTextMasker,
             KnowledgeCopilotProperties properties,
-            KnowledgeEmbeddingService knowledgeEmbeddingService) {
+            KnowledgeEmbeddingService knowledgeEmbeddingService,
+            KnowledgeEmbeddingRepository embeddingRepository) {
         return new DocumentUploadService(
                 documentRepository, chunkRepository, markdownParser,
                 textParser, chunkingService, sensitiveTextMasker, properties,
-                knowledgeEmbeddingService);
+                knowledgeEmbeddingService, embeddingRepository);
     }
 
     // ── Retrieval & Q&A beans ──────────────────────────────────

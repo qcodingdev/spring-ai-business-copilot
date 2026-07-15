@@ -30,9 +30,12 @@ public class InMemorySqlCandidateStore implements SqlCandidateStore {
     }
 
     @Override
-    public void remove(String candidateId) {
-        store.remove(candidateId);
-        log.debug("Removed SQL candidate: id={}", candidateId);
+    public boolean remove(String candidateId, SqlCandidate expected) {
+        boolean removed = store.remove(candidateId, expected);
+        if (removed) {
+            log.debug("Consumed SQL candidate: id={}", candidateId);
+        }
+        return removed;
     }
 
     @Override

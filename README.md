@@ -48,6 +48,10 @@ docker compose up --build
 
 Open [http://localhost:8080](http://localhost:8080). PostgreSQL is available on `localhost:5432`, and Flyway creates all sample and Copilot tables automatically.
 
+If those host ports are already in use, set `APP_HOST_PORT` and `POSTGRES_HOST_PORT` in `examples/.env`; Compose service-to-service addresses remain unchanged.
+
+The workbench requires login by default. Demo credentials are `admin/admin-change-me`, `operator/operator-change-me`, and `reviewer/reviewer-change-me`. Operators run standard workflows, reviewers inspect audits and may perform confirmations/reviews, and admins have full access. Change every default password through the `BUSINESS_COPILOT_*` environment variables before deploying to a shared environment.
+
 The default `.env` starts with chat and embedding models disabled, so infrastructure and non-AI previews can run without an API key. To use AI workflows:
 
 ```dotenv
@@ -79,6 +83,10 @@ Requirements: Java 21 and PostgreSQL 16 with pgvector.
 ```
 
 Default database settings are `jdbc:postgresql://localhost:5432/business_copilot`, user `copilot`, password `copilot`. Override them with `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, and `SPRING_DATASOURCE_PASSWORD`.
+
+Data Copilot can use a separate PostgreSQL business query database through `BUSINESS_QUERY_DATASOURCE_ENABLED=true` and the `BUSINESS_QUERY_DATASOURCE_*` settings. The database account must have database-level `SELECT` privileges only; Compose creates an example `business_reader` role when it initializes a new volume. Platform audits, knowledge vectors, and other module state remain in the platform PostgreSQL database. MySQL query-target support is planned for the v1.2 dialect layer; migrating the whole platform to MySQL is not recommended.
+
+Admins and reviewers can access `/actuator/metrics`. Spring AI model observations record call latency and provider-reported token usage without exposing prompt or business content in the metrics.
 
 ## Try the Workflows
 
@@ -144,6 +152,7 @@ Every Maven module has its own README with architecture, flow, boundaries, API, 
 ./mvnw -q -DskipTests compile
 ./mvnw -q test
 ./mvnw -q -pl modules/resume-copilot -am test
+bash scripts/smoke-test.sh  # run after the application starts
 ```
 
 ## Deliberate Non-Goals

@@ -23,6 +23,9 @@ public interface KnowledgeEmbeddingRepository {
     /** Delete all embeddings for chunks belonging to a document. */
     int deleteByDocumentId(Long documentId);
 
+    /** Whether at least one persisted embedding exists for the document. */
+    boolean existsByDocumentId(Long documentId);
+
     /**
      * Find the top-K most similar chunks to the given embedding vector,
      * limited to chunks from <strong>enabled</strong> documents only,

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>登录 · AI Business Copilot</title>
+  <link rel="stylesheet" th:href="@{/css/app.css}"/>
+</head>
+<body class="login-page">
+<main class="login-card">
+  <h1>AI Business Copilot</h1>
+  <p class="subtitle">登录业务智能助手工作台</p>
+  <p class="login-error" th:if="${param.error}">用户名或密码错误</p>
+  <p class="login-success" th:if="${param.logout}">已安全退出</p>
+  <form th:action="@{/login}" method="post">
+    <div class="field-group">
+      <label for="username">用户名</label>
+      <input id="username" name="username" type="text" autocomplete="username" required autofocus/>
+    </div>
+    <div class="field-group">
+      <label for="password">密码</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required/>
+    </div>
+    <button type="submit">登录</button>
+  </form>
+  <p class="login-hint">演示账号由 <code>BUSINESS_COPILOT_*_USERNAME/PASSWORD</code> 环境变量配置。</p>
+</main>
+</body>
+</html>

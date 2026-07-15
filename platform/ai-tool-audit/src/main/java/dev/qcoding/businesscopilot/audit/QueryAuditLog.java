@@ -8,6 +8,8 @@ package dev.qcoding.businesscopilot.audit;
  *
  * @param id               primary key
  * @param requestId        request identifier for cross-service tracing
+ * @param httpRequestId    HTTP request identifier for support correlation
+ * @param actorId          authenticated actor that triggered the event
  * @param userQuestion     original natural-language question
  * @param generatedSql     SQL produced by the AI model
  * @param finalSql         SQL actually executed (may differ if guardrail stripped comments etc.)
@@ -24,6 +26,8 @@ package dev.qcoding.businesscopilot.audit;
 public record QueryAuditLog(
         Long id,
         String requestId,
+        String httpRequestId,
+        String actorId,
         String userQuestion,
         String generatedSql,
         String finalSql,

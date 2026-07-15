@@ -31,6 +31,43 @@ body {
   line-height: 1.5;
 }
 
+header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.user-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.user-actions form { margin: 0; }
+
+.login-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.login-card {
+  width: min(420px, 100%);
+  padding: 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+}
+
+.login-card input { width: 100%; }
+.login-card button { width: 100%; }
+.login-error { color: var(--danger); }
+.login-success { color: var(--pass); }
+.login-hint { margin-top: 20px; color: var(--text-muted); font-size: 12px; }
+
 .container {
   max-width: 1200px;
   margin: 0 auto;
@@ -500,6 +537,12 @@ tbody tr:hover { background: #fafbfc; }
 .btn-secondary:hover {
   border-color: var(--danger);
   color: var(--danger);
+}
+
+.table-action-button {
+  margin-top: 0;
+  padding: 6px 10px;
+  white-space: nowrap;
 }
 
 .snippet {

@@ -9,17 +9,23 @@ import dev.qcoding.businesscopilot.datacopilot.confirmation.SqlCandidateStore;
 import dev.qcoding.businesscopilot.datacopilot.confirmation.SqlConfirmationService;
 import dev.qcoding.businesscopilot.datacopilot.explanation.QueryResultSummarizer;
 import dev.qcoding.businesscopilot.datacopilot.explanation.ResultExplanationService;
+import dev.qcoding.businesscopilot.datacopilot.generation.SqlGenerationService;
 import dev.qcoding.businesscopilot.datacopilot.query.JdbcReadOnlyQueryExecutor;
 import dev.qcoding.businesscopilot.datacopilot.query.QueryExecutionProperties;
 import dev.qcoding.businesscopilot.datacopilot.query.QueryExecutionService;
 import dev.qcoding.businesscopilot.datacopilot.query.ReadOnlyQueryExecutor;
 import dev.qcoding.businesscopilot.datacopilot.schema.DataCopilotSchemaProperties;
+import dev.qcoding.businesscopilot.datacopilot.schema.JdbcSchemaMetadataRepository;
+import dev.qcoding.businesscopilot.datacopilot.schema.SchemaContextService;
+import dev.qcoding.businesscopilot.datacopilot.schema.SchemaMetadataRepository;
+import dev.qcoding.businesscopilot.datacopilot.web.DataCopilotController;
 import dev.qcoding.businesscopilot.guardrails.GuardrailsProperties;
 import dev.qcoding.businesscopilot.guardrails.SensitiveDataMasker;
 import dev.qcoding.businesscopilot.guardrails.SqlGuardrailService;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -32,6 +38,16 @@ import org.springframework.jdbc.core.JdbcTemplate;
  */
 @AutoConfiguration
 public class DataCopilotAutoConfiguration {
+
+    /**
+     * Named query boundary. Deployments can override this bean with a dedicated read-only
+     * business database; the default keeps the existing single-database demo working.
+     */
+    @Bean(name = "businessQueryJdbcTemplate")
+    @ConditionalOnMissingBean(name = "businessQueryJdbcTemplate")
+    public JdbcTemplate businessQueryJdbcTemplate(@Qualifier("jdbcTemplate") JdbcTemplate platformJdbcTemplate) {
+        return platformJdbcTemplate;
+    }
 
     @Bean
     @ConfigurationProperties(prefix = "business-copilot.data-copilot.schema")
@@ -77,7 +93,21 @@ public class DataCopilotAutoConfiguration {
     }
 
     @Bean
-    public ReadOnlyQueryExecutor readOnlyQueryExecutor(JdbcTemplate jdbcTemplate,
+    public SchemaMetadataRepository schemaMetadataRepository(
+            @Qualifier("businessQueryJdbcTemplate") JdbcTemplate jdbcTemplate,
+            DataCopilotSchemaProperties properties) {
+        return new JdbcSchemaMetadataRepository(jdbcTemplate, properties);
+    }
+
+    @Bean
+    public SchemaContextService schemaContextService(SchemaMetadataRepository repository,
+                                                      DataCopilotSchemaProperties properties) {
+        return new SchemaContextService(repository, properties);
+    }
+
+    @Bean
+    public ReadOnlyQueryExecutor readOnlyQueryExecutor(
+                                                        @Qualifier("businessQueryJdbcTemplate") JdbcTemplate jdbcTemplate,
                                                         SqlGuardrailService guardrailService,
                                                         GuardrailsProperties guardrailsProperties,
                                                         SensitiveDataMasker sensitiveDataMasker,
@@ -104,6 +134,18 @@ public class DataCopilotAutoConfiguration {
     }
 
     @Bean
+    public SqlGenerationService sqlGenerationService(SchemaContextService schemaContextService,
+                                                      AiChatService aiChatService,
+                                                      PromptTemplateService promptTemplateService,
+                                                      SqlGuardrailService guardrailService,
+                                                      AuditService auditService,
+                                                      GuardrailsProperties guardrailsProperties,
+                                                      SqlConfirmationService confirmationService) {
+        return new SqlGenerationService(schemaContextService, aiChatService, promptTemplateService,
+                guardrailService, auditService, guardrailsProperties, confirmationService);
+    }
+
+    @Bean
     public QueryExecutionService queryExecutionService(SqlConfirmationService confirmationService,
                                                         ReadOnlyQueryExecutor readOnlyQueryExecutor,
                                                         ResultExplanationService resultExplanationService,
@@ -113,5 +155,15 @@ public class DataCopilotAutoConfiguration {
                 readOnlyQueryExecutor,
                 resultExplanationService,
                 auditService);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(DataCopilotController.class)
+    public DataCopilotController dataCopilotController(SchemaContextService schemaContextService,
+                                                       SqlGenerationService sqlGenerationService,
+                                                       QueryExecutionService queryExecutionService,
+                                                       AuditService auditService) {
+        return new DataCopilotController(schemaContextService, sqlGenerationService,
+                queryExecutionService, auditService);
     }
 }

@@ -1,5 +1,6 @@
 package dev.qcoding.businesscopilot.audit;
 
+import dev.qcoding.businesscopilot.commonweb.request.BusinessRequestContextHolder;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
@@ -19,16 +20,16 @@ public class JdbcQueryAuditRepository implements QueryAuditRepository {
 
     private static final String INSERT_SQL = """
             INSERT INTO query_audit_logs (
-                request_id, user_question, generated_sql, final_sql,
+                request_id, http_request_id, actor_id, user_question, generated_sql, final_sql,
                 validation_status, validation_errors, confirmed,
                 execution_status, row_count, error_message,
                 model_name, latency_ms, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             RETURNING id
             """;
 
     private static final String FIND_RECENT_SQL = """
-            SELECT id, request_id, user_question, generated_sql, final_sql,
+            SELECT id, request_id, http_request_id, actor_id, user_question, generated_sql, final_sql,
                    validation_status, validation_errors, confirmed,
                    execution_status, row_count, error_message,
                    model_name, latency_ms, created_at
@@ -42,6 +43,8 @@ public class JdbcQueryAuditRepository implements QueryAuditRepository {
     private static final RowMapper<QueryAuditLog> ROW_MAPPER = (rs, rowNum) -> new QueryAuditLog(
             rs.getLong("id"),
             rs.getString("request_id"),
+            rs.getString("http_request_id"),
+            rs.getString("actor_id"),
             rs.getString("user_question"),
             rs.getString("generated_sql"),
             rs.getString("final_sql"),
@@ -66,6 +69,8 @@ public class JdbcQueryAuditRepository implements QueryAuditRepository {
         Timestamp now = Timestamp.from(java.time.Instant.now());
         return jdbcTemplate.queryForObject(INSERT_SQL, Long.class,
                 event.requestId(),
+                BusinessRequestContextHolder.currentRequestId(),
+                BusinessRequestContextHolder.currentActorId(),
                 event.userQuestion(),
                 event.generatedSql(),
                 event.finalSql(),

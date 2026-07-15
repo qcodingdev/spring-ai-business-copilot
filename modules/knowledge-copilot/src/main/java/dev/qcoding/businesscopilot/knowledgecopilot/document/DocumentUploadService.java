@@ -7,6 +7,7 @@ import dev.qcoding.businesscopilot.knowledgecopilot.KnowledgeCopilotProperties;
 import dev.qcoding.businesscopilot.knowledgecopilot.chunking.ChunkingService;
 import dev.qcoding.businesscopilot.knowledgecopilot.chunking.ParsedSection;
 import dev.qcoding.businesscopilot.knowledgecopilot.embedding.EmbeddingIndexResult;
+import dev.qcoding.businesscopilot.knowledgecopilot.embedding.KnowledgeEmbeddingRepository;
 import dev.qcoding.businesscopilot.knowledgecopilot.embedding.KnowledgeEmbeddingService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,6 +47,7 @@ public class DocumentUploadService {
     private final SensitiveTextMasker sensitiveTextMasker;
     private final KnowledgeCopilotProperties properties;
     private final KnowledgeEmbeddingService knowledgeEmbeddingService;
+    private final KnowledgeEmbeddingRepository embeddingRepository;
 
     public DocumentUploadService(KnowledgeDocumentRepository documentRepository,
                                  KnowledgeChunkRepository chunkRepository,
@@ -54,7 +56,8 @@ public class DocumentUploadService {
                                  ChunkingService chunkingService,
                                  SensitiveTextMasker sensitiveTextMasker,
                                  KnowledgeCopilotProperties properties,
-                                 KnowledgeEmbeddingService knowledgeEmbeddingService) {
+                                 KnowledgeEmbeddingService knowledgeEmbeddingService,
+                                 KnowledgeEmbeddingRepository embeddingRepository) {
         this.documentRepository = documentRepository;
         this.chunkRepository = chunkRepository;
         this.markdownParser = markdownParser;
@@ -63,6 +66,7 @@ public class DocumentUploadService {
         this.sensitiveTextMasker = sensitiveTextMasker;
         this.properties = properties;
         this.knowledgeEmbeddingService = knowledgeEmbeddingService;
+        this.embeddingRepository = embeddingRepository;
     }
 
     /**
@@ -113,7 +117,7 @@ public class DocumentUploadService {
         String title = deriveTitle(request.fileName(), sections);
         KnowledgeDocument document = new KnowledgeDocument(
                 null, title, "upload", request.fileName(), request.category(),
-                contentHash, true, null, null);
+                contentHash, false, null, null);
         Long documentId = documentRepository.save(document);
 
         // 6. 分片
@@ -129,16 +133,48 @@ public class DocumentUploadService {
 
         // 9. 获取已持久化的分片（含数据库生成的 id），生成并保存 embedding 向量
         List<KnowledgeChunk> savedChunks = chunkRepository.findByDocumentId(documentId);
+        boolean indexed = false;
         try {
             EmbeddingIndexResult embedResult = knowledgeEmbeddingService.indexChunks(documentId, savedChunks);
+            indexed = embedResult.chunkCount() > 0;
+            if (indexed && !documentRepository.updateEnabled(documentId, true)) {
+                throw new BusinessException(ErrorCode.BUSINESS_ERROR, "知识文档索引完成但无法启用");
+            }
             log.info("Generated {} embeddings for document id={}, model={}, dim={}",
                     embedResult.chunkCount(), documentId, embedResult.modelName(), embedResult.dimension());
         } catch (dev.qcoding.businesscopilot.aicore.AiModelNotEnabledException e) {
-            log.warn("Embedding model not available; document id={} saved without embeddings", documentId);
+            log.warn("Embedding model not available; document id={} saved disabled and can be reindexed later", documentId);
         }
 
         log.info("Uploaded document id={} title='{}' chunks={}", documentId, title, maskedChunks.size());
-        return new DocumentUploadResponse(documentId, title, maskedChunks.size(), true);
+        return new DocumentUploadResponse(documentId, title, maskedChunks.size(), indexed, indexed);
+    }
+
+    /** Rebuild embeddings for a persisted document and enable it only after indexing succeeds. */
+    @Transactional
+    public EmbeddingIndexResult reindex(Long documentId) {
+        documentRepository.findById(documentId).orElseThrow(() ->
+                new BusinessException(ErrorCode.NOT_FOUND, "知识文档不存在: " + documentId));
+        List<KnowledgeChunk> chunks = chunkRepository.findByDocumentId(documentId);
+        if (chunks.isEmpty()) {
+            throw new BusinessException(ErrorCode.DOCUMENT_EMPTY, "知识文档没有可索引分片");
+        }
+        EmbeddingIndexResult result = knowledgeEmbeddingService.reindex(documentId, chunks);
+        if (result.chunkCount() <= 0 || !documentRepository.updateEnabled(documentId, true)) {
+            throw new BusinessException(ErrorCode.BUSINESS_ERROR, "知识文档索引完成但无法启用");
+        }
+        return result;
+    }
+
+    /** Enable only indexed documents; disabling remains available at any time. */
+    public boolean updateEnabled(Long documentId, boolean enabled) {
+        if (documentRepository.findById(documentId).isEmpty()) {
+            return false;
+        }
+        if (enabled && !embeddingRepository.existsByDocumentId(documentId)) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "文档尚未完成向量索引，请先执行重建索引");
+        }
+        return documentRepository.updateEnabled(documentId, enabled);
     }
 
     private KnowledgeChunk maskChunk(KnowledgeChunk chunk) {

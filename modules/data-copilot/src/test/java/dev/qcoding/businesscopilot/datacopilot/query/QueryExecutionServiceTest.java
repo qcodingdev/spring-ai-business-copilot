@@ -63,7 +63,7 @@ class QueryExecutionServiceTest {
     void executionSuccessRecordsAuditWithRowCount() {
         String sql = "SELECT id FROM customers LIMIT 10";
         SqlCandidate candidate = candidateWithAuditContext(sql);
-        when(confirmationService.confirmAndRetrieve("cand-1", "token-1")).thenReturn(candidate);
+        when(confirmationService.confirmAndConsume("cand-1", "token-1")).thenReturn(candidate);
 
         QueryResultTable table = new QueryResultTable(
                 List.of(new QueryColumn("id", "integer")),
@@ -98,7 +98,7 @@ class QueryExecutionServiceTest {
     void executionFailureRecordsAuditWithErrorSummary() {
         String sql = "SELECT bad_col FROM customers LIMIT 10";
         SqlCandidate candidate = candidateWithAuditContext(sql);
-        when(confirmationService.confirmAndRetrieve("cand-1", "token-1")).thenReturn(candidate);
+        when(confirmationService.confirmAndConsume("cand-1", "token-1")).thenReturn(candidate);
 
         when(queryExecutor.execute(sql)).thenThrow(
                 new QueryExecutionException("查询执行失败"));
@@ -125,7 +125,7 @@ class QueryExecutionServiceTest {
     void secondGuardrailsFailureRecordsAudit() {
         String sql = "DELETE FROM customers";
         SqlCandidate candidate = candidateWithAuditContext(sql);
-        when(confirmationService.confirmAndRetrieve("cand-1", "token-1")).thenReturn(candidate);
+        when(confirmationService.confirmAndConsume("cand-1", "token-1")).thenReturn(candidate);
 
         when(queryExecutor.execute(sql)).thenThrow(
                 new BusinessException(ErrorCode.SQL_GUARDRAIL_VIOLATION, "rejected by guardrails"));
@@ -147,7 +147,7 @@ class QueryExecutionServiceTest {
     @Test
     @DisplayName("confirmation failure records not-confirmed audit")
     void confirmationFailureRecordsNotConfirmedAudit() {
-        when(confirmationService.confirmAndRetrieve("cand-1", "wrong-token"))
+        when(confirmationService.confirmAndConsume("cand-1", "wrong-token"))
                 .thenThrow(new SqlCandidateNotExecutableException("Invalid confirmation token"));
 
         assertThatThrownBy(() -> service.execute("cand-1", "wrong-token"))
@@ -171,7 +171,7 @@ class QueryExecutionServiceTest {
     void executeReturnsTableAndExplanation() {
         String sql = "SELECT id FROM customers LIMIT 10";
         SqlCandidate candidate = candidateWithAuditContext(sql);
-        when(confirmationService.confirmAndRetrieve("cand-1", "token-1")).thenReturn(candidate);
+        when(confirmationService.confirmAndConsume("cand-1", "token-1")).thenReturn(candidate);
 
         QueryResultTable table = new QueryResultTable(
                 List.of(new QueryColumn("id", "integer")),
@@ -193,7 +193,7 @@ class QueryExecutionServiceTest {
     void auditEventHasNoResultRows() {
         String sql = "SELECT id FROM customers LIMIT 10";
         SqlCandidate candidate = candidateWithAuditContext(sql);
-        when(confirmationService.confirmAndRetrieve("cand-1", "token-1")).thenReturn(candidate);
+        when(confirmationService.confirmAndConsume("cand-1", "token-1")).thenReturn(candidate);
 
         QueryResultTable table = new QueryResultTable(
                 List.of(new QueryColumn("id", "integer")),

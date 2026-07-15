@@ -75,25 +75,12 @@ public class JdbcSupportReplyDraftRepository implements SupportReplyDraftReposit
     }
 
     @Override
-    public Optional<SupportReplyDraft> findByConfirmationToken(String token) {
+    public Optional<SupportReplyDraft> consumeConfirmationToken(Long id, String token, Instant now) {
         List<SupportReplyDraft> results = jdbcTemplate.query(
-                "SELECT * FROM support_reply_drafts WHERE confirmation_token = ?",
-                ROW_MAPPER, token);
+                "UPDATE support_reply_drafts SET confirmation_token = NULL "
+                        + "WHERE id = ? AND confirmation_token = ? AND expires_at > ? RETURNING *",
+                ROW_MAPPER, id, token, Timestamp.from(now));
         return results.isEmpty() ? Optional.empty() : Optional.of(results.getFirst());
-    }
-
-    @Override
-    public boolean markConfirmed(Long id) {
-        int rows = jdbcTemplate.update(
-                "UPDATE support_reply_drafts SET confirmation_token = NULL WHERE id = ?", id);
-        return rows > 0;
-    }
-
-    @Override
-    public boolean markCanceled(Long id) {
-        int rows = jdbcTemplate.update(
-                "UPDATE support_reply_drafts SET confirmation_token = NULL WHERE id = ?", id);
-        return rows > 0;
     }
 
     @Override

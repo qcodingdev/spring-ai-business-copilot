@@ -49,8 +49,13 @@ document.getElementById('kc-upload-btn').addEventListener('click', async () => {
       return;
     }
 
-    statusEl.textContent = `上传成功！文档 ID=${payload.data.documentId}，${payload.data.chunkCount} 个分片`;
-    statusEl.className = 'inline-status';
+    if (payload.data.indexed) {
+      statusEl.textContent = `上传成功！文档 ID=${payload.data.documentId}，${payload.data.chunkCount} 个分片，已建立向量索引`;
+      statusEl.className = 'inline-status';
+    } else {
+      statusEl.textContent = `文档已保存（ID=${payload.data.documentId}），但尚未建立向量索引；配置 Embedding 模型后请点击“重建索引”`;
+      statusEl.className = 'inline-status error';
+    }
     show(statusEl);
 
     // 清空表单
@@ -109,11 +114,37 @@ async function kcLoadDocuments() {
       tr.appendChild(toggleTd);
 
       tr.appendChild(td(formatTime(doc.createdAt)));
-      tr.appendChild(td('')); // 操作列保留
+      const actionTd = document.createElement('td');
+      const reindexButton = document.createElement('button');
+      reindexButton.type = 'button';
+      reindexButton.className = 'btn-secondary table-action-button';
+      reindexButton.textContent = '重建索引';
+      reindexButton.addEventListener('click', () => kcReindexDocument(doc.id, reindexButton));
+      actionTd.appendChild(reindexButton);
+      tr.appendChild(actionTd);
       tbody.appendChild(tr);
     });
   } catch (e) {
     // 静默处理
+  }
+}
+
+async function kcReindexDocument(documentId, button) {
+  button.disabled = true;
+  kcSetLoading('重建向量索引中…');
+  try {
+    const res = await fetch(`${KC_API_BASE}/documents/${documentId}/reindex`, { method: 'POST' });
+    const payload = await res.json();
+    if (!res.ok || !payload.success) {
+      kcShowError(payload.message || '重建索引失败');
+      return;
+    }
+    kcLoadDocuments();
+  } catch (e) {
+    kcShowError('网络错误');
+  } finally {
+    button.disabled = false;
+    kcSetLoading(null);
   }
 }
 

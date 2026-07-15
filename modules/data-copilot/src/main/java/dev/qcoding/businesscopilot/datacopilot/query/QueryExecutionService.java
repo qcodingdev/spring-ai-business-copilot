@@ -67,7 +67,7 @@ public class QueryExecutionService {
         // 1. 确认候选（校验 candidateId + token + 过期 + executable）
         SqlCandidate candidate;
         try {
-            candidate = confirmationService.confirmAndRetrieve(candidateId, confirmationToken);
+            candidate = confirmationService.confirmAndConsume(candidateId, confirmationToken);
         } catch (SqlCandidateNotExecutableException | SqlCandidateExpiredException ex) {
             // 确认失败：用户未有效确认，记录 QUERY_NOT_CONFIRMED 审计
             recordNotConfirmedAudit(candidateId, ex.getMessage(), startMs);

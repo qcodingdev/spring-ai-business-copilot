@@ -38,6 +38,15 @@ public class JdbcKnowledgeEmbeddingRepository implements KnowledgeEmbeddingRepos
             WHERE chunk_id IN (SELECT id FROM knowledge_chunks WHERE document_id = ?)
             """;
 
+    private static final String EXISTS_BY_DOCUMENT_SQL = """
+            SELECT EXISTS (
+                SELECT 1
+                FROM knowledge_chunk_embeddings e
+                JOIN knowledge_chunks c ON c.id = e.chunk_id
+                WHERE c.document_id = ?
+            )
+            """;
+
     /**
      * Cosine similarity search using pgvector's {@code <=>} operator.
      * 1 - (embedding <=> query) converts cosine distance to cosine similarity.
@@ -114,10 +123,16 @@ public class JdbcKnowledgeEmbeddingRepository implements KnowledgeEmbeddingRepos
     }
 
     @Override
+    public boolean existsByDocumentId(Long documentId) {
+        Boolean exists = jdbcTemplate.queryForObject(EXISTS_BY_DOCUMENT_SQL, Boolean.class, documentId);
+        return Boolean.TRUE.equals(exists);
+    }
+
+    @Override
     public List<KnowledgeEmbeddingRepository.SimilaritySearchResult> findSimilarChunks(
             float[] embedding, int topK, double minSimilarity) {
         return jdbcTemplate.query(SIMILARITY_SEARCH_SQL, SIMILARITY_ROW_MAPPER,
-                formatVector(embedding), topK, minSimilarity);
+                formatVector(embedding), minSimilarity, topK);
     }
 
     /**

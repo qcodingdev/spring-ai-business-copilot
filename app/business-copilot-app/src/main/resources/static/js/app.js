@@ -3,6 +3,23 @@
 
 const API_BASE = '/api/data-copilot';
 
+// Add Spring Security's CSRF header to every unsafe same-origin request.
+const nativeFetch = window.fetch.bind(window);
+window.fetch = (input, init = {}) => {
+  const options = { ...init };
+  const method = String(options.method || 'GET').toUpperCase();
+  if (!['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(method)) {
+    const token = document.querySelector('meta[name="_csrf"]')?.content;
+    const headerName = document.querySelector('meta[name="_csrf_header"]')?.content;
+    if (token && headerName) {
+      const headers = new Headers(options.headers || {});
+      headers.set(headerName, token);
+      options.headers = headers;
+    }
+  }
+  return nativeFetch(input, options);
+};
+
 // ---- DOM helpers ----
 const $ = (id) => document.getElementById(id);
 const show = (el) => el && (el.hidden = false);

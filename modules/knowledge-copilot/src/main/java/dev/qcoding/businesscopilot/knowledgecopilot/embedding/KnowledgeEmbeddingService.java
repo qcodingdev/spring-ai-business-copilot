@@ -1,6 +1,7 @@
 package dev.qcoding.businesscopilot.knowledgecopilot.embedding;
 
 import dev.qcoding.businesscopilot.aicore.AiEmbeddingService;
+import dev.qcoding.businesscopilot.aicore.AiModelNotEnabledException;
 import dev.qcoding.businesscopilot.commonweb.api.BusinessException;
 import dev.qcoding.businesscopilot.commonweb.api.ErrorCode;
 import dev.qcoding.businesscopilot.knowledgecopilot.KnowledgeCopilotProperties;
@@ -52,7 +53,9 @@ public class KnowledgeEmbeddingService {
      * @throws dev.qcoding.businesscopilot.aicore.AiModelNotEnabledException if no embedding model is configured
      * @throws BusinessException                                              on dimension mismatch or model invocation failure
      */
-    @Transactional
+    // Upload flow deliberately catches this exception and keeps the document disabled.
+    // Do not mark the shared upload transaction rollback-only in that recoverable case.
+    @Transactional(noRollbackFor = AiModelNotEnabledException.class)
     public EmbeddingIndexResult indexChunks(Long documentId, List<KnowledgeChunk> chunks) {
         // 1. 删除旧 embedding（重建索引场景）
         int deleted = embeddingRepository.deleteByDocumentId(documentId);
