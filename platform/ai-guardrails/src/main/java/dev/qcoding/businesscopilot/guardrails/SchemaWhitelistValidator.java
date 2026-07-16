@@ -1,15 +1,14 @@
 package dev.qcoding.businesscopilot.guardrails;
 
-import net.sf.jsqlparser.schema.Table;
-import net.sf.jsqlparser.statement.select.FromItem;
-import net.sf.jsqlparser.statement.select.Join;
-import net.sf.jsqlparser.statement.select.ParenthesedSelect;
-import net.sf.jsqlparser.statement.select.PlainSelect;
 import net.sf.jsqlparser.statement.select.Select;
-import net.sf.jsqlparser.statement.select.SetOperationList;
+import net.sf.jsqlparser.statement.Statement;
+import net.sf.jsqlparser.schema.Table;
+import net.sf.jsqlparser.util.TablesNamesFinder;
 
-import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 /**
  * Rejects SQL that references any table outside the configured whitelist.
@@ -19,7 +18,7 @@ import java.util.List;
  */
 public class SchemaWhitelistValidator implements SqlValidator {
 
-    private final List<String> whitelist;
+    private final Set<String> whitelist;
 
     public SchemaWhitelistValidator(List<String> whitelist) {
         this.whitelist = normalize(whitelist);
@@ -35,78 +34,71 @@ public class SchemaWhitelistValidator implements SqlValidator {
         if (!(context.parsedStatement() instanceof Select select)) {
             return;
         }
-        // Collect CTE aliases (WITH ... AS alias) — these are temporary tables
-        // defined in the query itself and should be treated as whitelisted.
-        List<String> cteAliases = new ArrayList<>();
-        if (select.getWithItemsList() != null) {
-            for (var withItem : select.getWithItemsList()) {
-                // In JSQLParser 4.9 WithItem extends ParenthesedSelect;
-                // the CTE name is stored in its Alias.
-                if (withItem.getAlias() != null && withItem.getAlias().getName() != null) {
-                    cteAliases.add(withItem.getAlias().getName().toLowerCase());
-                }
-            }
-        }
-
-        List<String> tables = new ArrayList<>();
-        collectTables(select, tables);
+        Set<String> tables = new CanonicalTableNamesFinder().getTables((Statement) select);
         for (String table : tables) {
-            String lower = table.toLowerCase();
-            // CTE aliases are considered whitelisted for this query
-            if (cteAliases.contains(lower)) continue;
-            if (!whitelist.contains(lower)) {
+            if (!whitelist.contains(table)) {
                 violations.add(SqlViolation.of(SqlViolationCode.TABLE_NOT_WHITELISTED, name(), table));
             }
         }
     }
 
-    /** Recursively collect all table names referenced in a Select. */
-    private void collectTables(Select select, List<String> tables) {
-        if (select instanceof PlainSelect plain) {
-            collectFromPlain(plain, tables);
-        } else if (select instanceof SetOperationList setOp) {
-            if (setOp.getSelects() != null) {
-                for (Select branch : setOp.getSelects()) {
-                    collectTables(branch, tables);
-                }
-            }
+    private Set<String> normalize(List<String> whitelist) {
+        Set<String> normalized = new LinkedHashSet<>();
+        if (whitelist == null) {
+            return normalized;
         }
-        // Also check WITH items
-        if (select.getWithItemsList() != null) {
-            for (var withItem : select.getWithItemsList()) {
-                if (withItem.getSelect() != null) {
-                    collectTables(withItem.getSelect(), tables);
-                }
-            }
-        }
-    }
-
-    private void collectFromPlain(PlainSelect plain, List<String> tables) {
-        FromItem fromItem = plain.getFromItem();
-        collectFromItem(fromItem, tables);
-        if (plain.getJoins() != null) {
-            for (Join join : plain.getJoins()) {
-                collectFromItem(join.getRightItem(), tables);
-            }
-        }
-    }
-
-    private void collectFromItem(FromItem fromItem, List<String> tables) {
-        if (fromItem == null) return;
-        if (fromItem instanceof Table table) {
-            String name = table.getName();
-            if (name != null) tables.add(name);
-        } else if (fromItem instanceof ParenthesedSelect sub) {
-            // Recurse into subqueries
-            collectTables(sub.getSelect(), tables);
-        }
-    }
-
-    private List<String> normalize(List<String> whitelist) {
-        List<String> normalized = new ArrayList<>();
         for (String t : whitelist) {
-            if (t != null && !t.isBlank()) normalized.add(t.trim().toLowerCase());
+            if (t != null && !t.isBlank()) {
+                normalized.add(canonicalizeQualifiedName(t.trim()));
+            }
         }
         return normalized;
+    }
+
+    /**
+     * TablesNamesFinder already traverses CTEs, joins, nested FROM items and expression
+     * subqueries. Keeping the fully-qualified name here prevents private.orders from
+     * being reduced to orders and matching a same-name public table.
+     */
+    private static final class CanonicalTableNamesFinder extends TablesNamesFinder {
+
+        @Override
+        protected String extractTableName(Table table) {
+            List<String> parts = table.getNameParts();
+            StringBuilder canonical = new StringBuilder();
+            for (int i = parts.size() - 1; i >= 0; i--) {
+                if (!canonical.isEmpty()) {
+                    canonical.append('.');
+                }
+                canonical.append(canonicalizeIdentifier(parts.get(i)));
+            }
+            return canonical.toString();
+        }
+    }
+
+    private static String canonicalizeQualifiedName(String qualifiedName) {
+        String[] parts = qualifiedName.split("\\.");
+        StringBuilder canonical = new StringBuilder();
+        for (String part : parts) {
+            if (!canonical.isEmpty()) {
+                canonical.append('.');
+            }
+            canonical.append(canonicalizeIdentifier(part.trim()));
+        }
+        return canonical.toString();
+    }
+
+    private static String canonicalizeIdentifier(String identifier) {
+        if (identifier.length() >= 2
+                && identifier.startsWith("\"")
+                && identifier.endsWith("\"")) {
+            String exact = identifier.substring(1, identifier.length() - 1)
+                    .replace("\"\"", "\"");
+            if (exact.equals(exact.toLowerCase(Locale.ROOT))) {
+                return exact;
+            }
+            return '"' + exact.replace("\"", "\"\"") + '"';
+        }
+        return identifier.toLowerCase(Locale.ROOT);
     }
 }

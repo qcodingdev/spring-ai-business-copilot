@@ -16,6 +16,7 @@ import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -31,7 +32,7 @@ import java.util.Map;
  *   <li>执行前再次调用 SqlGuardrailService 做防御式二次校验——即使生成阶段已通过，
  *       执行前仍需确认，防止候选被篡改或存储后规则变更。</li>
  *   <li>设置 query timeout 防止慢查询占用连接。</li>
- *   <li>设置 max rows，超出时截断并标记 truncated=true。</li>
+ *   <li>设置 JDBC max rows/fetch size，并限制返回列数和结果字节数。</li>
  *   <li>查询结果返回前调用 SensitiveDataMasker 对 phone/email 等字段脱敏。</li>
  *   <li>SQL 异常转换成用户可理解的 BusinessException，不暴露堆栈。</li>
  * </ul></p>
@@ -69,7 +70,7 @@ public class JdbcReadOnlyQueryExecutor implements ReadOnlyQueryExecutor {
                             .toList());
             log.warn("Second guardrails check rejected SQL: {}", violationDetails);
             throw new BusinessException(ErrorCode.SQL_GUARDRAIL_VIOLATION,
-                    "SQL rejected by guardrails on execution: " + violationDetails);
+                    "SQL 未通过安全校验");
         }
 
         // 2. 执行查询（设置超时和最大行数）；SQL 异常转换成用户可理解的 BusinessException，不暴露堆栈
@@ -78,6 +79,8 @@ public class JdbcReadOnlyQueryExecutor implements ReadOnlyQueryExecutor {
                 @Override
                 public QueryResultTable doInStatement(Statement stmt) throws SQLException {
                     stmt.setQueryTimeout(queryProperties.queryTimeoutSeconds());
+                    stmt.setMaxRows(jdbcMaxRows());
+                    stmt.setFetchSize(Math.min(queryProperties.fetchSize(), jdbcMaxRows()));
 
                     try (ResultSet rs = stmt.executeQuery(sql)) {
                         return mapResultSet(rs);
@@ -109,14 +112,21 @@ public class JdbcReadOnlyQueryExecutor implements ReadOnlyQueryExecutor {
     private QueryResultTable mapResultSet(ResultSet rs) throws SQLException {
         ResultSetMetaData metaData = rs.getMetaData();
         int columnCount = metaData.getColumnCount();
+        if (columnCount > queryProperties.maxColumns()) {
+            throw new QueryExecutionException("查询结果列数超过安全上限，请减少查询字段");
+        }
 
         // 提取列描述
         List<QueryColumn> columns = new ArrayList<>();
+        long resultBytes = 0;
         for (int i = 1; i <= columnCount; i++) {
-            columns.add(new QueryColumn(
-                    metaData.getColumnLabel(i),
-                    metaData.getColumnTypeName(i)));
+            String columnLabel = metaData.getColumnLabel(i);
+            String columnType = metaData.getColumnTypeName(i);
+            columns.add(new QueryColumn(columnLabel, columnType));
+            resultBytes += estimateBytes(columnLabel);
+            resultBytes += estimateBytes(columnType);
         }
+        enforceResultByteLimit(resultBytes);
 
         // 提取行数据，应用 max rows 和脱敏
         List<QueryRow> rows = new ArrayList<>();
@@ -132,12 +142,38 @@ public class JdbcReadOnlyQueryExecutor implements ReadOnlyQueryExecutor {
             for (int i = 1; i <= columnCount; i++) {
                 String columnName = metaData.getColumnLabel(i);
                 Object rawValue = rs.getObject(i);
-                values.put(columnName, maskIfNeeded(columnName, rawValue));
+                Object maskedValue = maskIfNeeded(columnName, rawValue);
+                resultBytes += estimateBytes(columnName);
+                resultBytes += estimateBytes(maskedValue);
+                enforceResultByteLimit(resultBytes);
+                values.put(columnName, maskedValue);
             }
             rows.add(new QueryRow(values));
         }
 
         return new QueryResultTable(columns, rows, rows.size(), truncated);
+    }
+
+    private int jdbcMaxRows() {
+        return queryProperties.maxRows() == Integer.MAX_VALUE
+                ? Integer.MAX_VALUE
+                : queryProperties.maxRows() + 1;
+    }
+
+    private void enforceResultByteLimit(long resultBytes) {
+        if (resultBytes > queryProperties.maxResultBytes()) {
+            throw new QueryExecutionException("查询结果大小超过安全上限，请缩小查询范围");
+        }
+    }
+
+    private long estimateBytes(Object value) {
+        if (value == null) {
+            return 4;
+        }
+        if (value instanceof byte[] bytes) {
+            return bytes.length;
+        }
+        return String.valueOf(value).getBytes(StandardCharsets.UTF_8).length;
     }
 
     /** Apply masking if the column is sensitive; pass through otherwise. */

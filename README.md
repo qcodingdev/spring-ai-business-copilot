@@ -18,10 +18,10 @@ This repository is an application suite, not another AI framework. Clone it, run
 AI demos often stop at a chat box. Business systems need a little more discipline:
 
 - model output is structured and validated before it becomes a business action;
-- sensitive input is masked before model calls and persistence;
+- module-specific sensitive fields are masked before model calls or persistence where that boundary is implemented;
 - facts are tied to current evidence IDs;
 - risky actions require a server-generated token and explicit human confirmation;
-- audit logs store metadata, not sensitive payloads or full model responses;
+- audit logs avoid full model responses and confirmation tokens, but the current Data and Knowledge audits can retain question text, so demo inputs must remain fictional and sanitized;
 - each module has a narrow scope and can explain its business value independently.
 
 ## Included Copilots
@@ -86,7 +86,9 @@ Requirements: Java 21 and PostgreSQL 16 with pgvector.
 
 Default database settings are `jdbc:postgresql://localhost:5432/business_copilot`, user `copilot`, password `copilot`. Override them with `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, and `SPRING_DATASOURCE_PASSWORD`.
 
-Data Copilot can use a separate PostgreSQL business query database through `BUSINESS_QUERY_DATASOURCE_ENABLED=true` and the `BUSINESS_QUERY_DATASOURCE_*` settings. The database account must have database-level `SELECT` privileges only; Compose creates an example `business_reader` role when it initializes a new volume. Platform audits, knowledge vectors, and other module state remain in the platform PostgreSQL database. MySQL query-target support is planned for the v1.2 dialect layer; migrating the whole platform to MySQL is not recommended.
+Data Copilot can use a separate PostgreSQL business query database through `BUSINESS_QUERY_DATASOURCE_ENABLED=true` and the `BUSINESS_QUERY_DATASOURCE_*` settings. The database account must be independently created with least-privilege `SELECT` access to only the approved business schema/tables. Compose creates an example `business_reader` role that can select only the six fictional sample tables; it cannot read platform audits or other Copilot tables and cannot perform DML/DDL. Platform audits, knowledge vectors, and other module state remain in the platform PostgreSQL database. MySQL query-target support is planned for the v1.2 dialect layer; migrating the whole platform to MySQL is not recommended.
+
+The v1.1 SQL boundary requires schema-qualified allowlisted tables (`public.customers`, not `customers`), denies database functions by default except the explicit `count`/`sum`/`avg`/`min`/`max` aggregate allowlist, and accepts only a bounded integer-literal `LIMIT`. JDBC independently caps timeout, rows, fetch size, columns, and approximate result bytes.
 
 Admins and reviewers can access `/actuator/metrics`. Spring AI model observations record call latency and provider-reported token usage without exposing prompt or business content in the metrics.
 
@@ -114,7 +116,7 @@ flowchart LR
 
 | Layer | Technology | Rule |
 |---|---|---|
-| Runtime | Java 21, Spring Boot 4.1 | One executable app, explicit module auto-configuration |
+| Runtime | Java 21, Spring Boot 4.1 | One executable app; independent-host module auto-configuration is being hardened |
 | AI | Spring AI 2.0, Jackson 3 | Central prompts and typed output before guardrails |
 | Persistence | JDBC + MyBatis-Plus 3.5.16 | MyBatis-Plus for stable CRUD; JDBC for dynamic or batch-specific access |
 | Database | PostgreSQL 16, pgvector, Flyway | Flyway is the only DDL authority |

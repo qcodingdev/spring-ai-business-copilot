@@ -57,12 +57,12 @@ business-copilot:
       maximum-pool-size: ${BUSINESS_QUERY_DATASOURCE_MAX_POOL_SIZE:5}
     schema:
       queryable-tables:
-        - customers
-        - products
-        - orders
-        - order_items
-        - refunds
-        - marketing_events
+        - public.customers
+        - public.products
+        - public.orders
+        - public.order_items
+        - public.refunds
+        - public.marketing_events
       # query_audit_logs 不在白名单中，自然语言查询无法触达
       max-schema-text-length: 2000
     confirmation:
@@ -70,9 +70,18 @@ business-copilot:
     query:
       query-timeout-seconds: 30
       max-rows: 100
+      fetch-size: 50
+      max-columns: 50
+      max-result-bytes: 1048576
   guardrails:
     default-max-rows: 100
     require-limit: true
+    allowed-aggregate-functions:
+      - count
+      - sum
+      - avg
+      - min
+      - max
   ai-core:
     model-name: ${SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL:deepseek-v4-flash}
   # ── Knowledge Copilot 配置 ─────────────────────────────────────

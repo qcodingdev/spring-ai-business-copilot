@@ -29,8 +29,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 /**
  * Auto-configuration for the Knowledge Copilot module.
  *
- * <p>Knowledge Copilot 自动装配。注册模块配置、文档/分片仓库、解析器、分片服务、
- * 上传服务等组件。embedding 调用和问答 API 将在后续步骤补充。</p>
+ * <p>Knowledge Copilot 自动装配。注册文档解析、分片、embedding、检索、问答和审计服务。
+ * Controller 的独立宿主装配将在 v1.2 继续收口。</p>
  */
 @AutoConfiguration
 @ConditionalOnProperty(prefix = "business-copilot.knowledge", name = "enabled", havingValue = "true")

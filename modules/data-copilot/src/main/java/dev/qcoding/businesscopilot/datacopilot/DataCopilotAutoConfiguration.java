@@ -65,7 +65,8 @@ public class DataCopilotAutoConfiguration {
                 guardrailsProperties.blockedColumns(),
                 guardrailsProperties.maskedColumns(),
                 guardrailsProperties.defaultMaxRows(),
-                guardrailsProperties.requireLimit());
+                guardrailsProperties.requireLimit(),
+                guardrailsProperties.allowedAggregateFunctions());
     }
 
     @Bean
@@ -77,7 +78,7 @@ public class DataCopilotAutoConfiguration {
     @Bean
     @ConfigurationProperties(prefix = "business-copilot.data-copilot.query")
     public QueryExecutionProperties queryExecutionProperties() {
-        return new QueryExecutionProperties(0, 0);
+        return new QueryExecutionProperties(0, 0, 0, 0, 0);
     }
 
     @Bean

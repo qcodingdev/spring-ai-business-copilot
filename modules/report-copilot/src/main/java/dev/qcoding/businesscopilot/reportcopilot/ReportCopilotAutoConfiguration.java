@@ -30,8 +30,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 /**
  * Auto-configuration for the Report Copilot module.
  *
- * <p>The initial vertical slice exposes normalized fictional source data only. Report generation,
- * draft state transitions, and export are added in later slices.</p>
+ * <p>Registers source normalization, structured report generation, draft state transitions,
+ * audit, confirmation, and Markdown export. Independent-host controller registration remains
+ * part of the v1.2 hardening work.</p>
  */
 @AutoConfiguration
 @ConditionalOnProperty(prefix = "business-copilot.report-copilot", name = "enabled", havingValue = "true")

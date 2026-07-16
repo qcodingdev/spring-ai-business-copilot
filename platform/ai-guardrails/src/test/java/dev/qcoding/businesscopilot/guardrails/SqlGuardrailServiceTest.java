@@ -23,8 +23,12 @@ class SqlGuardrailServiceTest {
                 new ReadOnlyStatementValidator(),
                 new ForbiddenKeywordValidator(),
                 new SchemaWhitelistValidator(properties.queryableTables()),
+                new FunctionAllowlistValidator(properties.allowedAggregateFunctions()),
                 new SensitiveFieldValidator(policy),
-                new LimitRequiredValidator(properties.defaultMaxRows(), properties.requireLimit())
+                new LimitRequiredValidator(
+                        properties.defaultMaxRows(),
+                        properties.requireLimit(),
+                        properties.allowedAggregateFunctions())
         );
         service = new SqlGuardrailService(validators);
     }
@@ -35,7 +39,7 @@ class SqlGuardrailServiceTest {
     @DisplayName("simple SELECT passes")
     void simpleSelectPasses() {
         SqlValidationResult result = service.validate(
-                "SELECT id, name FROM customers LIMIT 10", properties);
+                "SELECT id, name FROM public.customers LIMIT 10", properties);
         assertThat(result.passed()).isTrue();
         assertThat(result.violations()).isEmpty();
     }
@@ -44,7 +48,7 @@ class SqlGuardrailServiceTest {
     @DisplayName("WITH SELECT passes")
     void withSelectPasses() {
         SqlValidationResult result = service.validate(
-                "WITH recent_orders AS (SELECT * FROM orders WHERE created_at > '2024-01-01') " +
+                "WITH recent_orders AS (SELECT * FROM public.orders WHERE created_at > '2024-01-01') " +
                 "SELECT * FROM recent_orders LIMIT 10", properties);
         assertThat(result.passed()).isTrue();
     }
@@ -53,7 +57,7 @@ class SqlGuardrailServiceTest {
     @DisplayName("aggregate query without LIMIT passes")
     void aggregateWithoutLimitPasses() {
         SqlValidationResult result = service.validate(
-                "SELECT COUNT(*) FROM orders", properties);
+                "SELECT COUNT(*) FROM public.orders", properties);
         assertThat(result.passed()).isTrue();
     }
 
@@ -61,7 +65,7 @@ class SqlGuardrailServiceTest {
     @DisplayName("SELECT with phone/email passes (masked later)")
     void selectWithMaskedColumnsPasses() {
         SqlValidationResult result = service.validate(
-                "SELECT name, phone, email FROM customers LIMIT 10", properties);
+                "SELECT name, phone, email FROM public.customers LIMIT 10", properties);
         assertThat(result.passed()).isTrue();
     }
 
@@ -161,7 +165,7 @@ class SqlGuardrailServiceTest {
     @DisplayName("SQL comment smuggling forbidden keyword rejected")
     void commentSmugglingRejected() {
         SqlValidationResult result = service.validate(
-                "SELECT * FROM customers /* drop table customers */ LIMIT 10", properties);
+                "SELECT * FROM public.customers /* drop table customers */ LIMIT 10", properties);
         assertThat(result.passed()).isFalse();
         assertThat(result.violations()).anyMatch(v -> v.code().equals(SqlViolationCode.FORBIDDEN_KEYWORD.code()));
     }
@@ -179,7 +183,7 @@ class SqlGuardrailServiceTest {
     @DisplayName("non-whitelisted table rejected")
     void nonWhitelistedTableRejected() {
         SqlValidationResult result = service.validate(
-                "SELECT * FROM query_audit_logs LIMIT 10", properties);
+                "SELECT * FROM public.query_audit_logs LIMIT 10", properties);
         assertThat(result.passed()).isFalse();
         assertThat(result.violations()).anyMatch(v -> v.code().equals(SqlViolationCode.TABLE_NOT_WHITELISTED.code()));
     }
@@ -188,7 +192,7 @@ class SqlGuardrailServiceTest {
     @DisplayName("high-sensitivity field (password) blocked")
     void passwordFieldBlocked() {
         SqlValidationResult result = service.validate(
-                "SELECT password FROM customers LIMIT 10", properties);
+                "SELECT password FROM public.customers LIMIT 10", properties);
         assertThat(result.passed()).isFalse();
         assertThat(result.violations()).anyMatch(v -> v.code().equals(SqlViolationCode.SENSITIVE_FIELD_BLOCKED.code()));
     }
@@ -197,7 +201,7 @@ class SqlGuardrailServiceTest {
     @DisplayName("high-sensitivity field (token) blocked")
     void tokenFieldBlocked() {
         SqlValidationResult result = service.validate(
-                "SELECT token FROM customers LIMIT 10", properties);
+                "SELECT token FROM public.customers LIMIT 10", properties);
         assertThat(result.passed()).isFalse();
         assertThat(result.violations()).anyMatch(v -> v.code().equals(SqlViolationCode.SENSITIVE_FIELD_BLOCKED.code()));
     }
@@ -206,7 +210,7 @@ class SqlGuardrailServiceTest {
     @DisplayName("high-sensitivity field (secret) blocked")
     void secretFieldBlocked() {
         SqlValidationResult result = service.validate(
-                "SELECT secret FROM customers LIMIT 10", properties);
+                "SELECT secret FROM public.customers LIMIT 10", properties);
         assertThat(result.passed()).isFalse();
         assertThat(result.violations()).anyMatch(v -> v.code().equals(SqlViolationCode.SENSITIVE_FIELD_BLOCKED.code()));
     }
@@ -215,7 +219,7 @@ class SqlGuardrailServiceTest {
     @DisplayName("high-sensitivity field (id_card) blocked")
     void idCardFieldBlocked() {
         SqlValidationResult result = service.validate(
-                "SELECT id_card FROM customers LIMIT 10", properties);
+                "SELECT id_card FROM public.customers LIMIT 10", properties);
         assertThat(result.passed()).isFalse();
         assertThat(result.violations()).anyMatch(v -> v.code().equals(SqlViolationCode.SENSITIVE_FIELD_BLOCKED.code()));
     }
@@ -224,7 +228,7 @@ class SqlGuardrailServiceTest {
     @DisplayName("high-sensitivity field inside expression blocked")
     void sensitiveFieldInsideExpressionBlocked() {
         SqlValidationResult result = service.validate(
-                "SELECT substring(password, 1, 2) AS password_prefix FROM customers LIMIT 10", properties);
+                "SELECT substring(password, 1, 2) AS password_prefix FROM public.customers LIMIT 10", properties);
         assertThat(result.passed()).isFalse();
         assertThat(result.violations()).anyMatch(v -> v.code().equals(SqlViolationCode.SENSITIVE_FIELD_BLOCKED.code()));
     }
@@ -233,7 +237,7 @@ class SqlGuardrailServiceTest {
     @DisplayName("high-sensitivity field inside CASE expression blocked")
     void sensitiveFieldInsideCaseExpressionBlocked() {
         SqlValidationResult result = service.validate(
-                "SELECT CASE WHEN token IS NULL THEN 'missing' ELSE 'present' END AS token_status FROM customers LIMIT 10",
+                "SELECT CASE WHEN token IS NULL THEN 'missing' ELSE 'present' END AS token_status FROM public.customers LIMIT 10",
                 properties);
         assertThat(result.passed()).isFalse();
         assertThat(result.violations()).anyMatch(v -> v.code().equals(SqlViolationCode.SENSITIVE_FIELD_BLOCKED.code()));
@@ -243,7 +247,7 @@ class SqlGuardrailServiceTest {
     @DisplayName("non-aggregate query without LIMIT rejected")
     void missingLimitRejected() {
         SqlValidationResult result = service.validate(
-                "SELECT id, name FROM customers", properties);
+                "SELECT id, name FROM public.customers", properties);
         assertThat(result.passed()).isFalse();
         assertThat(result.violations()).anyMatch(v -> v.code().equals(SqlViolationCode.LIMIT_REQUIRED.code()));
     }
@@ -252,8 +256,164 @@ class SqlGuardrailServiceTest {
     @DisplayName("LIMIT exceeding max rejected")
     void limitExceedsMaxRejected() {
         SqlValidationResult result = service.validate(
-                "SELECT * FROM customers LIMIT 500", properties);
+                "SELECT * FROM public.customers LIMIT 500", properties);
         assertThat(result.passed()).isFalse();
         assertThat(result.violations()).anyMatch(v -> v.code().equals(SqlViolationCode.LIMIT_EXCEEDS_MAX.code()));
+    }
+
+    @Test
+    @DisplayName("unqualified table rejected when whitelist is schema-qualified")
+    void unqualifiedTableRejected() {
+        SqlValidationResult result = service.validate(
+                "SELECT * FROM customers LIMIT 10", properties);
+
+        assertThat(result.passed()).isFalse();
+        assertThat(result.violations())
+                .anyMatch(v -> v.code().equals(SqlViolationCode.TABLE_NOT_WHITELISTED.code()));
+    }
+
+    @Test
+    @DisplayName("same-name table in another schema rejected")
+    void sameNameCrossSchemaTableRejected() {
+        SqlValidationResult result = service.validate(
+                "SELECT * FROM private.customers LIMIT 10", properties);
+
+        assertThat(result.passed()).isFalse();
+        assertThat(result.violations())
+                .anyMatch(v -> v.code().equals(SqlViolationCode.TABLE_NOT_WHITELISTED.code()));
+    }
+
+    @Test
+    @DisplayName("cross-schema table inside expression subquery rejected")
+    void crossSchemaTableInsideSubqueryRejected() {
+        SqlValidationResult result = service.validate("""
+                SELECT id
+                FROM public.customers
+                WHERE id IN (
+                    SELECT customer_id FROM private.orders LIMIT 10
+                )
+                LIMIT 10
+                """, properties);
+
+        assertThat(result.passed()).isFalse();
+        assertThat(result.violations())
+                .anyMatch(v -> v.code().equals(SqlViolationCode.TABLE_NOT_WHITELISTED.code()));
+    }
+
+    @Test
+    @DisplayName("quoted lowercase qualified table passes")
+    void quotedLowercaseQualifiedTablePasses() {
+        SqlValidationResult result = service.validate(
+                "SELECT id FROM \"public\".\"customers\" LIMIT 10", properties);
+
+        assertThat(result.passed()).isTrue();
+    }
+
+    @Test
+    @DisplayName("ordinary function rejected")
+    void ordinaryFunctionRejected() {
+        SqlValidationResult result = service.validate(
+                "SELECT LOWER(name) FROM public.customers LIMIT 10", properties);
+
+        assertThat(result.passed()).isFalse();
+        assertThat(result.violations())
+                .anyMatch(v -> v.code().equals(SqlViolationCode.FUNCTION_NOT_ALLOWED.code()));
+    }
+
+    @Test
+    @DisplayName("dangerous sleep function rejected")
+    void sleepFunctionRejected() {
+        SqlValidationResult result = service.validate(
+                "SELECT pg_sleep(1) FROM public.customers LIMIT 1", properties);
+
+        assertThat(result.passed()).isFalse();
+        assertThat(result.violations())
+                .anyMatch(v -> v.code().equals(SqlViolationCode.FUNCTION_NOT_ALLOWED.code()));
+    }
+
+    @Test
+    @DisplayName("table function rejected")
+    void tableFunctionRejected() {
+        SqlValidationResult result = service.validate(
+                "SELECT * FROM generate_series(1, 10) LIMIT 1", properties);
+
+        assertThat(result.passed()).isFalse();
+        assertThat(result.violations())
+                .anyMatch(v -> v.code().equals(SqlViolationCode.FUNCTION_NOT_ALLOWED.code()));
+    }
+
+    @Test
+    @DisplayName("schema-qualified aggregate function rejected")
+    void schemaQualifiedAggregateFunctionRejected() {
+        SqlValidationResult result = service.validate(
+                "SELECT pg_catalog.count(*) FROM public.orders", properties);
+
+        assertThat(result.passed()).isFalse();
+        assertThat(result.violations())
+                .anyMatch(v -> v.code().equals(SqlViolationCode.FUNCTION_NOT_ALLOWED.code()));
+    }
+
+    @Test
+    @DisplayName("explicit aggregate allowlist passes")
+    void aggregateAllowlistPasses() {
+        for (String function : List.of("COUNT(*)", "SUM(total_amount)", "AVG(total_amount)",
+                "MIN(total_amount)", "MAX(total_amount)")) {
+            SqlValidationResult result = service.validate(
+                    "SELECT " + function + " FROM public.orders", properties);
+            assertThat(result.passed()).as(function).isTrue();
+        }
+    }
+
+    @Test
+    @DisplayName("grouped aggregate still requires bounded LIMIT")
+    void groupedAggregateRequiresLimit() {
+        SqlValidationResult result = service.validate(
+                "SELECT status, COUNT(*) FROM public.orders GROUP BY status", properties);
+
+        assertThat(result.passed()).isFalse();
+        assertThat(result.violations())
+                .anyMatch(v -> v.code().equals(SqlViolationCode.LIMIT_REQUIRED.code()));
+    }
+
+    @Test
+    @DisplayName("parameterized LIMIT rejected")
+    void parameterizedLimitRejected() {
+        SqlValidationResult result = service.validate(
+                "SELECT id FROM public.customers LIMIT ?", properties);
+
+        assertThat(result.passed()).isFalse();
+        assertThat(result.violations())
+                .anyMatch(v -> v.code().equals(SqlViolationCode.LIMIT_NOT_BOUNDED_CONSTANT.code()));
+    }
+
+    @Test
+    @DisplayName("computed LIMIT rejected")
+    void computedLimitRejected() {
+        SqlValidationResult result = service.validate(
+                "SELECT id FROM public.customers LIMIT 1 + 1", properties);
+
+        assertThat(result.passed()).isFalse();
+        assertThat(result.violations())
+                .anyMatch(v -> v.code().equals(SqlViolationCode.LIMIT_NOT_BOUNDED_CONSTANT.code()));
+    }
+
+    @Test
+    @DisplayName("negative LIMIT rejected")
+    void negativeLimitRejected() {
+        SqlValidationResult result = service.validate(
+                "SELECT id FROM public.customers LIMIT -1", properties);
+
+        assertThat(result.passed()).isFalse();
+        assertThat(result.violations())
+                .anyMatch(v -> v.code().equals(SqlViolationCode.LIMIT_NOT_BOUNDED_CONSTANT.code()));
+    }
+
+    @Test
+    @DisplayName("zero LIMIT is a bounded constant")
+    void zeroLimitPasses() {
+        SqlValidationResult result = service.validate(
+                "SELECT id FROM public.customers LIMIT 0", properties);
+
+        assertThat(result.passed()).isTrue();
     }
 }

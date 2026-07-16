@@ -9,6 +9,9 @@ import net.sf.jsqlparser.statement.select.SelectItem;
 import net.sf.jsqlparser.statement.select.SetOperationList;
 
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Enforces that non-aggregate queries include a LIMIT clause and that the limit
@@ -20,10 +23,23 @@ public class LimitRequiredValidator implements SqlValidator {
 
     private final int maxRows;
     private final boolean requireLimit;
+    private final Set<String> allowedAggregateFunctions;
 
     public LimitRequiredValidator(int maxRows, boolean requireLimit) {
+        this(maxRows, requireLimit, List.of("count", "sum", "avg", "min", "max"));
+    }
+
+    public LimitRequiredValidator(int maxRows,
+                                  boolean requireLimit,
+                                  List<String> allowedAggregateFunctions) {
         this.maxRows = maxRows;
         this.requireLimit = requireLimit;
+        this.allowedAggregateFunctions = allowedAggregateFunctions == null
+                ? Set.of()
+                : allowedAggregateFunctions.stream()
+                        .filter(name -> name != null && !name.isBlank())
+                        .map(name -> name.trim().toLowerCase(Locale.ROOT))
+                        .collect(Collectors.toUnmodifiableSet());
     }
 
     @Override
@@ -46,21 +62,12 @@ public class LimitRequiredValidator implements SqlValidator {
                     validateSelect(branch, violations);
                 }
             }
-            // Check limit on the outer set operation
-            if (setOp.getLimit() != null) {
-                checkLimitValue(setOp.getLimit(), violations);
-            }
-        }
-        // Check limit on the outer Select (common for all subtypes)
-        if (select.getLimit() != null) {
-            checkLimitValue(select.getLimit(), violations);
+            checkLimitValue(setOp.getLimit(), violations);
         }
     }
 
     private void validatePlainSelect(PlainSelect plain, List<SqlViolation> violations) {
         boolean isAggregate = isAggregateQuery(plain);
-        // Check the limit on the PlainSelect itself (in JSQLParser 4.9, Limit is on Select)
-        // PlainSelect inherits from Select, so getLimit() is available
         if (plain.getLimit() != null) {
             checkLimitValue(plain.getLimit(), violations);
         } else if (requireLimit && !isAggregate) {
@@ -69,27 +76,43 @@ public class LimitRequiredValidator implements SqlValidator {
         }
     }
 
-    private void checkLimitValue(net.sf.jsqlparser.statement.select.Limit limit, List<SqlViolation> violations) {
-        Expression rowCount = limit.getRowCount();
-        if (rowCount instanceof LongValue lval) {
-            long value = lval.getValue();
-            if (value > maxRows) {
-                violations.add(SqlViolation.of(SqlViolationCode.LIMIT_EXCEEDS_MAX, name(),
-                        "limit " + value + " exceeds max " + maxRows));
-            }
+    private void checkLimitValue(net.sf.jsqlparser.statement.select.Limit limit,
+                                 List<SqlViolation> violations) {
+        if (limit == null) {
+            return;
         }
-        // Non-constant LIMIT expressions (e.g. parameters) are allowed through
+        Expression rowCount = limit.getRowCount();
+        if (!(rowCount instanceof LongValue lval)) {
+            violations.add(SqlViolation.of(
+                    SqlViolationCode.LIMIT_NOT_BOUNDED_CONSTANT,
+                    name(),
+                    String.valueOf(rowCount)));
+            return;
+        }
+        long value = lval.getValue();
+        if (value < 0) {
+            violations.add(SqlViolation.of(
+                    SqlViolationCode.LIMIT_NOT_BOUNDED_CONSTANT,
+                    name(),
+                    "limit must be non-negative"));
+        } else if (value > maxRows) {
+            violations.add(SqlViolation.of(SqlViolationCode.LIMIT_EXCEEDS_MAX, name(),
+                    "limit " + value + " exceeds max " + maxRows));
+        }
     }
 
-    /** Heuristic: query is aggregate if all select items are aggregate functions. */
+    /** Only a single-row, ungrouped query made entirely of allowed aggregates may omit LIMIT. */
     private boolean isAggregateQuery(PlainSelect plain) {
-        if (plain.getGroupBy() != null) return true;
+        if (plain.getGroupBy() != null) return false;
         List<SelectItem<?>> items = plain.getSelectItems();
         if (items == null || items.isEmpty()) return false;
-        // If every expression item is a function, treat as aggregate
         for (SelectItem<?> item : items) {
             Expression expr = item.getExpression();
-            if (!(expr instanceof Function)) {
+            if (!(expr instanceof Function function)
+                    || function.getMultipartName() == null
+                    || function.getMultipartName().size() != 1
+                    || !allowedAggregateFunctions.contains(
+                            function.getMultipartName().getFirst().toLowerCase(Locale.ROOT))) {
                 return false;
             }
         }

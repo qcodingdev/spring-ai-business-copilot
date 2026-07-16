@@ -32,6 +32,10 @@ public class SchemaContextService {
             try {
                 List<ColumnSchema> columns = repository.findColumns(tableName);
                 String description = properties.columnDescriptions().get(tableName.toLowerCase());
+                if ((description == null || description.isBlank()) && tableName.contains(".")) {
+                    description = properties.columnDescriptions().get(
+                            tableName.substring(tableName.indexOf('.') + 1).toLowerCase());
+                }
                 if (description == null || description.isBlank()) {
                     description = "Table " + tableName;
                 }
@@ -79,6 +83,11 @@ public class SchemaContextService {
     /** Whether a given table name is whitelisted. */
     public boolean isQueryable(String tableName) {
         if (tableName == null) return false;
-        return properties.queryableTables().contains(tableName.toLowerCase());
+        try {
+            return properties.queryableTables()
+                    .contains(QualifiedTableName.parse(tableName).canonicalName());
+        } catch (IllegalArgumentException ex) {
+            return false;
+        }
     }
 }

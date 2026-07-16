@@ -29,8 +29,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 /**
  * Auto-configuration for the Support Copilot module.
  *
- * <p>Support Copilot 自动装配。注册模块配置、工单/草稿/审计仓库、脱敏器等组件。
- * 业务 service（分类、检索、草稿生成等）将在后续步骤补充。</p>
+ * <p>Support Copilot 自动装配。注册工单分类、知识检索、草稿生成、确认和审计服务。
+ * Controller 的独立宿主装配将在 v1.2 继续收口。</p>
  */
 @AutoConfiguration
 @ConditionalOnProperty(prefix = "business-copilot.support-copilot", name = "enabled", havingValue = "true")

@@ -9,11 +9,14 @@ import dev.qcoding.businesscopilot.commonweb.request.BusinessRequestContextHolde
 import dev.qcoding.businesscopilot.knowledgecopilot.embedding.JdbcKnowledgeEmbeddingRepository;
 import dev.qcoding.businesscopilot.knowledgecopilot.embedding.KnowledgeChunkEmbedding;
 import dev.qcoding.businesscopilot.knowledgecopilot.embedding.KnowledgeEmbeddingRepository;
+import dev.qcoding.businesscopilot.datacopilot.schema.DataCopilotSchemaProperties;
+import dev.qcoding.businesscopilot.datacopilot.schema.JdbcSchemaMetadataRepository;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.dao.DataAccessException;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
@@ -22,6 +25,7 @@ import org.testcontainers.utility.DockerImageName;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @Testcontainers(disabledWithoutDocker = true)
 class PostgresPgvectorIntegrationTest {
@@ -42,8 +46,18 @@ class PostgresPgvectorIntegrationTest {
     static void migrateDatabase() {
         DriverManagerDataSource dataSource = new DriverManagerDataSource(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+        JdbcTemplate adminJdbcTemplate = new JdbcTemplate(dataSource);
+        adminJdbcTemplate.execute("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'business_reader') THEN
+                        CREATE ROLE business_reader LOGIN PASSWORD 'reader-test' INHERIT;
+                    END IF;
+                END
+                $$;
+                """);
         Flyway.configure().dataSource(dataSource).load().migrate();
-        jdbcTemplate = new JdbcTemplate(dataSource);
+        jdbcTemplate = adminJdbcTemplate;
     }
 
     @Test
@@ -83,7 +97,7 @@ class PostgresPgvectorIntegrationTest {
         assertThat(extension).isEqualTo("vector");
         assertThat(actorColumns).isEqualTo(5);
         assertThat(httpRequestColumns).isEqualTo(5);
-        assertThat(latestMigration).isEqualTo("9");
+        assertThat(latestMigration).isEqualTo("10");
     }
 
     @Test
@@ -128,7 +142,79 @@ class PostgresPgvectorIntegrationTest {
                 """, Integer.class)).isEqualTo(10);
         assertThat(upgradeJdbcTemplate.queryForObject(
                 "SELECT version FROM flyway_schema_history WHERE success = TRUE ORDER BY installed_rank DESC LIMIT 1",
-                String.class)).isEqualTo("9");
+                String.class)).isEqualTo("10");
+    }
+
+    @Test
+    void exampleReaderCanOnlySelectTheSixSampleBusinessTables() {
+        List<String> grantedTables = jdbcTemplate.queryForList("""
+                SELECT table_name
+                FROM information_schema.role_table_grants
+                WHERE grantee = 'business_copilot_reader'
+                  AND table_schema = 'public'
+                  AND privilege_type = 'SELECT'
+                ORDER BY table_name
+                """, String.class);
+
+        assertThat(grantedTables).containsExactly(
+                "customers",
+                "marketing_events",
+                "order_items",
+                "orders",
+                "products",
+                "refunds");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT has_table_privilege('business_reader', 'public.customers', 'SELECT')",
+                Boolean.class)).isTrue();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT has_table_privilege('business_reader', 'public.query_audit_logs', 'SELECT')",
+                Boolean.class)).isFalse();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT has_table_privilege('business_reader', 'public.support_tickets', 'SELECT')",
+                Boolean.class)).isFalse();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT has_table_privilege('business_reader', 'public.customers', 'UPDATE')",
+                Boolean.class)).isFalse();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT has_schema_privilege('business_reader', 'public', 'CREATE')",
+                Boolean.class)).isFalse();
+
+        DriverManagerDataSource readerDataSource = new DriverManagerDataSource(
+                POSTGRES.getJdbcUrl(), "business_reader", "reader-test");
+        JdbcTemplate readerJdbcTemplate = new JdbcTemplate(readerDataSource);
+
+        assertThat(readerJdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM public.customers", Integer.class)).isPositive();
+        assertThatThrownBy(() -> readerJdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM public.query_audit_logs", Integer.class))
+                .isInstanceOf(DataAccessException.class);
+        assertThatThrownBy(() -> readerJdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM public.support_tickets", Integer.class))
+                .isInstanceOf(DataAccessException.class);
+        assertThatThrownBy(() -> readerJdbcTemplate.update(
+                "UPDATE public.customers SET name = name"))
+                .isInstanceOf(DataAccessException.class);
+    }
+
+    @Test
+    void dataCopilotMetadataExposesOnlySchemaQualifiedBusinessTables() {
+        JdbcSchemaMetadataRepository repository = new JdbcSchemaMetadataRepository(
+                jdbcTemplate,
+                new DataCopilotSchemaProperties(null, null, null, 0));
+
+        assertThat(repository.findQueryableTableNames()).containsExactly(
+                "public.customers",
+                "public.marketing_events",
+                "public.order_items",
+                "public.orders",
+                "public.products",
+                "public.refunds");
+        assertThat(repository.findColumns("public.customers"))
+                .extracting(column -> column.name())
+                .contains("id", "name", "phone", "email");
+        assertThat(repository.tableExists("public.query_audit_logs")).isTrue();
+        assertThat(repository.findQueryableTableNames())
+                .doesNotContain("public.query_audit_logs", "public.support_tickets");
     }
 
     @Test

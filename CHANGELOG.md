@@ -11,7 +11,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Added form login with `ADMIN`, `OPERATOR`, and `REVIEWER` role boundaries and CSRF protection.
 - Added request IDs and authenticated actor IDs to API responses and module audit records.
 - Added an optional named, read-only Data Copilot business query datasource separate from the platform database.
-- Added a Docker Compose PostgreSQL read-only role example with default `SELECT` grants for Data Copilot.
+- Added a Docker Compose PostgreSQL reader role that can select only the six fictional Data Copilot business tables.
 - Added PostgreSQL/pgvector Testcontainers coverage and a GitHub Actions Maven verification workflow.
 - Added v1.0.0-to-v1.1 database upgrade coverage and a frontend JavaScript syntax gate.
 - Added a health, CSRF login, and authenticated-workbench smoke-test script.
@@ -24,6 +24,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Added a persistent BuildKit Maven cache and a focused Docker build context for faster, retryable image builds.
 - Removed fixed Compose container names and made host ports configurable so isolated project stacks do not collide.
 - Made deployment smoke tests wait for application health to avoid container-startup races.
+- Made Data Copilot schema metadata and prompts use schema-qualified table names.
 
 ### Fixed
 
@@ -36,6 +37,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Security
 
 - Denied unlisted API HTTP methods by default and added a production profile that requires explicit database and role credentials.
+- Enforced exact schema-qualified SQL table allowlists, including nested subqueries and quoted identifiers.
+- Denied database functions by default and explicitly allowed only `count`, `sum`, `avg`, `min`, and `max`.
+- Required bounded integer-literal `LIMIT` values and added JDBC timeout, row, fetch-size, column, and result-byte caps.
+- Added Flyway V10 and PostgreSQL integration tests that prevent the example reader from accessing audit or other Copilot tables and from executing DML/DDL.
 
 ## [1.0.0] - 2026-07-12
 

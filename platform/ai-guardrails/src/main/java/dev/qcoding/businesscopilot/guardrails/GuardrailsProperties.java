@@ -14,6 +14,7 @@ import java.util.List;
  * @param maskedColumns      columns that may be queried but masked in the result
  * @param defaultMaxRows     maximum number of rows a single query may return
  * @param requireLimit       whether non-aggregate queries must include an explicit LIMIT
+ * @param allowedAggregateFunctions aggregate functions that may be used in generated SQL
  */
 @ConfigurationProperties(prefix = "business-copilot.guardrails")
 public record GuardrailsProperties(
@@ -21,15 +22,24 @@ public record GuardrailsProperties(
         List<String> blockedColumns,
         List<String> maskedColumns,
         int defaultMaxRows,
-        boolean requireLimit) {
+        boolean requireLimit,
+        List<String> allowedAggregateFunctions) {
+
+    public GuardrailsProperties(List<String> queryableTables,
+                                List<String> blockedColumns,
+                                List<String> maskedColumns,
+                                int defaultMaxRows,
+                                boolean requireLimit) {
+        this(queryableTables, blockedColumns, maskedColumns, defaultMaxRows, requireLimit, null);
+    }
 
     /** Conservative defaults aligned with the v1 security boundary. */
     public GuardrailsProperties {
         if (queryableTables == null || queryableTables.isEmpty()) {
             // 默认业务白名单表，审计表 query_audit_logs 不在其中
             queryableTables = List.of(
-                    "customers", "products", "orders", "order_items",
-                    "refunds", "marketing_events");
+                    "public.customers", "public.products", "public.orders",
+                    "public.order_items", "public.refunds", "public.marketing_events");
         }
         if (blockedColumns == null || blockedColumns.isEmpty()) {
             // 高敏字段直接阻断，禁止直接查询
@@ -41,6 +51,9 @@ public record GuardrailsProperties(
         }
         if (defaultMaxRows <= 0) {
             defaultMaxRows = 100;
+        }
+        if (allowedAggregateFunctions == null || allowedAggregateFunctions.isEmpty()) {
+            allowedAggregateFunctions = List.of("count", "sum", "avg", "min", "max");
         }
     }
 }

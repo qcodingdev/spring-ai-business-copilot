@@ -29,7 +29,13 @@ public enum SqlViolationCode {
     LIMIT_REQUIRED("SQL_007", "Non-aggregate query must include a LIMIT clause"),
 
     /** LIMIT exceeds the configured maximum. */
-    LIMIT_EXCEEDS_MAX("SQL_008", "LIMIT exceeds the allowed maximum");
+    LIMIT_EXCEEDS_MAX("SQL_008", "LIMIT exceeds the allowed maximum"),
+
+    /** LIMIT is absent, parameterized, computed, negative, or otherwise not a bounded literal. */
+    LIMIT_NOT_BOUNDED_CONSTANT("SQL_009", "LIMIT must be a bounded non-negative integer literal"),
+
+    /** A database function is not present in the explicit aggregate allowlist. */
+    FUNCTION_NOT_ALLOWED("SQL_010", "Database function is not allowed");
 
     private final String code;
     private final String defaultMessage;

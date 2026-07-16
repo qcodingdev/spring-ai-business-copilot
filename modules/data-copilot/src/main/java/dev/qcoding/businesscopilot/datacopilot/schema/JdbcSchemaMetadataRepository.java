@@ -13,9 +13,9 @@ import java.util.List;
 public class JdbcSchemaMetadataRepository implements SchemaMetadataRepository {
 
     private static final String FIND_TABLES_SQL = """
-            SELECT table_name FROM information_schema.tables
-            WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
-            ORDER BY table_name
+            SELECT table_schema, table_name FROM information_schema.tables
+            WHERE table_type = 'BASE TABLE'
+            ORDER BY table_schema, table_name
             """;
 
     private static final String FIND_COLUMNS_SQL = """
@@ -28,7 +28,7 @@ public class JdbcSchemaMetadataRepository implements SchemaMetadataRepository {
                 AND a.attname = c.column_name
                 AND a.attnum > 0
                 AND NOT a.attisdropped
-            WHERE c.table_schema = 'public' AND c.table_name = ?
+            WHERE c.table_schema = ? AND c.table_name = ?
             ORDER BY c.ordinal_position
             """;
 
@@ -42,46 +42,61 @@ public class JdbcSchemaMetadataRepository implements SchemaMetadataRepository {
 
     @Override
     public List<String> findQueryableTableNames() {
-        List<String> allTables = jdbcTemplate.queryForList(FIND_TABLES_SQL, String.class);
+        List<String> allTables = jdbcTemplate.query(
+                FIND_TABLES_SQL,
+                (rs, rowNum) -> new QualifiedTableName(
+                        rs.getString("table_schema"),
+                        rs.getString("table_name")).canonicalName());
         // 只返回白名单内且实际存在的表
         return allTables.stream()
-                .filter(t -> properties.queryableTables().contains(t.toLowerCase()))
+                .filter(properties.queryableTables()::contains)
                 .toList();
     }
 
     @Override
     public List<ColumnSchema> findColumns(String tableName) {
+        QualifiedTableName qualifiedTable = QualifiedTableName.parse(tableName);
         return jdbcTemplate.query(FIND_COLUMNS_SQL, (rs, rowNum) -> {
             String colName = rs.getString("column_name");
             String colType = rs.getString("data_type");
             boolean nullable = "YES".equalsIgnoreCase(rs.getString("is_nullable"));
             // pg_catalog.col_description may return null; fall back to configured description
             String pgDesc = rs.getString("description");
-            String description = resolveDescription(tableName, colName, pgDesc);
-            boolean sensitive = isSensitiveColumn(tableName, colName);
-            String maskingStrategy = sensitive ? properties.sensitiveColumns().get(tableName.toLowerCase() + "." + colName.toLowerCase()) : null;
+            String description = resolveDescription(qualifiedTable, colName, pgDesc);
+            String maskingStrategy = resolveConfiguredColumnValue(
+                    properties.sensitiveColumns(), qualifiedTable, colName);
+            boolean sensitive = maskingStrategy != null;
             return new ColumnSchema(colName, colType, nullable, description, sensitive, maskingStrategy);
-        }, tableName);
+        }, qualifiedTable.schema(), qualifiedTable.table());
     }
 
     @Override
     public boolean tableExists(String tableName) {
+        QualifiedTableName qualifiedTable = QualifiedTableName.parse(tableName);
         Integer count = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = ?",
-                Integer.class, tableName);
+                "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = ? AND table_name = ?",
+                Integer.class, qualifiedTable.schema(), qualifiedTable.table());
         return count != null && count > 0;
     }
 
-    private String resolveDescription(String tableName, String colName, String pgDesc) {
-        String key = tableName.toLowerCase() + "." + colName.toLowerCase();
-        String configured = properties.columnDescriptions().get(key);
+    private String resolveDescription(QualifiedTableName tableName, String colName, String pgDesc) {
+        String configured = resolveConfiguredColumnValue(
+                properties.columnDescriptions(), tableName, colName);
         if (configured != null && !configured.isBlank()) return configured;
         if (pgDesc != null && !pgDesc.isBlank()) return pgDesc;
         return colName; // 默认用列名作为描述
     }
 
-    private boolean isSensitiveColumn(String tableName, String colName) {
-        String key = tableName.toLowerCase() + "." + colName.toLowerCase();
-        return properties.sensitiveColumns().containsKey(key);
+    private String resolveConfiguredColumnValue(java.util.Map<String, String> values,
+                                                QualifiedTableName tableName,
+                                                String colName) {
+        String normalizedColumn = colName.toLowerCase();
+        String qualifiedKey = tableName.canonicalName() + "." + normalizedColumn;
+        String configured = values.get(qualifiedKey);
+        if (configured != null) {
+            return configured;
+        }
+        // Backward-compatible fallback for existing customer descriptions.
+        return values.get(tableName.table() + "." + normalizedColumn);
     }
 }

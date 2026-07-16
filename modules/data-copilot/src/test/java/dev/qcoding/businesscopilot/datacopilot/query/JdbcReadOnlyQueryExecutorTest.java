@@ -103,7 +103,11 @@ class JdbcReadOnlyQueryExecutorTest {
                             List.of(1, "Alice"),
                             List.of(2, "Bob")));
             when(stmt.executeQuery(sql)).thenReturn(rs);
-            return callback.doInStatement(stmt);
+            QueryResultTable table = callback.doInStatement(stmt);
+            verify(stmt).setQueryTimeout(30);
+            verify(stmt).setMaxRows(101);
+            verify(stmt).setFetchSize(50);
+            return table;
         });
 
         QueryResultTable result = executor.execute(sql);
@@ -195,7 +199,8 @@ class JdbcReadOnlyQueryExecutorTest {
 
         assertThatThrownBy(() -> executor.execute(sql))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("rejected by guardrails");
+                .hasMessage("SQL 未通过安全校验")
+                .hasMessageNotContaining("DELETE");
     }
 
     // ---- Test: SQL exception translated to user-friendly message ----
@@ -226,13 +231,71 @@ class JdbcReadOnlyQueryExecutorTest {
         QueryExecutionProperties defaults = new QueryExecutionProperties(0, 0);
         assertThat(defaults.queryTimeoutSeconds()).isEqualTo(30);
         assertThat(defaults.maxRows()).isEqualTo(100);
+        assertThat(defaults.fetchSize()).isEqualTo(50);
+        assertThat(defaults.maxColumns()).isEqualTo(50);
+        assertThat(defaults.maxResultBytes()).isEqualTo(1024 * 1024);
     }
 
     @Test
     @DisplayName("custom query execution properties")
     void customQueryExecutionProperties() {
-        QueryExecutionProperties custom = new QueryExecutionProperties(60, 500);
+        QueryExecutionProperties custom = new QueryExecutionProperties(60, 500, 25, 20, 4096);
         assertThat(custom.queryTimeoutSeconds()).isEqualTo(60);
         assertThat(custom.maxRows()).isEqualTo(500);
+        assertThat(custom.fetchSize()).isEqualTo(25);
+        assertThat(custom.maxColumns()).isEqualTo(20);
+        assertThat(custom.maxResultBytes()).isEqualTo(4096);
+    }
+
+    @Test
+    @DisplayName("result column count exceeding cap is rejected")
+    void resultColumnCountExceedingCapRejected() throws SQLException {
+        QueryExecutionProperties smallProps =
+                new QueryExecutionProperties(30, 100, 10, 1, 1024);
+        executor = new JdbcReadOnlyQueryExecutor(
+                jdbcTemplate, guardrailService, guardrailsProperties, masker, smallProps);
+        String sql = "SELECT id, name FROM public.customers LIMIT 10";
+        when(guardrailService.validate(sql, guardrailsProperties))
+                .thenReturn(SqlValidationResult.pass(sql));
+        when(jdbcTemplate.execute(any(StatementCallback.class))).thenAnswer(invocation -> {
+            StatementCallback<QueryResultTable> callback = invocation.getArgument(0);
+            Statement stmt = mock(Statement.class);
+            ResultSet rs = mockResultSet(
+                    List.of("id", "name"),
+                    List.of("integer", "varchar"),
+                    List.of(List.of(1, "Alice")));
+            when(stmt.executeQuery(sql)).thenReturn(rs);
+            return callback.doInStatement(stmt);
+        });
+
+        assertThatThrownBy(() -> executor.execute(sql))
+                .isInstanceOf(QueryExecutionException.class)
+                .hasMessageContaining("列数超过安全上限");
+    }
+
+    @Test
+    @DisplayName("result bytes exceeding cap are rejected")
+    void resultBytesExceedingCapRejected() throws SQLException {
+        QueryExecutionProperties smallProps =
+                new QueryExecutionProperties(30, 100, 10, 10, 32);
+        executor = new JdbcReadOnlyQueryExecutor(
+                jdbcTemplate, guardrailService, guardrailsProperties, masker, smallProps);
+        String sql = "SELECT name FROM public.customers LIMIT 10";
+        when(guardrailService.validate(sql, guardrailsProperties))
+                .thenReturn(SqlValidationResult.pass(sql));
+        when(jdbcTemplate.execute(any(StatementCallback.class))).thenAnswer(invocation -> {
+            StatementCallback<QueryResultTable> callback = invocation.getArgument(0);
+            Statement stmt = mock(Statement.class);
+            ResultSet rs = mockResultSet(
+                    List.of("name"),
+                    List.of("varchar"),
+                    List.of(List.of("A".repeat(64))));
+            when(stmt.executeQuery(sql)).thenReturn(rs);
+            return callback.doInStatement(stmt);
+        });
+
+        assertThatThrownBy(() -> executor.execute(sql))
+                .isInstanceOf(QueryExecutionException.class)
+                .hasMessageContaining("大小超过安全上限");
     }
 }
