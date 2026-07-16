@@ -11,11 +11,11 @@ import dev.qcoding.businesscopilot.commonweb.api.ErrorCode;
  */
 public class SqlCandidateNotExecutableException extends BusinessException {
 
-    public SqlCandidateNotExecutableException(String message) {
-        super(ErrorCode.SQL_CANDIDATE_NOT_EXECUTABLE, message);
+    public SqlCandidateNotExecutableException() {
+        super(ErrorCode.SQL_CANDIDATE_NOT_EXECUTABLE);
     }
 
-    public SqlCandidateNotExecutableException(String message, Throwable cause) {
-        super(ErrorCode.SQL_CANDIDATE_NOT_EXECUTABLE, message, cause);
+    public SqlCandidateNotExecutableException(String ignoredInternalReason) {
+        this();
     }
 }

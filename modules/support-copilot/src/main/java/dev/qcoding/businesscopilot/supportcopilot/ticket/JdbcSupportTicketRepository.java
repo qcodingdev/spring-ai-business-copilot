@@ -33,6 +33,7 @@ public class JdbcSupportTicketRepository implements SupportTicketRepository {
             rs.getString("sentiment"),
             rs.getString("urgency"),
             rs.getString("status"),
+            rs.getString("owner_actor_id"),
             rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toInstant() : null,
             rs.getTimestamp("updated_at") != null ? rs.getTimestamp("updated_at").toInstant() : null);
 
@@ -44,8 +45,8 @@ public class JdbcSupportTicketRepository implements SupportTicketRepository {
     @Override
     public SupportTicket save(SupportTicket ticket) {
         String maskedMessage = sensitiveTextMasker.mask(ticket.customerMessage());
-        String sql = "INSERT INTO support_tickets (external_id, customer_message, channel, category, sentiment, urgency, status, created_at, updated_at) "
-                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        String sql = "INSERT INTO support_tickets (external_id, customer_message, channel, category, sentiment, urgency, status, owner_actor_id, created_at, updated_at) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         KeyHolder keyHolder = new GeneratedKeyHolder();
         Instant now = Instant.now();
@@ -59,15 +60,16 @@ public class JdbcSupportTicketRepository implements SupportTicketRepository {
             ps.setString(5, ticket.sentiment());
             ps.setString(6, ticket.urgency());
             ps.setString(7, ticket.status());
-            ps.setTimestamp(8, Timestamp.from(now));
+            ps.setString(8, ticket.ownerActorId());
             ps.setTimestamp(9, Timestamp.from(now));
+            ps.setTimestamp(10, Timestamp.from(now));
             return ps;
         }, keyHolder);
 
         long id = keyHolder.getKey().longValue();
         return new SupportTicket(id, ticket.externalId(), maskedMessage,
                 ticket.channel(), ticket.category(), ticket.sentiment(),
-                ticket.urgency(), ticket.status(), now, now);
+                ticket.urgency(), ticket.status(), ticket.ownerActorId(), now, now);
     }
 
     @Override
@@ -85,11 +87,11 @@ public class JdbcSupportTicketRepository implements SupportTicketRepository {
     }
 
     @Override
-    public boolean updateStatus(Long id, String status) {
+    public boolean transitionStatus(Long id, String expectedStatus, String targetStatus) {
         int rows = jdbcTemplate.update(
-                "UPDATE support_tickets SET status = ?, updated_at = ? WHERE id = ?",
-                status, Timestamp.from(Instant.now()), id);
-        return rows > 0;
+                "UPDATE support_tickets SET status = ?, updated_at = ? WHERE id = ? AND status = ?",
+                targetStatus, Timestamp.from(Instant.now()), id, expectedStatus);
+        return rows == 1;
     }
 
     @Override

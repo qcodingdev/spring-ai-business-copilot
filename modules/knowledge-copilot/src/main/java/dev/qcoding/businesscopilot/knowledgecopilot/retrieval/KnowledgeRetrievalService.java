@@ -92,6 +92,10 @@ public class KnowledgeRetrievalService {
         return retrieved;
     }
 
+    public String embeddingModelName() {
+        return aiEmbeddingService.modelName();
+    }
+
     private static String truncate(String text) {
         if (text == null) return "null";
         return text.length() > 100 ? text.substring(0, 100) + "..." : text;

@@ -22,6 +22,7 @@
 
     <modules>
         <module>platform/common-web</module>
+        <module>platform/common-security</module>
         <module>platform/ai-core</module>
         <module>platform/ai-guardrails</module>
         <module>platform/ai-tool-audit</module>
@@ -37,7 +38,6 @@
         <java.version>21</java.version>
         <spring-boot.version>4.1.0</spring-boot.version>
         <spring-ai.version>2.0.0</spring-ai.version>
-        <mybatis-plus.version>3.5.16</mybatis-plus.version>
         <!-- Keep aligned with the Spring Boot dependency BOM when Boot is upgraded. -->
         <mockito.version>5.23.0</mockito.version>
         <maven.clean.plugin.version>3.5.0</maven.clean.plugin.version>

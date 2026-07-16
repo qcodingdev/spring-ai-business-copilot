@@ -28,5 +28,27 @@ public record AuditEvent(
         Integer rowCount,
         String errorMessage,
         String modelName,
-        Long latencyMs) {
+        Long latencyMs,
+        String creatorActorId,
+        String actionActorId,
+        String providerName,
+        String providerRequestId,
+        String promptName,
+        String promptVersion,
+        String promptHash,
+        String policyVersion,
+        String violationCodes,
+        Integer inputTokens,
+        Integer outputTokens,
+        String finishReason) {
+
+    public AuditEvent(String requestId, AuditEventType eventType, String userQuestion,
+                      String generatedSql, String finalSql, AuditStatus status,
+                      String validationErrors, boolean confirmed, Integer rowCount,
+                      String errorMessage, String modelName, Long latencyMs) {
+        this(requestId, eventType, userQuestion, generatedSql, finalSql, status,
+                validationErrors, confirmed, rowCount, errorMessage, modelName, latencyMs,
+                null, null, null, null, null, null, null,
+                null, null, null, null, null);
+    }
 }

@@ -1,6 +1,8 @@
 package dev.qcoding.businesscopilot.supportcopilot.classification;
 
 import dev.qcoding.businesscopilot.aicore.AiChatService;
+import dev.qcoding.businesscopilot.aicore.AiInvocationMetadata;
+import dev.qcoding.businesscopilot.aicore.AiInvocationResult;
 import dev.qcoding.businesscopilot.aicore.AiModelNotEnabledException;
 import dev.qcoding.businesscopilot.aicore.PromptTemplateService;
 import dev.qcoding.businesscopilot.commonweb.api.BusinessException;
@@ -65,9 +67,14 @@ class TicketClassificationServiceTest {
     void shouldAllowMessageWithinLengthLimit() {
         String validMsg = "我的订单还没有发货，请问什么时候能到？";
         var request = new TicketClassificationRequest(validMsg, "web");
-        when(aiChatService.generateJson(anyString(), eq(LlmClassificationOutput.class)))
-                .thenReturn(new LlmClassificationOutput(
-                        "PRODUCT_USAGE", "NEUTRAL", "LOW", "物流状态咨询", false, java.util.List.of()));
+        when(aiChatService.generateJsonWithMetadata(anyString(), eq(LlmClassificationOutput.class)))
+                .thenReturn(new AiInvocationResult<>(
+                        new LlmClassificationOutput(
+                                "PRODUCT_USAGE", "NEUTRAL", "LOW",
+                                "物流状态咨询", false, java.util.List.of()),
+                        new AiInvocationMetadata(
+                                "openai-compatible", "test-model", "request-1",
+                                10, 20, "stop", 25L)));
 
         TicketClassificationResponse response = service.classify(request);
 

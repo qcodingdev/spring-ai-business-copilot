@@ -112,10 +112,12 @@ public class KnowledgeCopilotController {
     @PostMapping("/questions")
     public ResponseEntity<ApiResponse<KnowledgeAnswerResponse>> askQuestion(
             @Valid @RequestBody KnowledgeAnswerRequest request) {
-        KnowledgeAnswerResponse response = questionService.ask(request);
+        KnowledgeQuestionService.QuestionInvocation invocation =
+                questionService.askWithAudit(request);
+        KnowledgeAnswerResponse response = invocation.response();
 
         // 审计记录（不中断主流程）
-        auditService.record(buildAuditLog(request.question(), response));
+        auditService.record(buildAuditLog(request.question(), invocation));
 
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
@@ -138,37 +140,44 @@ public class KnowledgeCopilotController {
     // helpers
     // ═══════════════════════════════════════════════════════════════
 
-    private KnowledgeQaAuditLog buildAuditLog(String question, KnowledgeAnswerResponse response) {
-        String retrievedIds = response.citations() != null && !response.citations().isEmpty()
-                ? response.citations().stream()
-                    .map(c -> String.valueOf(c.chunkId()))
-                    .reduce((a, b) -> a + "," + b).orElse("")
-                : null;
-
+    private KnowledgeQaAuditLog buildAuditLog(
+            String question, KnowledgeQuestionService.QuestionInvocation invocation) {
+        KnowledgeAnswerResponse response = invocation.response();
         String citedIds = response.citations() != null && !response.citations().isEmpty()
                 ? response.citations().stream()
                     .map(c -> String.valueOf(c.chunkId()))
                     .reduce((a, b) -> a + "," + b).orElse("")
                 : null;
 
-        String refusalReason = null;
-        if (response.status() != dev.qcoding.businesscopilot.knowledgecopilot.answer.KnowledgeAnswerStatus.ANSWERED) {
-            refusalReason = response.warnings() != null && !response.warnings().isEmpty()
-                    ? String.join("; ", response.warnings())
-                    : response.status().name();
-        }
+        String refusalReason = response.status()
+                != dev.qcoding.businesscopilot.knowledgecopilot.answer.KnowledgeAnswerStatus.ANSWERED
+                ? response.status().name() : null;
+        var aiMetadata = invocation.aiMetadata();
+        var promptMetadata = invocation.promptMetadata();
 
         return new KnowledgeQaAuditLog(
                 null,
                 UUID.randomUUID().toString(),
                 question,
-                retrievedIds,
+                invocation.retrievedChunkIds(),
                 citedIds,
                 response.status().name(),
                 refusalReason,
                 response.modelName(),
-                null,  // embeddingModel recorded during retrieval, not exposed in response
-                0L,    // latencyMs filled by caller if needed
+                invocation.embeddingModel(),
+                invocation.latencyMs(),
+                null, null,
+                aiMetadata != null ? aiMetadata.providerName() : null,
+                aiMetadata != null ? aiMetadata.providerRequestId() : null,
+                promptMetadata != null ? promptMetadata.name() : null,
+                promptMetadata != null ? promptMetadata.version() : null,
+                promptMetadata != null ? promptMetadata.contentHash() : null,
+                "knowledge-citation-guardrails-v1",
+                invocation.violationCodes(),
+                aiMetadata != null ? aiMetadata.inputTokens() : null,
+                aiMetadata != null ? aiMetadata.outputTokens() : null,
+                aiMetadata != null ? aiMetadata.finishReason() : null,
+                null,
                 null);
     }
 

@@ -1,7 +1,14 @@
 package dev.qcoding.businesscopilot.supportcopilot.draft;
 
 import dev.qcoding.businesscopilot.aicore.AiChatService;
+import dev.qcoding.businesscopilot.aicore.AiInvocationMetadata;
+import dev.qcoding.businesscopilot.aicore.AiInvocationResult;
 import dev.qcoding.businesscopilot.aicore.PromptTemplateService;
+import dev.qcoding.businesscopilot.aicore.PromptTemplateMetadata;
+import dev.qcoding.businesscopilot.aicore.RenderedPrompt;
+import dev.qcoding.businesscopilot.commonsecurity.ConfirmationTokenService;
+import dev.qcoding.businesscopilot.commonsecurity.CurrentActor;
+import dev.qcoding.businesscopilot.commonsecurity.CurrentActorProvider;
 import dev.qcoding.businesscopilot.commonweb.api.BusinessException;
 import dev.qcoding.businesscopilot.commonweb.api.ErrorCode;
 import dev.qcoding.businesscopilot.guardrails.SensitiveTextMasker;
@@ -30,19 +37,25 @@ public class ReplyDraftService {
     private final ReplyDraftGuardrailService guardrailService;
     private final SupportReplyDraftRepository draftRepository;
     private final SupportCopilotProperties properties;
+    private final CurrentActorProvider actorProvider;
+    private final ConfirmationTokenService tokenService;
 
     public ReplyDraftService(AiChatService aiChatService,
                              PromptTemplateService promptTemplateService,
                              SensitiveTextMasker sensitiveTextMasker,
                              ReplyDraftGuardrailService guardrailService,
                              SupportReplyDraftRepository draftRepository,
-                             SupportCopilotProperties properties) {
+                             SupportCopilotProperties properties,
+                             CurrentActorProvider actorProvider,
+                             ConfirmationTokenService tokenService) {
         this.aiChatService = aiChatService;
         this.promptTemplateService = promptTemplateService;
         this.sensitiveTextMasker = sensitiveTextMasker;
         this.guardrailService = guardrailService;
         this.draftRepository = draftRepository;
         this.properties = properties;
+        this.actorProvider = actorProvider;
+        this.tokenService = tokenService;
     }
 
     /**
@@ -52,12 +65,20 @@ public class ReplyDraftService {
      * @return draft response with text, risk info, citations, and confirmation token
      */
     public ReplyDraftResponse generate(ReplyDraftRequest request) {
+        return generateWithMetadata(request).response();
+    }
+
+    public DraftInvocation generateWithMetadata(ReplyDraftRequest request) {
         long startMs = System.currentTimeMillis();
+        CurrentActor actor = actorProvider.currentActor();
+        if (!actor.authenticated()) {
+            throw new BusinessException(ErrorCode.NOT_FOUND);
+        }
 
         // 如果没有知识依据且已经标记需要转人工，直接返回
         if (request.needsHuman() && (request.knowledgeEvidence() == null || request.knowledgeEvidence().isBlank())) {
             log.info("Ticket {} flagged as needsHuman with no evidence — skipping draft generation", request.ticketId());
-            return buildNoEvidenceResponse(request);
+            return new DraftInvocation(buildNoEvidenceResponse(request), null, null);
         }
 
         // 构建知识依据文本
@@ -66,7 +87,7 @@ public class ReplyDraftService {
                 : "无可用知识依据";
 
         // 构建 prompt
-        String prompt = promptTemplateService.render(PROMPT_TEMPLATE, Map.of(
+        RenderedPrompt prompt = promptTemplateService.renderWithMetadata(PROMPT_TEMPLATE, "v1", Map.of(
                 "customerMessage", request.customerMessage() != null ? request.customerMessage() : "",
                 "category", request.category() != null ? request.category() : "UNKNOWN",
                 "sentiment", request.sentiment() != null ? request.sentiment() : "NEUTRAL",
@@ -77,14 +98,16 @@ public class ReplyDraftService {
         log.debug("Generating reply draft for ticket {}", request.ticketId());
 
         // 调用模型
-        LlmReplyDraftOutput output;
+        AiInvocationResult<LlmReplyDraftOutput> invocation;
         try {
-            output = aiChatService.generateJson(prompt, LlmReplyDraftOutput.class);
+            invocation = aiChatService.generateJsonWithMetadata(
+                    prompt.content(), LlmReplyDraftOutput.class);
         } catch (Exception ex) {
             log.error("Reply draft generation model call failed for ticket {}", request.ticketId(), ex);
             throw new BusinessException(ErrorCode.AI_MODEL_ERROR,
-                    "回复草稿生成模型调用失败: " + ex.getMessage(), ex);
+                    ErrorCode.AI_MODEL_ERROR.defaultMessage(), ex);
         }
+        LlmReplyDraftOutput output = invocation.content();
 
         if (output == null || output.replyText() == null) {
             throw new BusinessException(ErrorCode.AI_MODEL_ERROR, "回复草稿生成模型返回了无效结果");
@@ -103,15 +126,19 @@ public class ReplyDraftService {
         String maskedReply = sensitiveTextMasker.mask(output.replyText());
 
         // 持久化草稿
-        String confirmationToken = UUID.randomUUID().toString();
+        ConfirmationTokenService.IssuedToken token = tokenService.issue();
         Instant expiresAt = Instant.now().plusSeconds(properties.draftTtlMinutes() * 60L);
+        boolean reviewQueue = effectiveNeedsHuman;
+        String status = reviewQueue ? "NEEDS_REVIEW" : "DRAFTED";
 
         SupportReplyDraft draft = new SupportReplyDraft(
                 null, request.ticketId(), maskedReply,
                 request.evidenceChunkIds(),
                 riskLevel,
                 String.join("; ", output.riskReasons() != null ? output.riskReasons() : List.of()),
-                confirmationToken, expiresAt, null);
+                token.rawToken(), token.digest(), status,
+                actor.actorId(), reviewQueue, null,
+                null, expiresAt, null, null);
 
         SupportReplyDraft saved = draftRepository.save(draft);
 
@@ -128,11 +155,12 @@ public class ReplyDraftService {
         log.info("Reply draft generated for ticket {}: draftId={}, riskLevel={}, needsHuman={}, latencyMs={}",
                 request.ticketId(), saved.id(), riskLevel, effectiveNeedsHuman, latencyMs);
 
-        return new ReplyDraftResponse(
+        ReplyDraftResponse response = new ReplyDraftResponse(
                 saved.id(), maskedReply, riskLevel,
                 output.riskReasons() != null ? output.riskReasons() : List.of(),
-                citations, confirmationToken, expiresAt.toString(),
+                citations, token.rawToken(), expiresAt.toString(),
                 effectiveNeedsHuman);
+        return new DraftInvocation(response, prompt.metadata(), invocation.metadata());
     }
 
     private ReplyDraftResponse buildNoEvidenceResponse(ReplyDraftRequest request) {
@@ -140,5 +168,11 @@ public class ReplyDraftService {
                 null, "", "HIGH",
                 List.of("无足够知识依据，且工单已标记需要转人工"),
                 List.of(), null, null, true);
+    }
+
+    public record DraftInvocation(
+            ReplyDraftResponse response,
+            PromptTemplateMetadata promptMetadata,
+            AiInvocationMetadata aiMetadata) {
     }
 }

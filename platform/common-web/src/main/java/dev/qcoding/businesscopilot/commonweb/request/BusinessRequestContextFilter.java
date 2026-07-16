@@ -8,6 +8,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.security.Principal;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.regex.Pattern;
@@ -19,13 +20,20 @@ public class BusinessRequestContextFilter extends OncePerRequestFilter {
     private static final Pattern SAFE_REQUEST_ID = Pattern.compile("[A-Za-z0-9._-]{8,64}");
 
     private final Function<HttpServletRequest, String> actorResolver;
+    private final Function<HttpServletRequest, Set<String>> rolesResolver;
 
     public BusinessRequestContextFilter() {
-        this(BusinessRequestContextFilter::principalName);
+        this(BusinessRequestContextFilter::principalName, request -> Set.of());
     }
 
     public BusinessRequestContextFilter(Function<HttpServletRequest, String> actorResolver) {
+        this(actorResolver, request -> Set.of());
+    }
+
+    public BusinessRequestContextFilter(Function<HttpServletRequest, String> actorResolver,
+                                        Function<HttpServletRequest, Set<String>> rolesResolver) {
         this.actorResolver = actorResolver;
+        this.rolesResolver = rolesResolver;
     }
 
     @Override
@@ -34,7 +42,8 @@ public class BusinessRequestContextFilter extends OncePerRequestFilter {
                                     FilterChain filterChain) throws ServletException, IOException {
         String requestId = resolveRequestId(request.getHeader(REQUEST_ID_HEADER));
         String actorId = normalizeActor(actorResolver.apply(request));
-        BusinessRequestContextHolder.set(new BusinessRequestContext(requestId, actorId));
+        BusinessRequestContextHolder.set(new BusinessRequestContext(
+                requestId, actorId, rolesResolver.apply(request)));
         response.setHeader(REQUEST_ID_HEADER, requestId);
         try {
             filterChain.doFilter(request, response);

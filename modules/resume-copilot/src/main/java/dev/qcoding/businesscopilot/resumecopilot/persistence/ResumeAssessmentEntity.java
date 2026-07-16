@@ -1,21 +1,19 @@
 package dev.qcoding.businesscopilot.resumecopilot.persistence;
 
-import com.baomidou.mybatisplus.annotation.IdType;
-import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableName;
-
 import java.time.Instant;
 
-@TableName("resume_assessments")
 public class ResumeAssessmentEntity {
-    @TableId(type = IdType.AUTO)
     private Long id;
     private Long jobId;
     private Long submissionId;
     private String contentJson;
     private String status;
     private String reviewReasons;
-    private String reviewToken;
+    private String reviewTokenDigest;
+    private String ownerActorId;
+    private boolean reviewQueue;
+    private String reviewerActorId;
+    private String actionActorId;
     private Instant expiresAt;
     private Instant createdAt;
     private Instant updatedAt;
@@ -32,8 +30,16 @@ public class ResumeAssessmentEntity {
     public void setStatus(String status) { this.status = status; }
     public String getReviewReasons() { return reviewReasons; }
     public void setReviewReasons(String reviewReasons) { this.reviewReasons = reviewReasons; }
-    public String getReviewToken() { return reviewToken; }
-    public void setReviewToken(String reviewToken) { this.reviewToken = reviewToken; }
+    public String getReviewTokenDigest() { return reviewTokenDigest; }
+    public void setReviewTokenDigest(String reviewTokenDigest) { this.reviewTokenDigest = reviewTokenDigest; }
+    public String getOwnerActorId() { return ownerActorId; }
+    public void setOwnerActorId(String ownerActorId) { this.ownerActorId = ownerActorId; }
+    public boolean isReviewQueue() { return reviewQueue; }
+    public void setReviewQueue(boolean reviewQueue) { this.reviewQueue = reviewQueue; }
+    public String getReviewerActorId() { return reviewerActorId; }
+    public void setReviewerActorId(String reviewerActorId) { this.reviewerActorId = reviewerActorId; }
+    public String getActionActorId() { return actionActorId; }
+    public void setActionActorId(String actionActorId) { this.actionActorId = actionActorId; }
     public Instant getExpiresAt() { return expiresAt; }
     public void setExpiresAt(Instant expiresAt) { this.expiresAt = expiresAt; }
     public Instant getCreatedAt() { return createdAt; }

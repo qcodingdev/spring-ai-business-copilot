@@ -7,6 +7,7 @@ import dev.qcoding.businesscopilot.guardrails.SensitiveTextMasker;
 import dev.qcoding.businesscopilot.knowledgecopilot.answer.KnowledgeQuestionService;
 import dev.qcoding.businesscopilot.knowledgecopilot.chunking.ChunkingProperties;
 import dev.qcoding.businesscopilot.knowledgecopilot.document.KnowledgeDocumentRepository;
+import dev.qcoding.businesscopilot.knowledgecopilot.web.KnowledgeCopilotController;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
@@ -85,6 +86,7 @@ class KnowledgeCopilotAutoConfigurationTest {
                 .run(context -> {
                     assertThat(context).hasSingleBean(KnowledgeQuestionService.class);
                     assertThat(context).hasSingleBean(KnowledgeDocumentRepository.class);
+                    assertThat(context).hasSingleBean(KnowledgeCopilotController.class);
                 });
     }
 }

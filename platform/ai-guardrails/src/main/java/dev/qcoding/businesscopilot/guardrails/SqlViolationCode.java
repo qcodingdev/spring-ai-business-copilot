@@ -35,7 +35,10 @@ public enum SqlViolationCode {
     LIMIT_NOT_BOUNDED_CONSTANT("SQL_009", "LIMIT must be a bounded non-negative integer literal"),
 
     /** A database function is not present in the explicit aggregate allowlist. */
-    FUNCTION_NOT_ALLOWED("SQL_010", "Database function is not allowed");
+    FUNCTION_NOT_ALLOWED("SQL_010", "Database function is not allowed"),
+
+    /** Statement references a wildcard or column outside the explicit allowlist. */
+    COLUMN_NOT_WHITELISTED("SQL_011", "Column is not in the query whitelist");
 
     private final String code;
     private final String defaultMessage;

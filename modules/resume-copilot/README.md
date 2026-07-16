@@ -13,7 +13,7 @@ flowchart LR
 
 Hard boundaries: no raw resume storage, score, stars, ranking, probability, hire/reject recommendation, candidate comparison, protected-attribute inference, ATS action, or automated workflow change. `REVIEWED` means only that a person read the material.
 
-Persistence: MyBatis-Plus for stable job/assessment CRUD; JDBC for evidence batches and audit metadata.
+Persistence: explicit Spring JDBC repositories for job, assessment, evidence batches, and audit metadata.
 
 API: `POST /api/resume-copilot/jobs/criteria`, `POST /jobs/{id}/criteria/confirm`, `POST /assessments`, `POST /assessments/{id}/review|cancel`.
 

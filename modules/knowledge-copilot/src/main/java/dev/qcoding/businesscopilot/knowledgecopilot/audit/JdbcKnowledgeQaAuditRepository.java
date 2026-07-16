@@ -22,15 +22,21 @@ public class JdbcKnowledgeQaAuditRepository implements KnowledgeQaAuditRepositor
             INSERT INTO knowledge_qa_audit_logs (
                 request_id, http_request_id, actor_id, question, retrieved_chunk_ids, cited_chunk_ids,
                 answer_status, refusal_reason, model_name, embedding_model,
-                latency_ms, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                latency_ms, creator_actor_id, action_actor_id, provider_name,
+                provider_request_id, prompt_name, prompt_version, prompt_hash,
+                policy_version, violation_codes, input_tokens, output_tokens,
+                finish_reason, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             RETURNING id
             """;
 
     private static final String FIND_RECENT_SQL = """
             SELECT id, request_id, question, retrieved_chunk_ids, cited_chunk_ids,
                    answer_status, refusal_reason, model_name, embedding_model,
-                   latency_ms, created_at
+                   latency_ms, creator_actor_id, action_actor_id, provider_name,
+                   provider_request_id, prompt_name, prompt_version, prompt_hash,
+                   policy_version, violation_codes, input_tokens, output_tokens,
+                   finish_reason, anonymized_at, created_at
             FROM knowledge_qa_audit_logs
             ORDER BY created_at DESC, id DESC
             LIMIT ? OFFSET ?
@@ -49,6 +55,20 @@ public class JdbcKnowledgeQaAuditRepository implements KnowledgeQaAuditRepositor
             rs.getString("model_name"),
             rs.getString("embedding_model"),
             (Long) rs.getObject("latency_ms"),
+            rs.getString("creator_actor_id"),
+            rs.getString("action_actor_id"),
+            rs.getString("provider_name"),
+            rs.getString("provider_request_id"),
+            rs.getString("prompt_name"),
+            rs.getString("prompt_version"),
+            rs.getString("prompt_hash"),
+            rs.getString("policy_version"),
+            rs.getString("violation_codes"),
+            (Integer) rs.getObject("input_tokens"),
+            (Integer) rs.getObject("output_tokens"),
+            rs.getString("finish_reason"),
+            rs.getTimestamp("anonymized_at") != null
+                    ? rs.getTimestamp("anonymized_at").toInstant() : null,
             rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toInstant() : null);
 
     private final JdbcTemplate jdbcTemplate;
@@ -72,6 +92,19 @@ public class JdbcKnowledgeQaAuditRepository implements KnowledgeQaAuditRepositor
                 log.modelName(),
                 log.embeddingModel(),
                 log.latencyMs(),
+                log.creatorActorId() != null ? log.creatorActorId()
+                        : BusinessRequestContextHolder.currentActorId(),
+                log.actionActorId(),
+                log.providerName(),
+                log.providerRequestId(),
+                log.promptName(),
+                log.promptVersion(),
+                log.promptHash(),
+                log.policyVersion(),
+                log.violationCodes(),
+                log.inputTokens(),
+                log.outputTokens(),
+                log.finishReason(),
                 now);
     }
 

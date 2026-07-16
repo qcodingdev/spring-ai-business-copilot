@@ -33,6 +33,11 @@
         </dependency>
         <dependency>
             <groupId>dev.qcoding</groupId>
+            <artifactId>common-security</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>dev.qcoding</groupId>
             <artifactId>knowledge-copilot</artifactId>
             <version>${project.version}</version>
         </dependency>

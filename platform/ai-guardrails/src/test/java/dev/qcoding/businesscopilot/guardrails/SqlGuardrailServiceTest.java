@@ -23,6 +23,7 @@ class SqlGuardrailServiceTest {
                 new ReadOnlyStatementValidator(),
                 new ForbiddenKeywordValidator(),
                 new SchemaWhitelistValidator(properties.queryableTables()),
+                new ColumnWhitelistValidator(properties.queryableColumns()),
                 new FunctionAllowlistValidator(properties.allowedAggregateFunctions()),
                 new SensitiveFieldValidator(policy),
                 new LimitRequiredValidator(
@@ -48,9 +49,70 @@ class SqlGuardrailServiceTest {
     @DisplayName("WITH SELECT passes")
     void withSelectPasses() {
         SqlValidationResult result = service.validate(
-                "WITH recent_orders AS (SELECT * FROM public.orders WHERE created_at > '2024-01-01') " +
-                "SELECT * FROM recent_orders LIMIT 10", properties);
+                "WITH recent_orders AS (SELECT id, customer_id, created_at FROM public.orders "
+                        + "WHERE created_at > '2024-01-01') "
+                        + "SELECT id, customer_id FROM recent_orders LIMIT 10", properties);
         assertThat(result.passed()).isTrue();
+    }
+
+    @Test
+    @DisplayName("wildcard SELECT rejected by column allowlist")
+    void wildcardSelectRejected() {
+        SqlValidationResult result = service.validate(
+                "SELECT * FROM public.customers LIMIT 10", properties);
+
+        assertThat(result.passed()).isFalse();
+        assertThat(result.violations())
+                .anyMatch(v -> v.code().equals(SqlViolationCode.COLUMN_NOT_WHITELISTED.code()));
+    }
+
+    @Test
+    @DisplayName("column outside table allowlist rejected")
+    void columnOutsideTableAllowlistRejected() {
+        SqlValidationResult result = service.validate(
+                "SELECT internal_note FROM public.customers LIMIT 10", properties);
+
+        assertThat(result.passed()).isFalse();
+        assertThat(result.violations())
+                .anyMatch(v -> v.code().equals(SqlViolationCode.COLUMN_NOT_WHITELISTED.code()));
+    }
+
+    @Test
+    @DisplayName("MySQL backtick-qualified allowed columns pass")
+    void mysqlBacktickQualifiedColumnsPass() {
+        GuardrailsProperties mysqlProperties = new GuardrailsProperties(
+                List.of("business_target.customers"),
+                List.of("business_target.customers.id", "business_target.customers.email"),
+                List.of("password", "token", "secret", "id_card"),
+                List.of("email"), 100, true,
+                List.of("count", "sum", "avg", "min", "max"));
+        SensitiveFieldPolicy mysqlPolicy = new SensitiveFieldPolicy(mysqlProperties);
+        SqlGuardrailService mysqlService = new SqlGuardrailService(List.of(
+                new SingleStatementValidator(),
+                new ReadOnlyStatementValidator(),
+                new ForbiddenKeywordValidator(),
+                new SchemaWhitelistValidator(mysqlProperties.queryableTables()),
+                new ColumnWhitelistValidator(mysqlProperties.queryableColumns()),
+                new FunctionAllowlistValidator(mysqlProperties.allowedAggregateFunctions()),
+                new SensitiveFieldValidator(mysqlPolicy),
+                new LimitRequiredValidator(100, true, mysqlProperties.allowedAggregateFunctions())));
+
+        SqlValidationResult result = mysqlService.validate(
+                "SELECT `id`, `email` FROM `business_target`.`customers` LIMIT 10",
+                mysqlProperties);
+
+        assertThat(result.passed()).isTrue();
+    }
+
+    @Test
+    @DisplayName("MySQL backtick-quoted blocked column is rejected")
+    void mysqlBacktickBlockedColumnRejected() {
+        SqlValidationResult result = service.validate(
+                "SELECT `password` FROM `public`.`customers` LIMIT 10", properties);
+
+        assertThat(result.passed()).isFalse();
+        assertThat(result.violations())
+                .anyMatch(v -> v.code().equals(SqlViolationCode.SENSITIVE_FIELD_BLOCKED.code()));
     }
 
     @Test

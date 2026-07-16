@@ -6,6 +6,9 @@ import org.springframework.util.StreamUtils;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.Map;
 
 /**
@@ -25,8 +28,16 @@ public class PromptTemplateService {
      * given variables. Template variables use the {@code {name}} syntax and are replaced verbatim.
      */
     public String render(String location, Map<String, String> variables) {
+        return renderWithMetadata(location, "v1", variables).content();
+    }
+
+    /** Render a template and return stable metadata without retaining prompt content. */
+    public RenderedPrompt renderWithMetadata(String location, String version,
+                                             Map<String, String> variables) {
         String template = loadTemplate(location);
-        return substitute(template, variables);
+        return new RenderedPrompt(
+                substitute(template, variables),
+                new PromptTemplateMetadata(location, version, sha256(template)));
     }
 
     /** Load a raw template without variable substitution. */
@@ -51,5 +62,14 @@ public class PromptTemplateService {
             result = result.replace("{" + entry.getKey() + "}", value);
         }
         return result;
+    }
+
+    private String sha256(String value) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                    .digest(value.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("SHA-256 is unavailable", ex);
+        }
     }
 }

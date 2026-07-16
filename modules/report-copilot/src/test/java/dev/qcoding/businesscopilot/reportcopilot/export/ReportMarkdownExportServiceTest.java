@@ -10,6 +10,9 @@ import dev.qcoding.businesscopilot.reportcopilot.draft.ReportDraftStatus;
 import dev.qcoding.businesscopilot.reportcopilot.generation.LlmReportOutput;
 import dev.qcoding.businesscopilot.reportcopilot.generation.ReportItem;
 import dev.qcoding.businesscopilot.reportcopilot.request.ReportType;
+import dev.qcoding.businesscopilot.commonsecurity.BusinessRole;
+import dev.qcoding.businesscopilot.commonsecurity.CurrentActor;
+import dev.qcoding.businesscopilot.commonsecurity.DefaultObjectAccessPolicy;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -29,7 +32,10 @@ class ReportMarkdownExportServiceTest {
 
     private final ReportDraftRepository repository = mock(ReportDraftRepository.class);
     private final ReportAuditService auditService = mock(ReportAuditService.class);
-    private final ReportMarkdownExportService service = new ReportMarkdownExportService(repository, properties(), auditService);
+    private final ReportMarkdownExportService service = new ReportMarkdownExportService(
+            repository, properties(), auditService,
+            () -> new CurrentActor("operator-1", Set.of(BusinessRole.OPERATOR)),
+            new DefaultObjectAccessPolicy());
 
     @Test
     void rendersOnlyConfirmedDraftsAndEscapesModelMarkdown() {
@@ -41,9 +47,11 @@ class ReportMarkdownExportServiceTest {
         assertThat(markdown).contains("\\[untrusted\\]");
         assertThat(markdown).contains("&lt;script&gt;");
         ArgumentCaptor<ReportAuditLog> audit = ArgumentCaptor.forClass(ReportAuditLog.class);
-        verify(auditService).record(audit.capture());
+        verify(auditService).recordRequired(audit.capture());
         assertThat(audit.getValue().eventType()).isEqualTo("EXPORTED");
         assertThat(audit.getValue().status()).isEqualTo("CONFIRMED");
+        assertThat(audit.getValue().creatorActorId()).isEqualTo("operator-1");
+        assertThat(audit.getValue().actionActorId()).isEqualTo("operator-1");
     }
 
     @Test
@@ -58,7 +66,10 @@ class ReportMarkdownExportServiceTest {
     private ReportDraft draft(ReportDraftStatus status) {
         LlmReportOutput content = new LlmReportOutput("[untrusted] <script>", List.of("source-1"), List.of(),
                 List.of(new ReportItem("Done", List.of("source-1"))), List.of(), List.of(), List.of(), List.of());
-        return new ReportDraft(10L, 20L, content, status, null, null, null, Instant.now(), Instant.now());
+        return new ReportDraft(
+                10L, 20L, content, status, null, null, null,
+                "operator-1", null, Instant.now().plusSeconds(60),
+                Instant.now(), Instant.now());
     }
 
     private static ReportCopilotProperties properties() {

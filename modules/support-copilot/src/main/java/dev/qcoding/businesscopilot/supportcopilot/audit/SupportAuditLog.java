@@ -33,5 +33,28 @@ public record SupportAuditLog(
         String modelName,
         Long latencyMs,
         String errorMessage,
+        String creatorActorId,
+        String actionActorId,
+        String providerName,
+        String providerRequestId,
+        String promptName,
+        String promptVersion,
+        String promptHash,
+        String policyVersion,
+        String violationCodes,
+        Integer inputTokens,
+        Integer outputTokens,
+        String finishReason,
+        Instant anonymizedAt,
         Instant createdAt) {
+
+    public SupportAuditLog(Long id, String requestId, Long ticketId, String eventType,
+                           String category, String urgency, String riskLevel,
+                           String citedChunkIds, String modelName, Long latencyMs,
+                           String errorMessage, Instant createdAt) {
+        this(id, requestId, ticketId, eventType, category, urgency, riskLevel,
+                citedChunkIds, modelName, latencyMs, errorMessage,
+                null, null, null, null, null, null, null,
+                null, null, null, null, null, null, createdAt);
+    }
 }

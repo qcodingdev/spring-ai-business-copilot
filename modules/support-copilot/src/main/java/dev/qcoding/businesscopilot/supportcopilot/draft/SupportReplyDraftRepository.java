@@ -14,8 +14,8 @@ public interface SupportReplyDraftRepository {
 
     Optional<SupportReplyDraft> findById(Long id);
 
-    /** Atomically consume an unexpired token for the requested draft. */
-    Optional<SupportReplyDraft> consumeConfirmationToken(Long id, String token, Instant now);
+    boolean transitionStatus(Long id, String expectedStatus, String targetStatus,
+                             String actionActorId, Instant now);
 
     long count();
 }

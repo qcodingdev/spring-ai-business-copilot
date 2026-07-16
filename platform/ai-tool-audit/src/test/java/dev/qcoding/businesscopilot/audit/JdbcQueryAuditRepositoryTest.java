@@ -67,6 +67,18 @@ class JdbcQueryAuditRepositoryTest {
                 eq(null),
                 eq("gpt-5-mini"),
                 eq(250L),
+                eq("operator-1"),
+                eq(null),
+                eq(null),
+                eq(null),
+                eq(null),
+                eq(null),
+                eq(null),
+                eq(null),
+                eq(null),
+                eq(null),
+                eq(null),
+                eq(null),
                 any(java.sql.Timestamp.class));
     }
 

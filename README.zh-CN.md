@@ -28,7 +28,7 @@
 
 | 模块 | 业务流程 | 安全默认值 |
 |---|---|---|
-| [Data Copilot](modules/data-copilot/README.md) | 自然语言查询数据库（Text to SQL） | 只读 SQL、表白名单、执行前确认 |
+| [Data Copilot](modules/data-copilot/README.md) | 自然语言查询数据库（Text to SQL） | 只读 SQL、schema/表/列白名单、执行前确认 |
 | [Knowledge Copilot](modules/knowledge-copilot/README.md) | 企业文档问答 | 强制引用、无依据拒答 |
 | [Support Copilot](modules/support-copilot/README.md) | 工单分类与回复草稿 | 高风险转人工，不自动发送或退款 |
 | [Report Copilot](modules/report-copilot/README.md) | 有来源的周报与经营简报 | 指标严格比对，确认后才可导出 |
@@ -86,9 +86,11 @@ Chat 与 embedding 端点有意分开配置：很多 OpenAI 兼容的聊天服�
 
 默认数据库为 `jdbc:postgresql://localhost:5432/business_copilot`，用户名和密码都是 `copilot`。可通过 `SPRING_DATASOURCE_URL`、`SPRING_DATASOURCE_USERNAME`、`SPRING_DATASOURCE_PASSWORD` 覆盖。
 
-Data Copilot 可通过 `BUSINESS_QUERY_DATASOURCE_ENABLED=true` 和 `BUSINESS_QUERY_DATASOURCE_*` 配置连接独立的 PostgreSQL 业务查询库。该账号必须由部署方独立创建，并且只对获批业务 schema/表授予最小 `SELECT` 权限。Compose 创建的示例 `business_reader` 只能查询 6 张虚构业务示例表，不能读取平台审计表和其他 Copilot 表，也不能执行 DML/DDL。平台审计、知识向量和其他模块数据仍保留在平台 PostgreSQL 中。MySQL 查询目标将在 v1.2 方言适配后提供，不建议把整个平台迁移到 MySQL。
+Data Copilot 可通过 `BUSINESS_QUERY_DATASOURCE_ENABLED=true` 和 `BUSINESS_QUERY_DATASOURCE_*` 配置连接独立的 PostgreSQL 或 MySQL 业务查询库。默认根据 JDBC URL 自动识别方言，也可使用 `BUSINESS_QUERY_DATASOURCE_DIALECT=postgresql|mysql` 显式固定；方言与 URL 冲突时失败关闭。该账号必须由部署方独立创建，并且只对获批业务 schema/表授予最小 `SELECT` 权限。Compose 默认启用示例 PostgreSQL `business_reader` 连接，它只能查询 6 张虚构业务示例表，不能读取平台审计表和其他 Copilot 表，也不能执行 DML/DDL。平台审计、知识向量和其他模块数据仍保留在 PostgreSQL + pgvector；MySQL 仅作为 Data Copilot 查询目标。
 
-v1.1 SQL 边界要求表名必须按 schema 完整限定（例如 `public.customers`，不能只写 `customers`）；数据库函数默认拒绝，只显式允许 `count`、`sum`、`avg`、`min`、`max` 五个聚合函数；`LIMIT` 必须是受上限约束的整数字面量。JDBC 层还会独立限制 timeout、行数、fetch size、列数和结果字节数。
+SQL 边界要求表名必须按 schema 完整限定（例如 `public.customers`，不能只写 `customers`），查询列也必须位于完整限定列白名单中；`SELECT *` 和 `table.*` 一律拒绝。数据库函数默认拒绝，只显式允许 `count`、`sum`、`avg`、`min`、`max` 五个聚合函数；`LIMIT` 必须是受上限约束的整数字面量。JDBC 层还会独立限制 timeout、行数、fetch size、列数和结果字节数。
+
+启用自定义业务数据库时，必须同时配置 `business-copilot.data-copilot.schema.queryable-tables` 和 `business-copilot.guardrails.queryable-columns`。列配置缺失或与目标库不匹配时会失败关闭，不会退化为读取全部 metadata。
 
 Admin 和 Reviewer 可访问 `/actuator/metrics`。Spring AI 的模型观察指标会记录调用耗时，并在模型供应商返回 usage 时记录 token 使用量；指标不包含 Prompt 或业务正文。
 
@@ -116,9 +118,9 @@ flowchart LR
 
 | 分层 | 技术 | 规则 |
 |---|---|---|
-| 运行时 | Java 21、Spring Boot 4.1 | 单一可执行 app，独立宿主模块自动配置仍在收口 |
+| 运行时 | Java 21、Spring Boot 4.1 | 单一可执行 app，各模块显式自动装配 Web 与持久层入口 |
 | AI | Spring AI 2.0、Jackson 3 | Prompt 集中，结构化输出先过 guardrails |
-| 持久层 | JDBC + MyBatis-Plus 3.5.16 | 稳定 CRUD 用 MyBatis-Plus，动态/批量特定访问用 JDBC |
+| 持久层 | Spring JDBC | 模块内显式 Repository、条件状态更新、动态 SQL、元数据、批量写入和 pgvector |
 | 数据库 | PostgreSQL 16、pgvector、Flyway | Flyway 是唯一 DDL 来源 |
 | Web | Spring MVC、Thymeleaf、原生 JS | 一个工作台，无前端构建工具链 |
 
@@ -130,6 +132,7 @@ platform/ai-core/               模型、向量、Prompt 模板
 platform/ai-guardrails/         可复用确定性安全规则
 platform/ai-tool-audit/         Data Copilot 查询审计
 platform/common-web/            API 响应与异常处理
+platform/common-security/       actor、角色、对象策略和 token 摘要
 modules/data-copilot/           数据库查询助手
 modules/knowledge-copilot/      企业知识库助手
 modules/support-copilot/        智能客服助手

@@ -1,131 +1,127 @@
 package dev.qcoding.businesscopilot.datacopilot.confirmation;
 
+import dev.qcoding.businesscopilot.commonsecurity.ConfirmationTokenService;
+import dev.qcoding.businesscopilot.aicore.AiInvocationMetadata;
+import dev.qcoding.businesscopilot.aicore.PromptTemplateMetadata;
+import dev.qcoding.businesscopilot.commonsecurity.CurrentActor;
+import dev.qcoding.businesscopilot.commonsecurity.CurrentActorProvider;
+import dev.qcoding.businesscopilot.commonsecurity.ObjectAccessPolicy;
+import dev.qcoding.businesscopilot.commonsecurity.ObjectAction;
+import dev.qcoding.businesscopilot.commonweb.api.BusinessException;
+import dev.qcoding.businesscopilot.commonweb.api.ErrorCode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
+import java.util.UUID;
 
-/**
- * Service for creating and confirming SQL candidates.
- *
- * <p>SQL 候选确认服务。核心职责：
- * <ul>
- *   <li>为通过 guardrails 的 SQL 候选生成 confirmationToken 并存入服务端存储；</li>
- *   <li>执行阶段仅凭 candidateId + confirmationToken 取出服务端保存的 SQL，不从客户端接收 SQL。</li>
- * </ul>
- *
- * 为什么不能信任客户端传回的 SQL？
- * 客户端可能在确认阶段篡改 SQL 语句（例如绕过 LIMIT、注入 DELETE/UPDATE、
- * 访问非白名单表），从而绕过服务端 guardrails 校验。
- * 因此执行时必须使用服务端存储的原始 SQL，确保执行的是经过安全审查的语句。</p>
- */
+/** Creates and atomically consumes database-backed SQL candidates. */
 public class SqlConfirmationService {
 
     private static final Logger log = LoggerFactory.getLogger(SqlConfirmationService.class);
 
     private final SqlCandidateStore store;
     private final DataCopilotConfirmationProperties properties;
+    private final CurrentActorProvider actorProvider;
+    private final ObjectAccessPolicy accessPolicy;
+    private final ConfirmationTokenService tokenService;
 
     public SqlConfirmationService(SqlCandidateStore store,
-                                   DataCopilotConfirmationProperties properties) {
+                                  DataCopilotConfirmationProperties properties,
+                                  CurrentActorProvider actorProvider,
+                                  ObjectAccessPolicy accessPolicy,
+                                  ConfirmationTokenService tokenService) {
         this.store = store;
         this.properties = properties;
+        this.actorProvider = actorProvider;
+        this.accessPolicy = accessPolicy;
+        this.tokenService = tokenService;
     }
 
-    /**
-     * Create an executable candidate with a confirmation token.
-     *
-     * @param sql the SQL that passed guardrails
-     * @return the saved candidate with token and expiry
-     */
     public SqlCandidate createExecutableCandidate(String sql) {
         return createExecutableCandidate(sql, null, null, null);
     }
 
-    /**
-     * Create an executable candidate with a confirmation token, carrying audit context.
-     *
-     * @param sql          the SQL that passed guardrails
-     * @param requestId    request identifier for audit tracing
-     * @param userQuestion original natural-language question for audit
-     * @param modelName    AI model name that generated this SQL
-     * @return the saved candidate with token, expiry, and audit context
-     */
     public SqlCandidate createExecutableCandidate(String sql, String requestId,
                                                    String userQuestion, String modelName) {
+        return createExecutableCandidate(sql, requestId, modelName, null, null, null);
+    }
+
+    public SqlCandidate createExecutableCandidate(String sql, String requestId, String modelName,
+                                                   PromptTemplateMetadata promptMetadata,
+                                                   AiInvocationMetadata aiMetadata,
+                                                   String policyVersion) {
+        CurrentActor actor = actorProvider.currentActor();
+        if (!actor.authenticated()) {
+            throw new BusinessException(ErrorCode.NOT_FOUND);
+        }
         Instant now = Instant.now();
-        Instant expiresAt = now.plusSeconds(properties.candidateTtlMinutes() * 60L);
-        SqlCandidate candidate = SqlCandidate.executable(sql, now, expiresAt, requestId, userQuestion, modelName);
+        ConfirmationTokenService.IssuedToken token = tokenService.issue();
+        SqlCandidate candidate = new SqlCandidate(
+                UUID.randomUUID().toString(),
+                sql,
+                token.rawToken(),
+                token.digest(),
+                SqlCandidateStatus.PENDING,
+                actor.actorId(),
+                requestId,
+                aiMetadata != null ? aiMetadata.modelName() : modelName,
+                promptMetadata != null ? promptMetadata.name() : "data-copilot/sql-generation.st",
+                promptMetadata != null ? promptMetadata.version() : "v1",
+                promptMetadata != null ? promptMetadata.contentHash() : null,
+                aiMetadata,
+                policyVersion,
+                now,
+                now.plusSeconds(properties.candidateTtlMinutes() * 60L),
+                null,
+                null);
         store.save(candidate);
-        log.info("Created executable SQL candidate: id={}, expiresAt={}", candidate.candidateId(), expiresAt);
+        log.info("Created executable SQL candidate: id={}, owner={}, expiresAt={}",
+                candidate.candidateId(), actor.actorId(), candidate.expiresAt());
         return candidate;
     }
 
-    /**
-     * Create a non-executable candidate (guardrails failed) — no token, no expiry.
-     *
-     * @param sql the SQL that failed guardrails
-     * @return the saved candidate without token
-     */
+    /** Guardrail-rejected candidates are returned to the caller but are not persisted. */
     public SqlCandidate createNotExecutableCandidate(String sql) {
         Instant now = Instant.now();
-        SqlCandidate candidate = SqlCandidate.notExecutable(sql, now);
-        store.save(candidate);
-        log.info("Created non-executable SQL candidate: id={}", candidate.candidateId());
-        return candidate;
+        return new SqlCandidate(
+                UUID.randomUUID().toString(), sql, null, null, SqlCandidateStatus.REJECTED,
+                actorProvider.currentActor().actorId(), null, null, null, null, null,
+                null, null,
+                now, null, null, null);
     }
 
-    /**
-     * Atomically confirm and consume a candidate by candidateId + confirmationToken.
-     *
-     * <p>确认候选并取出 SQL。校验 candidateId、confirmationToken、过期时间、executable。
-     * 不能信任客户端 SQL，只能使用服务端存储的原始 SQL。</p>
-     *
-     * @param candidateId       the candidate identifier
-     * @param confirmationToken the confirmation token
-     * @return the confirmed SQL candidate, removed from the store before execution
-     * @throws SqlCandidateNotExecutableException if candidate not found or token mismatch
-     * @throws SqlCandidateExpiredException       if candidate has expired
-     */
     public SqlCandidate confirmAndConsume(String candidateId, String confirmationToken) {
+        Instant now = Instant.now();
+        CurrentActor actor = actorProvider.currentActor();
         SqlCandidate candidate = store.findById(candidateId);
-
-        // 候选不存在
-        if (candidate == null) {
-            throw new SqlCandidateNotExecutableException(
-                    "SQL candidate not found: " + candidateId);
+        if (candidate == null || !accessPolicy.allowed(
+                actor, ObjectAction.EXECUTE, candidate.ownerActorId(), null, false)) {
+            throw new BusinessException(ErrorCode.NOT_FOUND);
         }
-
-        // 校验 confirmationToken
-        if (candidate.confirmationToken() == null || !candidate.confirmationToken().equals(confirmationToken)) {
-            throw new SqlCandidateNotExecutableException(
-                    "Invalid confirmation token for candidate: " + candidateId);
+        if (candidate.status() != SqlCandidateStatus.PENDING) {
+            throw new BusinessException(ErrorCode.STATE_CONFLICT);
         }
-
-        // 校验 executable
-        if (!candidate.executable()) {
-            throw new SqlCandidateNotExecutableException(
-                    "SQL candidate is not executable: " + candidateId);
+        if (!tokenService.matches(confirmationToken, candidate.tokenDigest())) {
+            throw new SqlCandidateNotExecutableException();
         }
-
-        // 校验过期
-        if (candidate.isExpired()) {
-            store.remove(candidateId, candidate);
-            throw new SqlCandidateExpiredException(candidateId);
+        if (candidate.isExpired(now)) {
+            store.expire(candidateId, now);
+            throw new SqlCandidateExpiredException();
         }
-
-        // 原子消费：并发请求中只有一个能拿到候选，token 不可重放。
-        if (!store.remove(candidateId, candidate)) {
-            throw new SqlCandidateNotExecutableException(
-                    "SQL candidate has already been consumed: " + candidateId);
+        if (!store.consume(candidateId, actor.actorId(), now)) {
+            throw new BusinessException(ErrorCode.STATE_CONFLICT);
         }
-
-        log.info("Confirmed and consumed SQL candidate: id={}", candidateId);
-        return candidate;
+        log.info("Confirmed SQL candidate: id={}, actor={}", candidateId, actor.actorId());
+        return new SqlCandidate(
+                candidate.candidateId(), candidate.sql(), null, null, SqlCandidateStatus.CONSUMED,
+                candidate.ownerActorId(), candidate.requestId(), candidate.modelName(),
+                candidate.promptName(), candidate.promptVersion(), candidate.promptHash(),
+                candidate.aiMetadata(), candidate.policyVersion(),
+                candidate.createdAt(), candidate.expiresAt(), now, actor.actorId());
     }
 
-    /** Evict expired candidates from the store. */
-    public void evictExpired() {
-        store.evictExpired();
+    public int evictExpired() {
+        return store.evictExpired(Instant.now());
     }
 }

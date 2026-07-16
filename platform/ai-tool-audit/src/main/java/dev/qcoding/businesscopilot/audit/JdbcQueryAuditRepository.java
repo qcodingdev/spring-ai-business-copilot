@@ -23,8 +23,10 @@ public class JdbcQueryAuditRepository implements QueryAuditRepository {
                 request_id, http_request_id, actor_id, user_question, generated_sql, final_sql,
                 validation_status, validation_errors, confirmed,
                 execution_status, row_count, error_message,
-                model_name, latency_ms, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                model_name, latency_ms, creator_actor_id, action_actor_id,
+                provider_name, provider_request_id, prompt_name, prompt_version, prompt_hash,
+                policy_version, violation_codes, input_tokens, output_tokens, finish_reason, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             RETURNING id
             """;
 
@@ -32,7 +34,10 @@ public class JdbcQueryAuditRepository implements QueryAuditRepository {
             SELECT id, request_id, http_request_id, actor_id, user_question, generated_sql, final_sql,
                    validation_status, validation_errors, confirmed,
                    execution_status, row_count, error_message,
-                   model_name, latency_ms, created_at
+                   model_name, latency_ms, creator_actor_id, action_actor_id,
+                   provider_name, provider_request_id, prompt_name, prompt_version, prompt_hash,
+                   policy_version, violation_codes, input_tokens, output_tokens, finish_reason,
+                   anonymized_at, created_at
             FROM query_audit_logs
             ORDER BY created_at DESC, id DESC
             LIMIT ? OFFSET ?
@@ -56,6 +61,19 @@ public class JdbcQueryAuditRepository implements QueryAuditRepository {
             rs.getString("error_message"),
             rs.getString("model_name"),
             (Long) rs.getObject("latency_ms"),
+            rs.getString("creator_actor_id"),
+            rs.getString("action_actor_id"),
+            rs.getString("provider_name"),
+            rs.getString("provider_request_id"),
+            rs.getString("prompt_name"),
+            rs.getString("prompt_version"),
+            rs.getString("prompt_hash"),
+            rs.getString("policy_version"),
+            rs.getString("violation_codes"),
+            (Integer) rs.getObject("input_tokens"),
+            (Integer) rs.getObject("output_tokens"),
+            rs.getString("finish_reason"),
+            rs.getTimestamp("anonymized_at") != null ? rs.getTimestamp("anonymized_at").toInstant() : null,
             rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toInstant() : null);
 
     private final JdbcTemplate jdbcTemplate;
@@ -82,6 +100,19 @@ public class JdbcQueryAuditRepository implements QueryAuditRepository {
                 event.errorMessage(),
                 event.modelName(),
                 event.latencyMs(),
+                event.creatorActorId() != null ? event.creatorActorId()
+                        : BusinessRequestContextHolder.currentActorId(),
+                event.actionActorId(),
+                event.providerName(),
+                event.providerRequestId(),
+                event.promptName(),
+                event.promptVersion(),
+                event.promptHash(),
+                event.policyVersion(),
+                event.violationCodes(),
+                event.inputTokens(),
+                event.outputTokens(),
+                event.finishReason(),
                 now);
     }
 

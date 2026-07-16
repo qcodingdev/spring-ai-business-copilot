@@ -16,6 +16,9 @@ public enum ErrorCode {
     /** Requested resource was not found. */
     NOT_FOUND("BIZ_0003", "Resource not found"),
 
+    /** A visible object exists but its state no longer allows the requested transition. */
+    STATE_CONFLICT("BIZ_0004", "Resource state conflict"),
+
     /** Upstream AI model invocation failed or returned an unusable response. */
     AI_MODEL_ERROR("BIZ_0100", "AI model invocation failed"),
 

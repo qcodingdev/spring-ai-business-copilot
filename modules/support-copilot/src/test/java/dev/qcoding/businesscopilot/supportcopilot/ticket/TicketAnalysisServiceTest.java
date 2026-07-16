@@ -1,6 +1,10 @@
 package dev.qcoding.businesscopilot.supportcopilot.ticket;
 
 import dev.qcoding.businesscopilot.guardrails.SensitiveTextMasker;
+import dev.qcoding.businesscopilot.commonsecurity.ConfirmationTokenService;
+import dev.qcoding.businesscopilot.commonsecurity.CurrentActor;
+import dev.qcoding.businesscopilot.commonsecurity.CurrentActorProvider;
+import dev.qcoding.businesscopilot.commonsecurity.BusinessRole;
 import dev.qcoding.businesscopilot.supportcopilot.SupportCopilotProperties;
 import dev.qcoding.businesscopilot.supportcopilot.audit.SupportAuditLog;
 import dev.qcoding.businesscopilot.supportcopilot.audit.SupportAuditRepository;
@@ -20,6 +24,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -41,7 +46,8 @@ class TicketAnalysisServiceTest {
                 new SupportAuditService(auditRepository),
                 new SensitiveTextMasker(),
                 new SupportCopilotProperties(true, 2000, 10,
-                        "REFUND,ACCOUNT_SECURITY,INCIDENT", true, 5));
+                        "REFUND,ACCOUNT_SECURITY,INCIDENT", true, 5),
+                actorProvider());
 
         var result = service.analyze(new TicketClassificationRequest("如何申请退款？", "web"));
 
@@ -71,6 +77,11 @@ class TicketAnalysisServiceTest {
         }
 
         @Override
+        public ClassificationInvocation classifyWithMetadata(TicketClassificationRequest request) {
+            return new ClassificationInvocation(classify(request), null, null);
+        }
+
+        @Override
         public String maskedMessage(String rawMessage) {
             return rawMessage;
         }
@@ -82,7 +93,8 @@ class TicketAnalysisServiceTest {
         CountingDraftService() {
             super(null, null, new SensitiveTextMasker(), null, null,
                     new SupportCopilotProperties(true, 2000, 10,
-                            "REFUND,ACCOUNT_SECURITY,INCIDENT", true, 5));
+                            "REFUND,ACCOUNT_SECURITY,INCIDENT", true, 5),
+                    actorProvider(), new ConfirmationTokenService());
         }
 
         @Override
@@ -90,6 +102,11 @@ class TicketAnalysisServiceTest {
             calls++;
             return new ReplyDraftResponse(1L, "草稿", "LOW", List.of(),
                     List.of(), "token", Instant.now().plusSeconds(60).toString(), false);
+        }
+
+        @Override
+        public DraftInvocation generateWithMetadata(ReplyDraftRequest request) {
+            return new DraftInvocation(generate(request), null, null);
         }
     }
 
@@ -100,7 +117,8 @@ class TicketAnalysisServiceTest {
         public SupportTicket save(SupportTicket ticket) {
             return new SupportTicket(100L, ticket.externalId(), ticket.customerMessage(),
                     ticket.channel(), ticket.category(), ticket.sentiment(),
-                    ticket.urgency(), ticket.status(), Instant.now(), Instant.now());
+                    ticket.urgency(), ticket.status(), ticket.ownerActorId(),
+                    Instant.now(), Instant.now());
         }
 
         @Override
@@ -114,8 +132,8 @@ class TicketAnalysisServiceTest {
         }
 
         @Override
-        public boolean updateStatus(Long id, String status) {
-            lastStatus = status;
+        public boolean transitionStatus(Long id, String expectedStatus, String targetStatus) {
+            lastStatus = targetStatus;
             return true;
         }
 
@@ -123,6 +141,10 @@ class TicketAnalysisServiceTest {
         public long count() {
             return 0;
         }
+    }
+
+    private static CurrentActorProvider actorProvider() {
+        return () -> new CurrentActor("operator-1", Set.of(BusinessRole.OPERATOR));
     }
 
     private static class InMemoryAuditRepository implements SupportAuditRepository {

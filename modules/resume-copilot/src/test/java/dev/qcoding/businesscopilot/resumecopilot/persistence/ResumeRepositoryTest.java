@@ -16,8 +16,7 @@ class ResumeRepositoryTest {
         JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
         when(jdbcTemplate.update(anyString(), any(Object[].class)))
                 .thenThrow(new IllegalStateException("audit database unavailable"));
-        ResumeRepository repository = new ResumeRepository(
-                mock(ResumeJobMapper.class), mock(ResumeAssessmentMapper.class), jdbcTemplate);
+        ResumeRepository repository = new ResumeRepository(jdbcTemplate);
 
         assertThatCode(() -> repository.audit("REVIEWED", 1L, 2L, 3L,
                 4, 5, "model", "REVIEWED", null)).doesNotThrowAnyException();

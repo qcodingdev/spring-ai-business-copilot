@@ -8,6 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Added a narrow `common-security` module for authenticated actors, roles, object access policies, and confirmation-token digests.
+- Added Flyway V11/V12 migrations for persistent trusted-confirmation state, audit v2 metadata, and configurable audit anonymization/deletion.
+- Added explicit auto-configuration for all five Copilot modules without relying on the bundled application's root package scan.
+- Added PostgreSQL/MySQL Data Copilot query-target dialect detection, read-only session initialization, and integration contracts.
 - Added form login with `ADMIN`, `OPERATOR`, and `REVIEWER` role boundaries and CSRF protection.
 - Added request IDs and authenticated actor IDs to API responses and module audit records.
 - Added an optional named, read-only Data Copilot business query datasource separate from the platform database.
@@ -20,6 +24,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- Persisted Data SQL candidates and bound Data/Support/Report/Resume confirmation state to owner, object status, expiry, and conditional database transitions.
+- Replaced Resume Mapper scanning with an explicit Spring JDBC repository.
+- Expanded AI and business audit records with creator/action actors, provider/model, Prompt identity, policy, latency, token usage, finish reason, and provider request IDs.
 - Pinned Maven lifecycle plugin versions for reproducible local and CI builds.
 - Added a persistent BuildKit Maven cache and a focused Docker build context for faster, retryable image builds.
 - Removed fixed Compose container names and made host ports configurable so isolated project stacks do not collide.
@@ -37,6 +44,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Security
 
+- Enforced fully-qualified SQL column allowlists, rejected `SELECT *`/`table.*`, and normalized PostgreSQL/MySQL quoted identifiers before policy checks.
+- Made high-risk Data, Support, Report, and Resume state transitions fail closed when required audit persistence fails.
+- Removed the implicit non-request `system/ADMIN` actor fallback; background hosts must provide an explicit controlled actor provider.
 - Denied unlisted API HTTP methods by default and added a production profile that requires explicit database and role credentials.
 - Enforced exact schema-qualified SQL table allowlists, including nested subqueries and quoted identifiers.
 - Denied database functions by default and explicitly allowed only `count`, `sum`, `avg`, `min`, and `max`.

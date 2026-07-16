@@ -28,7 +28,7 @@ AI demos often stop at a chat box. Business systems need a little more disciplin
 
 | Module | Business workflow | Safety default |
 |---|---|---|
-| [Data Copilot](modules/data-copilot/README.md) | Natural language to SQL and query explanation | Read-only SQL, allowlisted schema, confirm before execution |
+| [Data Copilot](modules/data-copilot/README.md) | Natural language to SQL and query explanation | Read-only SQL, schema/table/column allowlists, confirm before execution |
 | [Knowledge Copilot](modules/knowledge-copilot/README.md) | Internal document Q&A | Mandatory citations and `NO_EVIDENCE` refusal |
 | [Support Copilot](modules/support-copilot/README.md) | Ticket classification and reply drafting | Human handoff, no automatic sending or refunds |
 | [Report Copilot](modules/report-copilot/README.md) | Source-grounded weekly reports | Exact metric evidence, confirm before Markdown export |
@@ -86,9 +86,11 @@ Requirements: Java 21 and PostgreSQL 16 with pgvector.
 
 Default database settings are `jdbc:postgresql://localhost:5432/business_copilot`, user `copilot`, password `copilot`. Override them with `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, and `SPRING_DATASOURCE_PASSWORD`.
 
-Data Copilot can use a separate PostgreSQL business query database through `BUSINESS_QUERY_DATASOURCE_ENABLED=true` and the `BUSINESS_QUERY_DATASOURCE_*` settings. The database account must be independently created with least-privilege `SELECT` access to only the approved business schema/tables. Compose creates an example `business_reader` role that can select only the six fictional sample tables; it cannot read platform audits or other Copilot tables and cannot perform DML/DDL. Platform audits, knowledge vectors, and other module state remain in the platform PostgreSQL database. MySQL query-target support is planned for the v1.2 dialect layer; migrating the whole platform to MySQL is not recommended.
+Data Copilot can use a separate PostgreSQL or MySQL business query database through `BUSINESS_QUERY_DATASOURCE_ENABLED=true` and the `BUSINESS_QUERY_DATASOURCE_*` settings. The dialect is detected from the JDBC URL by default and can be pinned with `BUSINESS_QUERY_DATASOURCE_DIALECT=postgresql|mysql`; mismatches fail closed. The database account must be independently created with least-privilege `SELECT` access to only the approved business schema/tables. Compose enables an example PostgreSQL `business_reader` connection by default; it can select only the six fictional sample tables, cannot read platform audits or other Copilot tables, and cannot perform DML/DDL. Platform audits, knowledge vectors, and other module state remain in PostgreSQL + pgvector; MySQL is supported only as a Data Copilot query target.
 
-The v1.1 SQL boundary requires schema-qualified allowlisted tables (`public.customers`, not `customers`), denies database functions by default except the explicit `count`/`sum`/`avg`/`min`/`max` aggregate allowlist, and accepts only a bounded integer-literal `LIMIT`. JDBC independently caps timeout, rows, fetch size, columns, and approximate result bytes.
+The SQL boundary requires schema-qualified allowlisted tables (`public.customers`, not `customers`) and fully-qualified allowlisted columns. Wildcard projections such as `SELECT *` and `table.*` are rejected. Database functions are denied by default except the explicit `count`/`sum`/`avg`/`min`/`max` aggregate allowlist, and `LIMIT` must be a bounded integer literal. JDBC independently caps timeout, rows, fetch size, columns, and approximate result bytes.
+
+When a custom business database is enabled, configure both `business-copilot.data-copilot.schema.queryable-tables` and `business-copilot.guardrails.queryable-columns` for that database. Missing or mismatched column entries fail closed instead of falling back to unrestricted metadata.
 
 Admins and reviewers can access `/actuator/metrics`. Spring AI model observations record call latency and provider-reported token usage without exposing prompt or business content in the metrics.
 
@@ -116,9 +118,9 @@ flowchart LR
 
 | Layer | Technology | Rule |
 |---|---|---|
-| Runtime | Java 21, Spring Boot 4.1 | One executable app; independent-host module auto-configuration is being hardened |
+| Runtime | Java 21, Spring Boot 4.1 | One executable app; every module explicitly auto-configures its web and persistence entrypoints |
 | AI | Spring AI 2.0, Jackson 3 | Central prompts and typed output before guardrails |
-| Persistence | JDBC + MyBatis-Plus 3.5.16 | MyBatis-Plus for stable CRUD; JDBC for dynamic or batch-specific access |
+| Persistence | Spring JDBC | Explicit module repositories, conditional state transitions, dynamic SQL, metadata, batches, and pgvector access |
 | Database | PostgreSQL 16, pgvector, Flyway | Flyway is the only DDL authority |
 | Web | Spring MVC, Thymeleaf, vanilla JS | One operational workbench, no frontend build toolchain |
 
@@ -130,6 +132,7 @@ platform/ai-core/               model calls, embeddings, prompt templates
 platform/ai-guardrails/         reusable deterministic safety rules
 platform/ai-tool-audit/         Data Copilot query audit boundary
 platform/common-web/            API responses and exception handling
+platform/common-security/       actor, role, object-policy, and token-digest primitives
 modules/data-copilot/           database query assistant
 modules/knowledge-copilot/      cited knowledge assistant
 modules/support-copilot/        support reply assistant

@@ -1,6 +1,7 @@
 package dev.qcoding.businesscopilot;
 
 import com.zaxxer.hikari.HikariDataSource;
+import dev.qcoding.businesscopilot.datacopilot.schema.BusinessDatabaseDialect;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration;
@@ -52,6 +53,11 @@ class BusinessQueryDataSourceConfigurationTest {
                     assertThat(hikari.isReadOnly()).isTrue();
                     assertThat(hikari.getMaximumPoolSize()).isEqualTo(3);
                     assertThat(hikari.getPoolName()).isEqualTo("business-query-pool");
+                    assertThat(hikari.getDriverClassName()).isEqualTo("org.postgresql.Driver");
+                    assertThat(hikari.getConnectionInitSql())
+                            .isEqualTo("SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY");
+                    assertThat(context.getBean("businessQueryDatabaseDialect"))
+                            .isEqualTo(BusinessDatabaseDialect.POSTGRESQL);
                     assertThat(jdbcTemplate.getDataSource()).isSameAs(dataSource);
                     assertThat(platformDataSource).isNotSameAs(dataSource);
                     assertThat(platformJdbcTemplate.getDataSource()).isSameAs(platformDataSource);
@@ -62,6 +68,38 @@ class BusinessQueryDataSourceConfigurationTest {
     void rejectsAnEnabledDatasourceWithoutAUrl() {
         contextRunner
                 .withPropertyValues("business-copilot.data-copilot.datasource.enabled=true")
+                .run(context -> assertThat(context).hasFailed());
+    }
+
+    @Test
+    void configuresMySqlReadOnlyPoolFromTheJdbcUrl() {
+        contextRunner
+                .withPropertyValues(
+                        "business-copilot.data-copilot.datasource.enabled=true",
+                        "business-copilot.data-copilot.datasource.url=jdbc:mysql://localhost:3306/business",
+                        "business-copilot.data-copilot.datasource.username=business_reader",
+                        "business-copilot.data-copilot.datasource.password=test-only")
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    HikariDataSource dataSource =
+                            context.getBean("businessQueryDataSource", HikariDataSource.class);
+                    assertThat(dataSource.isReadOnly()).isTrue();
+                    assertThat(dataSource.getDriverClassName()).isEqualTo("com.mysql.cj.jdbc.Driver");
+                    assertThat(dataSource.getConnectionInitSql())
+                            .isEqualTo("SET SESSION TRANSACTION READ ONLY");
+                    assertThat(context.getBean("businessQueryDatabaseDialect"))
+                            .isEqualTo(BusinessDatabaseDialect.MYSQL);
+                });
+    }
+
+    @Test
+    void rejectsDialectAndJdbcUrlMismatch() {
+        contextRunner
+                .withPropertyValues(
+                        "business-copilot.data-copilot.datasource.enabled=true",
+                        "business-copilot.data-copilot.datasource.url=jdbc:mysql://localhost:3306/business",
+                        "business-copilot.data-copilot.datasource.username=business_reader",
+                        "business-copilot.data-copilot.datasource.dialect=postgresql")
                 .run(context -> assertThat(context).hasFailed());
     }
 }

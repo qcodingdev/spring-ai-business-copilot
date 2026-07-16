@@ -1,5 +1,15 @@
 package dev.qcoding.businesscopilot.commonweb.request;
 
-/** Per-request trace and authenticated actor metadata. */
-public record BusinessRequestContext(String requestId, String actorId) {
+import java.util.Set;
+
+/** Per-request trace, authenticated actor, and framework-independent business role names. */
+public record BusinessRequestContext(String requestId, String actorId, Set<String> roles) {
+
+    public BusinessRequestContext {
+        roles = roles == null ? Set.of() : Set.copyOf(roles);
+    }
+
+    public BusinessRequestContext(String requestId, String actorId) {
+        this(requestId, actorId, Set.of());
+    }
 }

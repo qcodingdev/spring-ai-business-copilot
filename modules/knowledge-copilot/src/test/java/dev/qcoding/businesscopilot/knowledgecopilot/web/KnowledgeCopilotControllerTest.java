@@ -159,7 +159,10 @@ class KnowledgeCopilotControllerTest {
                 List.of(new KnowledgeCitation(1L, "年假政策说明")),
                 List.of(),
                 "test-model");
-        when(questionService.ask(questionRequest)).thenReturn(answerResponse);
+        when(questionService.askWithAudit(questionRequest)).thenReturn(
+                new KnowledgeQuestionService.QuestionInvocation(
+                        answerResponse, "1,2", "test-embedding", 25L,
+                        null, null, null));
         when(auditService.record(any())).thenReturn(1L);
 
         var response = controller.askQuestion(questionRequest);
@@ -186,7 +189,10 @@ class KnowledgeCopilotControllerTest {
                 List.of(),
                 List.of("No chunks met similarity threshold"),
                 "test-model");
-        when(questionService.ask(questionRequest)).thenReturn(answerResponse);
+        when(questionService.askWithAudit(questionRequest)).thenReturn(
+                new KnowledgeQuestionService.QuestionInvocation(
+                        answerResponse, null, "test-embedding", 20L,
+                        null, null, "NO_RETRIEVED_EVIDENCE"));
         when(auditService.record(any())).thenReturn(1L);
 
         var response = controller.askQuestion(questionRequest);

@@ -3,8 +3,11 @@ package dev.qcoding.businesscopilot.datacopilot;
 import dev.qcoding.businesscopilot.aicore.AiChatService;
 import dev.qcoding.businesscopilot.aicore.PromptTemplateService;
 import dev.qcoding.businesscopilot.audit.AuditService;
+import dev.qcoding.businesscopilot.commonsecurity.ConfirmationTokenService;
+import dev.qcoding.businesscopilot.commonsecurity.CurrentActorProvider;
+import dev.qcoding.businesscopilot.commonsecurity.ObjectAccessPolicy;
 import dev.qcoding.businesscopilot.datacopilot.confirmation.DataCopilotConfirmationProperties;
-import dev.qcoding.businesscopilot.datacopilot.confirmation.InMemorySqlCandidateStore;
+import dev.qcoding.businesscopilot.datacopilot.confirmation.JdbcSqlCandidateStore;
 import dev.qcoding.businesscopilot.datacopilot.confirmation.SqlCandidateStore;
 import dev.qcoding.businesscopilot.datacopilot.confirmation.SqlConfirmationService;
 import dev.qcoding.businesscopilot.datacopilot.explanation.QueryResultSummarizer;
@@ -15,6 +18,7 @@ import dev.qcoding.businesscopilot.datacopilot.query.QueryExecutionProperties;
 import dev.qcoding.businesscopilot.datacopilot.query.QueryExecutionService;
 import dev.qcoding.businesscopilot.datacopilot.query.ReadOnlyQueryExecutor;
 import dev.qcoding.businesscopilot.datacopilot.schema.DataCopilotSchemaProperties;
+import dev.qcoding.businesscopilot.datacopilot.schema.BusinessDatabaseDialect;
 import dev.qcoding.businesscopilot.datacopilot.schema.JdbcSchemaMetadataRepository;
 import dev.qcoding.businesscopilot.datacopilot.schema.SchemaContextService;
 import dev.qcoding.businesscopilot.datacopilot.schema.SchemaMetadataRepository;
@@ -26,6 +30,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -33,10 +38,13 @@ import org.springframework.jdbc.core.JdbcTemplate;
 /**
  * Auto-configuration for the Data Copilot module.
  *
- * <p>Data Copilot 自动装配。注册 schema 配置、确认机制组件、查询执行组件、结果解释组件。
- * 第一版确认机制使用内存存储，不引入 Redis，不做集群会话一致性。</p>
+ * <p>Data Copilot 自动装配。注册 schema 配置、数据库候选存储、可信确认、
+ * 只读查询执行和结果解释组件。候选状态由平台数据库持久化并使用条件更新，
+ * 当前不引入 Redis。</p>
  */
 @AutoConfiguration
+@ConditionalOnProperty(prefix = "business-copilot.data-copilot", name = "enabled",
+        havingValue = "true", matchIfMissing = true)
 public class DataCopilotAutoConfiguration {
 
     /**
@@ -47,6 +55,12 @@ public class DataCopilotAutoConfiguration {
     @ConditionalOnMissingBean(name = "businessQueryJdbcTemplate")
     public JdbcTemplate businessQueryJdbcTemplate(@Qualifier("jdbcTemplate") JdbcTemplate platformJdbcTemplate) {
         return platformJdbcTemplate;
+    }
+
+    @Bean(name = "businessQueryDatabaseDialect")
+    @ConditionalOnMissingBean(name = "businessQueryDatabaseDialect")
+    public BusinessDatabaseDialect businessQueryDatabaseDialect() {
+        return BusinessDatabaseDialect.POSTGRESQL;
     }
 
     @Bean
@@ -62,6 +76,7 @@ public class DataCopilotAutoConfiguration {
             DataCopilotSchemaProperties schemaProperties) {
         return new GuardrailsProperties(
                 schemaProperties.queryableTables(),
+                guardrailsProperties.queryableColumns(),
                 guardrailsProperties.blockedColumns(),
                 guardrailsProperties.maskedColumns(),
                 guardrailsProperties.defaultMaxRows(),
@@ -82,22 +97,28 @@ public class DataCopilotAutoConfiguration {
     }
 
     @Bean
-    public SqlCandidateStore sqlCandidateStore() {
-        // 第一版只用内存存储，不引入 Redis
-        return new InMemorySqlCandidateStore();
+    @ConditionalOnMissingBean
+    public SqlCandidateStore sqlCandidateStore(
+            @Qualifier("jdbcTemplate") JdbcTemplate platformJdbcTemplate) {
+        return new JdbcSqlCandidateStore(platformJdbcTemplate);
     }
 
     @Bean
     public SqlConfirmationService sqlConfirmationService(SqlCandidateStore store,
-                                                          DataCopilotConfirmationProperties properties) {
-        return new SqlConfirmationService(store, properties);
+                                                          DataCopilotConfirmationProperties properties,
+                                                          CurrentActorProvider actorProvider,
+                                                          ObjectAccessPolicy accessPolicy,
+                                                          ConfirmationTokenService tokenService) {
+        return new SqlConfirmationService(
+                store, properties, actorProvider, accessPolicy, tokenService);
     }
 
     @Bean
     public SchemaMetadataRepository schemaMetadataRepository(
             @Qualifier("businessQueryJdbcTemplate") JdbcTemplate jdbcTemplate,
-            DataCopilotSchemaProperties properties) {
-        return new JdbcSchemaMetadataRepository(jdbcTemplate, properties);
+            DataCopilotSchemaProperties properties,
+            @Qualifier("businessQueryDatabaseDialect") BusinessDatabaseDialect dialect) {
+        return new JdbcSchemaMetadataRepository(jdbcTemplate, properties, dialect);
     }
 
     @Bean

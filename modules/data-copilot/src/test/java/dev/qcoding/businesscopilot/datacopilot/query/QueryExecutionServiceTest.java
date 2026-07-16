@@ -51,9 +51,14 @@ class QueryExecutionServiceTest {
     }
 
     private SqlCandidate candidateWithAuditContext(String sql) {
-        return SqlCandidate.executable(
-                sql, Instant.now(), Instant.now().plusSeconds(600),
-                "req-001", "上个月销售额", "gpt-5-mini");
+        Instant now = Instant.now();
+        return new SqlCandidate(
+                "cand-1", sql, null, null,
+                dev.qcoding.businesscopilot.datacopilot.confirmation.SqlCandidateStatus.CONSUMED,
+                "operator-1", "req-001", "gpt-5-mini",
+                "data-copilot/sql-generation.st", "v1", null,
+                null, "sql-guardrails-v1.1",
+                now, now.plusSeconds(600), now, "operator-1");
     }
 
     // ---- 执行成功：写审计并包含 rowCount ----
@@ -84,7 +89,7 @@ class QueryExecutionServiceTest {
         assertThat(event.status()).isEqualTo(AuditStatus.EXECUTED);
         assertThat(event.rowCount()).isEqualTo(2);
         assertThat(event.requestId()).isEqualTo("req-001");
-        assertThat(event.userQuestion()).isEqualTo("上个月销售额");
+        assertThat(event.userQuestion()).isEqualTo("Confirmed read-only business query");
         assertThat(event.modelName()).isEqualTo("gpt-5-mini");
         assertThat(event.confirmed()).isTrue();
         assertThat(event.finalSql()).isEqualTo(sql);
@@ -94,8 +99,8 @@ class QueryExecutionServiceTest {
     // ---- 执行失败：写审计并包含错误摘要 ----
 
     @Test
-    @DisplayName("execution failure records audit with error summary")
-    void executionFailureRecordsAuditWithErrorSummary() {
+    @DisplayName("execution failure records a stable audit outcome without provider details")
+    void executionFailureRecordsStableAuditOutcome() {
         String sql = "SELECT bad_col FROM customers LIMIT 10";
         SqlCandidate candidate = candidateWithAuditContext(sql);
         when(confirmationService.confirmAndConsume("cand-1", "token-1")).thenReturn(candidate);
@@ -112,7 +117,7 @@ class QueryExecutionServiceTest {
         AuditEvent event = captor.getValue();
         assertThat(event.eventType()).isEqualTo(AuditEventType.QUERY_FAILURE);
         assertThat(event.status()).isEqualTo(AuditStatus.EXECUTION_FAILED);
-        assertThat(event.errorMessage()).contains("查询执行失败");
+        assertThat(event.errorMessage()).isNull();
         assertThat(event.rowCount()).isNull();
         assertThat(event.requestId()).isEqualTo("req-001");
         assertThat(event.modelName()).isEqualTo("gpt-5-mini");
@@ -139,7 +144,8 @@ class QueryExecutionServiceTest {
         AuditEvent event = captor.getValue();
         assertThat(event.eventType()).isEqualTo(AuditEventType.QUERY_FAILURE);
         assertThat(event.status()).isEqualTo(AuditStatus.VALIDATION_FAILED);
-        assertThat(event.validationErrors()).contains("rejected by guardrails");
+        assertThat(event.validationErrors()).isNull();
+        assertThat(event.violationCodes()).isEqualTo("SECONDARY_GUARDRAIL_REJECTED");
     }
 
     // ---- 确认失败（取消）：写 not-confirmed 审计 ----

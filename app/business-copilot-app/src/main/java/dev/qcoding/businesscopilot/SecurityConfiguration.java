@@ -21,6 +21,8 @@ import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 
 import java.io.IOException;
+import java.util.HashSet;
+import java.util.Set;
 
 /** Basic single-organization authentication and role boundaries for the v1.1 baseline. */
 @Configuration(proxyBeanMethods = false)
@@ -81,9 +83,21 @@ public class SecurityConfiguration {
                                 PathPatternRequestMatcher.pathPattern("/api/**"))
                         .accessDeniedHandler((request, response, exception) -> writeSecurityError(
                                 response, HttpStatus.FORBIDDEN, "SEC_0403", "Access denied")))
-                .addFilterAfter(new BusinessRequestContextFilter(), AnonymousAuthenticationFilter.class);
+                .addFilterAfter(new BusinessRequestContextFilter(
+                        request -> request.getUserPrincipal() == null ? null : request.getUserPrincipal().getName(),
+                        SecurityConfiguration::businessRoles), AnonymousAuthenticationFilter.class);
 
         return http.build();
+    }
+
+    private static Set<String> businessRoles(jakarta.servlet.http.HttpServletRequest request) {
+        Set<String> roles = new HashSet<>();
+        for (String role : new String[]{"ADMIN", "OPERATOR", "REVIEWER"}) {
+            if (request.isUserInRole(role)) {
+                roles.add(role);
+            }
+        }
+        return Set.copyOf(roles);
     }
 
     private static void writeSecurityError(HttpServletResponse response,

@@ -1,7 +1,11 @@
 package dev.qcoding.businesscopilot.supportcopilot.classification;
 
 import dev.qcoding.businesscopilot.aicore.AiChatService;
+import dev.qcoding.businesscopilot.aicore.AiInvocationMetadata;
+import dev.qcoding.businesscopilot.aicore.AiInvocationResult;
 import dev.qcoding.businesscopilot.aicore.PromptTemplateService;
+import dev.qcoding.businesscopilot.aicore.PromptTemplateMetadata;
+import dev.qcoding.businesscopilot.aicore.RenderedPrompt;
 import dev.qcoding.businesscopilot.commonweb.api.BusinessException;
 import dev.qcoding.businesscopilot.commonweb.api.ErrorCode;
 import dev.qcoding.businesscopilot.guardrails.SensitiveTextMasker;
@@ -67,6 +71,10 @@ public class TicketClassificationService {
      * @throws BusinessException on validation failure or model error
      */
     public TicketClassificationResponse classify(TicketClassificationRequest request) {
+        return classifyWithMetadata(request).response();
+    }
+
+    public ClassificationInvocation classifyWithMetadata(TicketClassificationRequest request) {
         String rawMessage = request.customerMessage();
         if (rawMessage == null || rawMessage.isBlank()) {
             throw new BusinessException(ErrorCode.VALIDATION_ERROR, "customerMessage 不能为空");
@@ -80,23 +88,25 @@ public class TicketClassificationService {
         String maskedMessage = sensitiveTextMasker.mask(rawMessage);
 
         // 构建 prompt
-        String prompt = promptTemplateService.render(PROMPT_TEMPLATE,
+        RenderedPrompt prompt = promptTemplateService.renderWithMetadata(PROMPT_TEMPLATE, "v1",
                 Map.of("customerMessage", maskedMessage));
 
         log.debug("Classifying ticket: message length={}, channel={}",
                 rawMessage.length(), request.channel());
 
         // 调用模型
-        LlmClassificationOutput output;
+        AiInvocationResult<LlmClassificationOutput> invocation;
         try {
-            output = aiChatService.generateJson(prompt, LlmClassificationOutput.class);
+            invocation = aiChatService.generateJsonWithMetadata(
+                    prompt.content(), LlmClassificationOutput.class);
         } catch (BusinessException ex) {
             throw ex;
         } catch (Exception ex) {
             log.error("Ticket classification model call failed", ex);
             throw new BusinessException(ErrorCode.AI_MODEL_ERROR,
-                    "工单分类模型调用失败: " + ex.getMessage(), ex);
+                    ErrorCode.AI_MODEL_ERROR.defaultMessage(), ex);
         }
+        LlmClassificationOutput output = invocation.content();
 
         // 验证模型输出
         if (output == null || output.category() == null) {
@@ -127,11 +137,18 @@ public class TicketClassificationService {
         log.info("Ticket classified: category={}, sentiment={}, urgency={}, needsHuman={}",
                 response.category(), response.sentiment(), response.urgency(), response.needsHuman());
 
-        return response;
+        return new ClassificationInvocation(
+                response, prompt.metadata(), invocation.metadata());
     }
 
     /** Return the masked version of a customer message for storage. */
     public String maskedMessage(String rawMessage) {
         return sensitiveTextMasker.mask(rawMessage);
+    }
+
+    public record ClassificationInvocation(
+            TicketClassificationResponse response,
+            PromptTemplateMetadata promptMetadata,
+            AiInvocationMetadata aiMetadata) {
     }
 }

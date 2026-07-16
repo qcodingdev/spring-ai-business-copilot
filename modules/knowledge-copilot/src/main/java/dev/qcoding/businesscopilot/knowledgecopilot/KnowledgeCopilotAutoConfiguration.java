@@ -20,7 +20,9 @@ import dev.qcoding.businesscopilot.knowledgecopilot.embedding.JdbcKnowledgeEmbed
 import dev.qcoding.businesscopilot.knowledgecopilot.embedding.KnowledgeEmbeddingRepository;
 import dev.qcoding.businesscopilot.knowledgecopilot.embedding.KnowledgeEmbeddingService;
 import dev.qcoding.businesscopilot.knowledgecopilot.retrieval.KnowledgeRetrievalService;
+import dev.qcoding.businesscopilot.knowledgecopilot.web.KnowledgeCopilotController;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -146,5 +148,16 @@ public class KnowledgeCopilotAutoConfiguration {
     @Bean
     public KnowledgeAuditService knowledgeAuditService(KnowledgeQaAuditRepository repository) {
         return new KnowledgeAuditService(repository);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(KnowledgeCopilotController.class)
+    public KnowledgeCopilotController knowledgeCopilotController(
+            DocumentUploadService documentUploadService,
+            KnowledgeDocumentRepository documentRepository,
+            KnowledgeQuestionService questionService,
+            KnowledgeAuditService auditService) {
+        return new KnowledgeCopilotController(
+                documentUploadService, documentRepository, questionService, auditService);
     }
 }

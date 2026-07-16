@@ -11,6 +11,8 @@ import java.util.List;
  */
 public class SqlGuardrailService {
 
+    public static final String POLICY_VERSION = "sql-guardrails-v1.1";
+
     private final List<SqlValidator> validators;
 
     public SqlGuardrailService(List<SqlValidator> validators) {

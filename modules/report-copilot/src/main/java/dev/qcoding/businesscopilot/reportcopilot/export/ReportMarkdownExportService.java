@@ -2,6 +2,10 @@ package dev.qcoding.businesscopilot.reportcopilot.export;
 
 import dev.qcoding.businesscopilot.commonweb.api.BusinessException;
 import dev.qcoding.businesscopilot.commonweb.api.ErrorCode;
+import dev.qcoding.businesscopilot.commonsecurity.CurrentActor;
+import dev.qcoding.businesscopilot.commonsecurity.CurrentActorProvider;
+import dev.qcoding.businesscopilot.commonsecurity.ObjectAccessPolicy;
+import dev.qcoding.businesscopilot.commonsecurity.ObjectAction;
 import dev.qcoding.businesscopilot.reportcopilot.ReportCopilotProperties;
 import dev.qcoding.businesscopilot.reportcopilot.audit.ReportAuditLog;
 import dev.qcoding.businesscopilot.reportcopilot.audit.ReportAuditService;
@@ -19,12 +23,18 @@ public class ReportMarkdownExportService {
     private final ReportDraftRepository draftRepository;
     private final ReportCopilotProperties properties;
     private final ReportAuditService auditService;
+    private final CurrentActorProvider actorProvider;
+    private final ObjectAccessPolicy accessPolicy;
 
     public ReportMarkdownExportService(ReportDraftRepository draftRepository, ReportCopilotProperties properties,
-                                       ReportAuditService auditService) {
+                                       ReportAuditService auditService,
+                                       CurrentActorProvider actorProvider,
+                                       ObjectAccessPolicy accessPolicy) {
         this.draftRepository = draftRepository;
         this.properties = properties;
         this.auditService = auditService;
+        this.actorProvider = actorProvider;
+        this.accessPolicy = accessPolicy;
     }
 
     public String export(Long draftId) {
@@ -32,13 +42,21 @@ public class ReportMarkdownExportService {
             throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Markdown export is disabled.");
         }
         ReportDraft draft = draftRepository.findById(draftId).orElseThrow(() ->
-                new BusinessException(ErrorCode.NOT_FOUND, "Report draft not found."));
+                new BusinessException(ErrorCode.NOT_FOUND));
+        CurrentActor actor = actorProvider.currentActor();
+        if (!accessPolicy.allowed(actor, ObjectAction.EXPORT,
+                draft.ownerActorId(), null, false)) {
+            throw new BusinessException(ErrorCode.NOT_FOUND);
+        }
         if (draft.status() != ReportDraftStatus.CONFIRMED) {
             throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Only CONFIRMED report drafts can be exported.");
         }
         String markdown = render(draft);
-        auditService.record(new ReportAuditLog(draft.requestId(), draft.id(), "EXPORTED", 0, "", null,
-                ReportDraftStatus.CONFIRMED.name(), null));
+        auditService.recordRequired(new ReportAuditLog(
+                draft.requestId(), draft.id(), "EXPORTED", 0, "", null,
+                ReportDraftStatus.CONFIRMED.name(), null, null,
+                draft.ownerActorId(), actor.actorId(), null, null,
+                null, null, null, null, null, null, null, null));
         return markdown;
     }
 

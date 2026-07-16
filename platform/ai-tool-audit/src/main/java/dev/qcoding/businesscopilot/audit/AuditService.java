@@ -33,6 +33,11 @@ public class AuditService {
         }
     }
 
+    /** Persist a fail-closed audit event; callers rely on the exception for rollback. */
+    public Long recordRequired(AuditEvent event) {
+        return repository.save(event);
+    }
+
     /** Find recent audit logs for the dashboard preview. */
     public List<QueryAuditLog> findRecent(int page, int size) {
         return repository.findRecent(page, size);

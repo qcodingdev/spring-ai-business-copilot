@@ -20,7 +20,7 @@ public class AiCoreAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public AiModelProperties aiModelProperties() {
-        return new AiModelProperties(null, false, 0);
+        return new AiModelProperties(null, null, false, 0);
     }
 
     @Bean

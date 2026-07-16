@@ -20,6 +20,10 @@ import dev.qcoding.businesscopilot.reportcopilot.audit.ReportAuditService;
 import dev.qcoding.businesscopilot.reportcopilot.export.ReportMarkdownExportService;
 import dev.qcoding.businesscopilot.aicore.AiChatService;
 import dev.qcoding.businesscopilot.aicore.PromptTemplateService;
+import dev.qcoding.businesscopilot.commonsecurity.ConfirmationTokenService;
+import dev.qcoding.businesscopilot.commonsecurity.CurrentActorProvider;
+import dev.qcoding.businesscopilot.commonsecurity.ObjectAccessPolicy;
+import dev.qcoding.businesscopilot.reportcopilot.web.ReportCopilotController;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -99,8 +103,10 @@ public class ReportCopilotAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public ReportDraftRepository reportDraftRepository(JdbcTemplate jdbcTemplate) {
-        return new JdbcReportDraftRepository(jdbcTemplate);
+    public ReportDraftRepository reportDraftRepository(JdbcTemplate jdbcTemplate,
+                                                        CurrentActorProvider actorProvider,
+                                                        ConfirmationTokenService tokenService) {
+        return new JdbcReportDraftRepository(jdbcTemplate, actorProvider, tokenService);
     }
 
     @Bean
@@ -120,16 +126,23 @@ public class ReportCopilotAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public ReportDraftConfirmationService reportDraftConfirmationService(ReportDraftRepository draftRepository,
-                                                                         ReportAuditService auditService) {
-        return new ReportDraftConfirmationService(draftRepository, auditService);
+                                                                         ReportAuditService auditService,
+                                                                         CurrentActorProvider actorProvider,
+                                                                         ObjectAccessPolicy accessPolicy,
+                                                                         ConfirmationTokenService tokenService) {
+        return new ReportDraftConfirmationService(
+                draftRepository, auditService, actorProvider, accessPolicy, tokenService);
     }
 
     @Bean
     @ConditionalOnMissingBean
     public ReportMarkdownExportService reportMarkdownExportService(ReportDraftRepository draftRepository,
                                                                    ReportCopilotProperties properties,
-                                                                   ReportAuditService auditService) {
-        return new ReportMarkdownExportService(draftRepository, properties, auditService);
+                                                                   ReportAuditService auditService,
+                                                                   CurrentActorProvider actorProvider,
+                                                                   ObjectAccessPolicy accessPolicy) {
+        return new ReportMarkdownExportService(
+                draftRepository, properties, auditService, actorProvider, accessPolicy);
     }
 
     @Bean
@@ -143,5 +156,17 @@ public class ReportCopilotAutoConfiguration {
                                                            ReportDraftPersistenceService draftPersistenceService) {
         return new ReportGenerationService(preparationService, aiChatService, promptTemplateService,
                 promptContextFactory, outputValidator, outputSanitizer, draftPersistenceService);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(ReportCopilotController.class)
+    public ReportCopilotController reportCopilotController(
+            ReportSourcePreviewService sourcePreviewService,
+            ReportRequestPreparationService requestPreparationService,
+            ReportGenerationService generationService,
+            ReportDraftConfirmationService confirmationService,
+            ReportMarkdownExportService markdownExportService) {
+        return new ReportCopilotController(sourcePreviewService, requestPreparationService,
+                generationService, confirmationService, markdownExportService);
     }
 }

@@ -32,7 +32,8 @@ class ReportDraftPersistenceServiceTest {
         when(preview.sources()).thenReturn(List.of(mock(dev.qcoding.businesscopilot.reportcopilot.source.ReportSource.class)));
         List<String> reasons = List.of("Metric highlight does not exactly match a cited metric source.");
         var draft = new ReportDraft(11L, 21L, null, ReportDraftStatus.NEEDS_REVIEW, reasons.getFirst(),
-                "review-token", Instant.now().plusSeconds(60), Instant.now(), Instant.now());
+                "review-token", "digest", "operator-1", null,
+                Instant.now().plusSeconds(60), Instant.now(), Instant.now());
         when(repository.saveNeedsReview(eq(preview), eq(reasons), eq("test-model"), any())).thenReturn(draft);
 
         var result = service.createNeedsReviewDraft(preview, reasons, "test-model");
@@ -43,7 +44,8 @@ class ReportDraftPersistenceServiceTest {
         verify(auditService).record(audit.capture());
         assertThat(audit.getValue().eventType()).isEqualTo("NEEDS_REVIEW");
         assertThat(audit.getValue().citedSourceIds()).isEmpty();
-        assertThat(audit.getValue().errorMessage()).doesNotContain("Metric highlight");
+        assertThat(audit.getValue().errorMessage()).isNull();
+        assertThat(audit.getValue().violationCodes()).isEqualTo("REPORT_OUTPUT_VALIDATION");
     }
 
     private static ReportCopilotProperties properties() {

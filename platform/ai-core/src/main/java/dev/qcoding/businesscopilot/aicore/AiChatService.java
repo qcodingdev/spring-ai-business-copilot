@@ -5,6 +5,7 @@ import dev.qcoding.businesscopilot.commonweb.api.ErrorCode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.ObjectProvider;
 
@@ -44,6 +45,10 @@ public class AiChatService {
     /** Configured model name, recorded in audit logs. */
     public String modelName() {
         return properties.modelName();
+    }
+
+    public String providerName() {
+        return properties.providerName();
     }
 
     /**
@@ -87,6 +92,71 @@ public class AiChatService {
             throw new BusinessException(ErrorCode.AI_OUTPUT_PARSE_ERROR,
                     "AI model output could not be mapped to the expected schema", ex);
         }
+    }
+
+    /** Structured generation with metadata from the exact same provider response. */
+    public <T> AiInvocationResult<T> generateJsonWithMetadata(String prompt, Class<T> type) {
+        ChatClient chatClient = requireChatClient();
+        long startedAt = System.nanoTime();
+        try {
+            var responseEntity = chatClient.prompt()
+                    .user(prompt)
+                    .call()
+                    .responseEntity(type, spec -> spec.validateSchema());
+            return new AiInvocationResult<>(
+                    responseEntity.entity(),
+                    metadata(responseEntity.response(), startedAt));
+        } catch (BusinessException ex) {
+            throw ex;
+        } catch (RuntimeException ex) {
+            log.error("Chat model structured generation failed", ex);
+            throw new BusinessException(ErrorCode.AI_OUTPUT_PARSE_ERROR,
+                    "AI model output could not be mapped to the expected schema", ex);
+        }
+    }
+
+    /** Text generation with metadata from the exact same provider response. */
+    public AiInvocationResult<String> generateTextWithMetadata(String prompt) {
+        ChatClient chatClient = requireChatClient();
+        long startedAt = System.nanoTime();
+        try {
+            ChatResponse response = chatClient.prompt().user(prompt).call().chatResponse();
+            String content = response != null && response.getResult() != null
+                    ? response.getResult().getOutput().getText() : null;
+            return new AiInvocationResult<>(content, metadata(response, startedAt));
+        } catch (BusinessException ex) {
+            throw ex;
+        } catch (RuntimeException ex) {
+            log.error("Chat model text generation failed", ex);
+            throw new BusinessException(ErrorCode.AI_MODEL_ERROR,
+                    "AI model invocation failed", ex);
+        }
+    }
+
+    private AiInvocationMetadata metadata(ChatResponse response, long startedAt) {
+        long latencyMs = (System.nanoTime() - startedAt) / 1_000_000L;
+        if (response == null) {
+            return new AiInvocationMetadata(
+                    properties.providerName(), properties.modelName(), null,
+                    null, null, null, latencyMs);
+        }
+        var responseMetadata = response.getMetadata();
+        var usage = responseMetadata != null ? responseMetadata.getUsage() : null;
+        var generation = response.getResult();
+        String finishReason = generation != null && generation.getMetadata() != null
+                ? generation.getMetadata().getFinishReason() : null;
+        return new AiInvocationMetadata(
+                properties.providerName(),
+                responseMetadata != null && responseMetadata.getModel() != null
+                        && !responseMetadata.getModel().isBlank()
+                        ? responseMetadata.getModel() : properties.modelName(),
+                responseMetadata != null && responseMetadata.getId() != null
+                        && !responseMetadata.getId().isBlank()
+                        ? responseMetadata.getId() : null,
+                usage != null ? usage.getPromptTokens() : null,
+                usage != null ? usage.getCompletionTokens() : null,
+                finishReason,
+                latencyMs);
     }
 
     private ChatClient requireChatClient() {

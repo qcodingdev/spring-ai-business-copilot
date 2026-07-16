@@ -1,7 +1,11 @@
 package dev.qcoding.businesscopilot.knowledgecopilot.answer;
 
 import dev.qcoding.businesscopilot.aicore.AiChatService;
+import dev.qcoding.businesscopilot.aicore.AiInvocationMetadata;
+import dev.qcoding.businesscopilot.aicore.AiInvocationResult;
 import dev.qcoding.businesscopilot.aicore.PromptTemplateService;
+import dev.qcoding.businesscopilot.aicore.PromptTemplateMetadata;
+import dev.qcoding.businesscopilot.aicore.RenderedPrompt;
 import dev.qcoding.businesscopilot.commonweb.api.BusinessException;
 import dev.qcoding.businesscopilot.commonweb.api.ErrorCode;
 import dev.qcoding.businesscopilot.guardrails.SensitiveTextMasker;
@@ -66,18 +70,24 @@ public class KnowledgeAnswerService {
      * @return a structured answer response
      */
     public KnowledgeAnswerResponse answer(String question, List<RetrievedKnowledgeChunk> retrievedChunks) {
+        return answerWithMetadata(question, retrievedChunks).response();
+    }
+
+    public AnswerInvocation answerWithMetadata(
+            String question, List<RetrievedKnowledgeChunk> retrievedChunks) {
         // 1. 召回为空 → 直接拒答
         if (retrievedChunks == null || retrievedChunks.isEmpty()) {
             log.info("No chunks retrieved — returning NO_EVIDENCE for question: {}", truncate(question));
-            return new KnowledgeAnswerResponse(
-                    KnowledgeAnswerStatus.NO_EVIDENCE, null, List.of(), List.of(), aiChatService.modelName());
+            return result(new KnowledgeAnswerResponse(
+                    KnowledgeAnswerStatus.NO_EVIDENCE, null, List.of(), List.of(),
+                    aiChatService.modelName()), null, null, "NO_RETRIEVED_EVIDENCE");
         }
 
         // 2. 序列化 chunks 为 prompt 上下文
         String contextChunks = formatContextChunks(retrievedChunks);
 
         // 3. 渲染 prompt 模板
-        String prompt = promptTemplateService.render(PROMPT_LOCATION, Map.of(
+        RenderedPrompt prompt = promptTemplateService.renderWithMetadata(PROMPT_LOCATION, "v1", Map.of(
                 "contextChunks", contextChunks,
                 "question", question));
 
@@ -85,32 +95,39 @@ public class KnowledgeAnswerService {
         String modelName = aiChatService.modelName();
         log.debug("Invoking LLM model={} for question: {}", modelName, truncate(question));
 
+        AiInvocationMetadata aiMetadata;
         LlmAnswerOutput llmOutput;
         try {
-            llmOutput = aiChatService.generateJson(prompt, LlmAnswerOutput.class);
+            AiInvocationResult<LlmAnswerOutput> invocation =
+                    aiChatService.generateJsonWithMetadata(prompt.content(), LlmAnswerOutput.class);
+            llmOutput = invocation.content();
+            aiMetadata = invocation.metadata();
+            if (aiMetadata != null && aiMetadata.modelName() != null) {
+                modelName = aiMetadata.modelName();
+            }
         } catch (BusinessException ex) {
             // JSON 解析失败 → 返回 REJECTED
             log.error("Failed to parse LLM output as JSON", ex);
-            return new KnowledgeAnswerResponse(
+            return result(new KnowledgeAnswerResponse(
                     KnowledgeAnswerStatus.REJECTED, null, List.of(),
-                    List.of("AI model output could not be parsed: " + ex.getMessage()),
-                    modelName);
+                    List.of("AI model output could not be parsed"),
+                    modelName), prompt.metadata(), null, ex.errorCode().code());
         }
 
         if (llmOutput == null) {
-            return new KnowledgeAnswerResponse(
+            return result(new KnowledgeAnswerResponse(
                     KnowledgeAnswerStatus.REJECTED, null, List.of(),
                     List.of("AI model returned empty output"),
-                    modelName);
+                    modelName), prompt.metadata(), aiMetadata, "EMPTY_MODEL_OUTPUT");
         }
 
         // 5. 处理 NO_EVIDENCE 状态
         if (!"ANSWERED".equals(llmOutput.status())) {
             log.info("LLM returned status={} for question: {}", llmOutput.status(), truncate(question));
-            return new KnowledgeAnswerResponse(
+            return result(new KnowledgeAnswerResponse(
                     KnowledgeAnswerStatus.NO_EVIDENCE, null, List.of(),
                     llmOutput.warnings() != null ? llmOutput.warnings() : List.of(),
-                    modelName);
+                    modelName), prompt.metadata(), aiMetadata, "MODEL_NO_EVIDENCE");
         }
 
         // 6. 转换 citations
@@ -126,8 +143,9 @@ public class KnowledgeAnswerService {
             List<String> warnings = new ArrayList<>();
             warnings.add("Citation guardrail violation: answer rejected");
             warnings.addAll(validation.violations());
-            return new KnowledgeAnswerResponse(
-                    KnowledgeAnswerStatus.REJECTED, null, List.of(), warnings, modelName);
+            return result(new KnowledgeAnswerResponse(
+                    KnowledgeAnswerStatus.REJECTED, null, List.of(), warnings, modelName),
+                    prompt.metadata(), aiMetadata, "CITATION_VALIDATION_FAILED");
         }
 
         // 8. 敏感内容脱敏检查
@@ -143,16 +161,24 @@ public class KnowledgeAnswerService {
         // 9. ANSWERED 状态必须至少有一个 citation（双重检查）
         if (citations.isEmpty()) {
             log.warn("ANSWERED status but no citations after validation — rejecting");
-            return new KnowledgeAnswerResponse(
+            return result(new KnowledgeAnswerResponse(
                     KnowledgeAnswerStatus.REJECTED, null, List.of(),
                     List.of("ANSWERED status requires at least one citation, but none survived validation"),
-                    modelName);
+                    modelName), prompt.metadata(), aiMetadata, "CITATION_REQUIRED");
         }
 
         log.info("Answer generated successfully with {} citations for question: {}",
                 citations.size(), truncate(question));
-        return new KnowledgeAnswerResponse(
-                KnowledgeAnswerStatus.ANSWERED, answer, citations, warnings, modelName);
+        return result(new KnowledgeAnswerResponse(
+                KnowledgeAnswerStatus.ANSWERED, answer, citations, warnings, modelName),
+                prompt.metadata(), aiMetadata, null);
+    }
+
+    private AnswerInvocation result(KnowledgeAnswerResponse response,
+                                    PromptTemplateMetadata promptMetadata,
+                                    AiInvocationMetadata aiMetadata,
+                                    String violationCodes) {
+        return new AnswerInvocation(response, promptMetadata, aiMetadata, violationCodes);
     }
 
     /**
@@ -186,5 +212,12 @@ public class KnowledgeAnswerService {
     private static String truncate(String text) {
         if (text == null) return "null";
         return text.length() > 100 ? text.substring(0, 100) + "..." : text;
+    }
+
+    public record AnswerInvocation(
+            KnowledgeAnswerResponse response,
+            PromptTemplateMetadata promptMetadata,
+            AiInvocationMetadata aiMetadata,
+            String violationCodes) {
     }
 }

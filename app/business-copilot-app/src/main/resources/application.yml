@@ -37,6 +37,11 @@ management:
 
 # ── Data Copilot 配置 ──────────────────────────────────────────
 business-copilot:
+  audit:
+    retention:
+      anonymize-after: ${BUSINESS_COPILOT_AUDIT_ANONYMIZE_AFTER:7d}
+      delete-after: ${BUSINESS_COPILOT_AUDIT_DELETE_AFTER:30d}
+      cleanup-cron: ${BUSINESS_COPILOT_AUDIT_CLEANUP_CRON:0 15 3 * * *}
   security:
     admin:
       username: ${BUSINESS_COPILOT_ADMIN_USERNAME:admin}
@@ -53,8 +58,10 @@ business-copilot:
       url: ${BUSINESS_QUERY_DATASOURCE_URL:}
       username: ${BUSINESS_QUERY_DATASOURCE_USERNAME:}
       password: ${BUSINESS_QUERY_DATASOURCE_PASSWORD:}
-      driver-class-name: ${BUSINESS_QUERY_DATASOURCE_DRIVER:org.postgresql.Driver}
+      dialect: ${BUSINESS_QUERY_DATASOURCE_DIALECT:auto}
+      driver-class-name: ${BUSINESS_QUERY_DATASOURCE_DRIVER:}
       maximum-pool-size: ${BUSINESS_QUERY_DATASOURCE_MAX_POOL_SIZE:5}
+      connection-timeout-ms: ${BUSINESS_QUERY_DATASOURCE_CONNECTION_TIMEOUT_MS:5000}
     schema:
       queryable-tables:
         - public.customers
@@ -74,6 +81,40 @@ business-copilot:
       max-columns: 50
       max-result-bytes: 1048576
   guardrails:
+    queryable-columns:
+      - public.customers.id
+      - public.customers.name
+      - public.customers.email
+      - public.customers.phone
+      - public.customers.created_at
+      - public.products.id
+      - public.products.name
+      - public.products.category
+      - public.products.price
+      - public.products.stock
+      - public.products.created_at
+      - public.orders.id
+      - public.orders.customer_id
+      - public.orders.status
+      - public.orders.total_amount
+      - public.orders.created_at
+      - public.order_items.id
+      - public.order_items.order_id
+      - public.order_items.product_id
+      - public.order_items.quantity
+      - public.order_items.unit_price
+      - public.order_items.subtotal
+      - public.refunds.id
+      - public.refunds.order_id
+      - public.refunds.amount
+      - public.refunds.status
+      - public.refunds.created_at
+      - public.marketing_events.id
+      - public.marketing_events.name
+      - public.marketing_events.channel
+      - public.marketing_events.start_date
+      - public.marketing_events.end_date
+      - public.marketing_events.budget
     default-max-rows: 100
     require-limit: true
     allowed-aggregate-functions:
@@ -84,6 +125,7 @@ business-copilot:
       - max
   ai-core:
     model-name: ${SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL:deepseek-v4-flash}
+    provider-name: ${BUSINESS_COPILOT_AI_PROVIDER:openai-compatible}
   # ── Knowledge Copilot 配置 ─────────────────────────────────────
   # embedding-dimension 必须与 V4 迁移中 knowledge_chunk_embeddings.embedding 列维度
   # 以及实际 embedding 模型输出维度一致，否则向量写入或检索会失败。

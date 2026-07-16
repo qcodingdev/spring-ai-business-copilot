@@ -18,26 +18,20 @@ public class JdbcSchemaMetadataRepository implements SchemaMetadataRepository {
             ORDER BY table_schema, table_name
             """;
 
-    private static final String FIND_COLUMNS_SQL = """
-            SELECT column_name, data_type, is_nullable,
-                   col_description(t.oid, a.attnum) as description
-            FROM information_schema.columns c
-            LEFT JOIN pg_namespace n ON n.nspname = c.table_schema
-            LEFT JOIN pg_class t ON t.relname = c.table_name AND t.relnamespace = n.oid
-            LEFT JOIN pg_attribute a ON a.attrelid = t.oid
-                AND a.attname = c.column_name
-                AND a.attnum > 0
-                AND NOT a.attisdropped
-            WHERE c.table_schema = ? AND c.table_name = ?
-            ORDER BY c.ordinal_position
-            """;
-
     private final JdbcTemplate jdbcTemplate;
     private final DataCopilotSchemaProperties properties;
+    private final BusinessDatabaseDialect dialect;
 
     public JdbcSchemaMetadataRepository(JdbcTemplate jdbcTemplate, DataCopilotSchemaProperties properties) {
+        this(jdbcTemplate, properties, BusinessDatabaseDialect.POSTGRESQL);
+    }
+
+    public JdbcSchemaMetadataRepository(JdbcTemplate jdbcTemplate,
+                                        DataCopilotSchemaProperties properties,
+                                        BusinessDatabaseDialect dialect) {
         this.jdbcTemplate = jdbcTemplate;
         this.properties = properties;
+        this.dialect = dialect;
     }
 
     @Override
@@ -56,13 +50,12 @@ public class JdbcSchemaMetadataRepository implements SchemaMetadataRepository {
     @Override
     public List<ColumnSchema> findColumns(String tableName) {
         QualifiedTableName qualifiedTable = QualifiedTableName.parse(tableName);
-        return jdbcTemplate.query(FIND_COLUMNS_SQL, (rs, rowNum) -> {
+        return jdbcTemplate.query(dialect.columnsSql(), (rs, rowNum) -> {
             String colName = rs.getString("column_name");
             String colType = rs.getString("data_type");
             boolean nullable = "YES".equalsIgnoreCase(rs.getString("is_nullable"));
-            // pg_catalog.col_description may return null; fall back to configured description
-            String pgDesc = rs.getString("description");
-            String description = resolveDescription(qualifiedTable, colName, pgDesc);
+            String databaseDescription = rs.getString("description");
+            String description = resolveDescription(qualifiedTable, colName, databaseDescription);
             String maskingStrategy = resolveConfiguredColumnValue(
                     properties.sensitiveColumns(), qualifiedTable, colName);
             boolean sensitive = maskingStrategy != null;

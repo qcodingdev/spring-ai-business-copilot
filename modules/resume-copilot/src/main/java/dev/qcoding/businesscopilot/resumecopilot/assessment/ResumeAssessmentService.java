@@ -1,7 +1,15 @@
 package dev.qcoding.businesscopilot.resumecopilot.assessment;
 
 import dev.qcoding.businesscopilot.aicore.AiChatService;
+import dev.qcoding.businesscopilot.aicore.AiInvocationMetadata;
+import dev.qcoding.businesscopilot.aicore.AiInvocationResult;
 import dev.qcoding.businesscopilot.aicore.PromptTemplateService;
+import dev.qcoding.businesscopilot.aicore.RenderedPrompt;
+import dev.qcoding.businesscopilot.commonsecurity.ConfirmationTokenService;
+import dev.qcoding.businesscopilot.commonsecurity.CurrentActor;
+import dev.qcoding.businesscopilot.commonsecurity.CurrentActorProvider;
+import dev.qcoding.businesscopilot.commonsecurity.ObjectAccessPolicy;
+import dev.qcoding.businesscopilot.commonsecurity.ObjectAction;
 import dev.qcoding.businesscopilot.commonweb.api.BusinessException;
 import dev.qcoding.businesscopilot.commonweb.api.ErrorCode;
 import dev.qcoding.businesscopilot.resumecopilot.ResumeCopilotProperties;
@@ -18,11 +26,12 @@ import tools.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.stream.Collectors;
+import org.springframework.transaction.annotation.Transactional;
 
 public class ResumeAssessmentService {
     private static final String PROMPT = "resume-copilot/resume-assessment.st";
+    private static final String POLICY_VERSION = "resume-evidence-guardrails-v1";
     private final ResumePrivacySanitizer sanitizer;
     private final ResumeEvidenceService evidenceService;
     private final JobCriteriaService criteriaService;
@@ -31,12 +40,18 @@ public class ResumeAssessmentService {
     private final AiChatService ai;
     private final PromptTemplateService prompts;
     private final ResumeCopilotProperties properties;
+    private final CurrentActorProvider actorProvider;
+    private final ObjectAccessPolicy accessPolicy;
+    private final ConfirmationTokenService tokenService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public ResumeAssessmentService(ResumePrivacySanitizer sanitizer, ResumeEvidenceService evidenceService,
                                    JobCriteriaService criteriaService, ResumeAssessmentGuardrail guardrail,
                                    ResumeRepository repository, AiChatService ai, PromptTemplateService prompts,
-                                   ResumeCopilotProperties properties) {
+                                   ResumeCopilotProperties properties,
+                                   CurrentActorProvider actorProvider,
+                                   ObjectAccessPolicy accessPolicy,
+                                   ConfirmationTokenService tokenService) {
         this.sanitizer = sanitizer;
         this.evidenceService = evidenceService;
         this.criteriaService = criteriaService;
@@ -45,12 +60,20 @@ public class ResumeAssessmentService {
         this.ai = ai;
         this.prompts = prompts;
         this.properties = properties;
+        this.actorProvider = actorProvider;
+        this.accessPolicy = accessPolicy;
+        this.tokenService = tokenService;
     }
 
     public AssessmentResponse assess(long jobId, String resumeText) {
         ResumeJobEntity job = repository.findJob(jobId);
-        if (job == null || !ResumeModels.Status.CRITERIA_CONFIRMED.name().equals(job.getStatus())) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Job criteria must be confirmed before resume assessment.");
+        CurrentActor actor = actorProvider.currentActor();
+        if (job == null || !accessPolicy.allowed(
+                actor, ObjectAction.EXECUTE, job.getOwnerActorId(), null, false)) {
+            throw new BusinessException(ErrorCode.NOT_FOUND);
+        }
+        if (!ResumeModels.Status.CRITERIA_CONFIRMED.name().equals(job.getStatus())) {
+            throw new BusinessException(ErrorCode.STATE_CONFLICT);
         }
         String sanitizedResume = sanitizer.sanitizeResume(resumeText);
         List<ResumeModels.ResumeEvidence> evidence = evidenceService.extract(sanitizedResume);
@@ -60,64 +83,118 @@ public class ResumeAssessmentService {
                 "SANITIZED", null);
         List<ResumeModels.JobCriterion> criteria = criteriaService.criteria(job);
         String modelName = ai.modelName();
+        long startMs = System.currentTimeMillis();
+        RenderedPrompt prompt = prompts.renderWithMetadata(PROMPT, "v1", Map.of(
+                "jobTitle", job.getTitle(),
+                "criteria", formatCriteria(criteria), "evidence", formatEvidence(evidence)));
+        AiInvocationMetadata aiMetadata = null;
         try {
-            String prompt = prompts.render(PROMPT, Map.of("jobTitle", job.getTitle(),
-                    "criteria", formatCriteria(criteria), "evidence", formatEvidence(evidence)));
-            ResumeModels.AssessmentContent output = ai.generateJson(prompt, ResumeModels.AssessmentContent.class);
+            AiInvocationResult<ResumeModels.AssessmentContent> invocation =
+                    ai.generateJsonWithMetadata(prompt.content(), ResumeModels.AssessmentContent.class);
+            aiMetadata = invocation.metadata();
+            if (aiMetadata != null && aiMetadata.modelName() != null) {
+                modelName = aiMetadata.modelName();
+            }
+            ResumeModels.AssessmentContent output = invocation.content();
             var validation = guardrail.validate(output, criteria, evidence);
             ResumeModels.Status status = validation.valid() ? ResumeModels.Status.DRAFTED : ResumeModels.Status.NEEDS_REVIEW;
             ResumeModels.AssessmentContent safeContent = validation.valid() ? guardrail.normalizeNotFound(output) : null;
             Instant now = Instant.now();
+            ConfirmationTokenService.IssuedToken token = tokenService.issue();
             ResumeAssessmentEntity entity = new ResumeAssessmentEntity();
             entity.setJobId(jobId);
             entity.setSubmissionId(submissionId);
             entity.setContentJson(safeContent == null ? "{}" : write(safeContent));
             entity.setStatus(status.name());
             entity.setReviewReasons(validation.valid() ? null : String.join("\n", validation.reasons()));
-            entity.setReviewToken(UUID.randomUUID().toString());
+            entity.setReviewTokenDigest(token.digest());
+            entity.setOwnerActorId(actor.actorId());
+            entity.setReviewQueue(true);
             entity.setExpiresAt(now.plus(properties.reviewTokenTtl()));
             entity.setCreatedAt(now);
             entity.setUpdatedAt(now);
             repository.insertAssessment(entity);
-            repository.audit(status == ResumeModels.Status.DRAFTED ? "ASSESSMENT_DRAFTED" : "NEEDS_REVIEW",
-                    jobId, submissionId, entity.getId(), criteria.size(), evidence.size(), modelName, status.name(),
-                    validation.valid() ? null : "Assessment failed deterministic evidence or hiring guardrails.");
+            repository.audit(
+                    status == ResumeModels.Status.DRAFTED ? "ASSESSMENT_DRAFTED" : "NEEDS_REVIEW",
+                    jobId, submissionId, entity.getId(), criteria.size(), evidence.size(),
+                    modelName, status.name(), null, prompt.metadata(), aiMetadata,
+                    POLICY_VERSION, validation.valid() ? null : "ASSESSMENT_EVIDENCE_VALIDATION",
+                    System.currentTimeMillis() - startMs, actor.actorId(), null);
             return new AssessmentResponse(entity.getId(), jobId, submissionId, status, safeContent,
-                    validation.reasons(), entity.getReviewToken(), entity.getExpiresAt().toString(), evidence);
+                    validation.reasons(), token.rawToken(), entity.getExpiresAt().toString(), evidence);
         } catch (RuntimeException ex) {
-            repository.audit("FAILED", jobId, submissionId, null, criteria.size(), evidence.size(), modelName,
-                    ResumeModels.Status.FAILED.name(), "Resume assessment generation failed.");
+            repository.audit("FAILED", jobId, submissionId, null,
+                    criteria.size(), evidence.size(), modelName,
+                    ResumeModels.Status.FAILED.name(), null, prompt.metadata(), aiMetadata,
+                    POLICY_VERSION, ErrorCode.AI_MODEL_ERROR.code(),
+                    System.currentTimeMillis() - startMs, actor.actorId(), null);
             throw ex;
         }
     }
 
+    @Transactional
     public StatusResponse review(long assessmentId, String token) {
         ResumeAssessmentEntity assessment = requireAssessment(assessmentId);
+        CurrentActor actor = actorProvider.currentActor();
+        requireAccess(assessment, actor, ObjectAction.REVIEW);
+        validateTokenAndExpiry(assessment, token);
         if (!ResumeModels.Status.DRAFTED.name().equals(assessment.getStatus())
-                || !repository.transitionAssessment(assessmentId, token, ResumeModels.Status.DRAFTED, ResumeModels.Status.REVIEWED)) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Only an unexpired DRAFTED assessment can be marked REVIEWED.");
+                || !repository.transitionAssessment(
+                assessmentId, ResumeModels.Status.DRAFTED, ResumeModels.Status.REVIEWED,
+                actor.actorId(), Instant.now())) {
+            throw new BusinessException(ErrorCode.STATE_CONFLICT);
         }
-        repository.audit("REVIEWED", assessment.getJobId(), assessment.getSubmissionId(), assessmentId, 0, 0,
-                null, ResumeModels.Status.REVIEWED.name(), null);
+        repository.auditRequired("REVIEWED", assessment.getJobId(), assessment.getSubmissionId(),
+                assessmentId, 0, 0, null, ResumeModels.Status.REVIEWED.name(), null,
+                assessment.getOwnerActorId(), actor.actorId());
         return new StatusResponse(assessmentId, ResumeModels.Status.REVIEWED);
     }
 
+    @Transactional
     public StatusResponse cancel(long assessmentId, String token) {
         ResumeAssessmentEntity assessment = requireAssessment(assessmentId);
+        CurrentActor actor = actorProvider.currentActor();
+        boolean allowed = accessPolicy.allowed(actor, ObjectAction.CANCEL,
+                assessment.getOwnerActorId(), assessment.getReviewerActorId(), assessment.isReviewQueue())
+                || accessPolicy.allowed(actor, ObjectAction.REVIEW,
+                assessment.getOwnerActorId(), assessment.getReviewerActorId(), assessment.isReviewQueue());
+        if (!allowed) {
+            throw new BusinessException(ErrorCode.NOT_FOUND);
+        }
+        validateTokenAndExpiry(assessment, token);
         ResumeModels.Status current = ResumeModels.Status.valueOf(assessment.getStatus());
         if ((current != ResumeModels.Status.DRAFTED && current != ResumeModels.Status.NEEDS_REVIEW)
-                || !repository.transitionAssessment(assessmentId, token, current, ResumeModels.Status.CANCELED)) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Only DRAFTED or NEEDS_REVIEW assessments can be canceled.");
+                || !repository.transitionAssessment(
+                assessmentId, current, ResumeModels.Status.CANCELED,
+                actor.actorId(), Instant.now())) {
+            throw new BusinessException(ErrorCode.STATE_CONFLICT);
         }
-        repository.audit("CANCELED", assessment.getJobId(), assessment.getSubmissionId(), assessmentId, 0, 0,
-                null, ResumeModels.Status.CANCELED.name(), null);
+        repository.auditRequired("CANCELED", assessment.getJobId(), assessment.getSubmissionId(),
+                assessmentId, 0, 0, null, ResumeModels.Status.CANCELED.name(), null,
+                assessment.getOwnerActorId(), actor.actorId());
         return new StatusResponse(assessmentId, ResumeModels.Status.CANCELED);
     }
 
     private ResumeAssessmentEntity requireAssessment(long id) {
         ResumeAssessmentEntity entity = repository.findAssessment(id);
-        if (entity == null) throw new BusinessException(ErrorCode.NOT_FOUND, "Resume assessment not found.");
+        if (entity == null) throw new BusinessException(ErrorCode.NOT_FOUND);
         return entity;
+    }
+
+    private void requireAccess(ResumeAssessmentEntity assessment, CurrentActor actor, ObjectAction action) {
+        if (!accessPolicy.allowed(actor, action, assessment.getOwnerActorId(),
+                assessment.getReviewerActorId(), assessment.isReviewQueue())) {
+            throw new BusinessException(ErrorCode.NOT_FOUND);
+        }
+    }
+
+    private void validateTokenAndExpiry(ResumeAssessmentEntity assessment, String rawToken) {
+        if (!tokenService.matches(rawToken, assessment.getReviewTokenDigest())) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR);
+        }
+        if (assessment.getExpiresAt() == null || !assessment.getExpiresAt().isAfter(Instant.now())) {
+            throw new BusinessException(ErrorCode.STATE_CONFLICT);
+        }
     }
 
     private String formatCriteria(List<ResumeModels.JobCriterion> criteria) {

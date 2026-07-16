@@ -39,5 +39,29 @@ public record QueryAuditLog(
         String errorMessage,
         String modelName,
         Long latencyMs,
+        String creatorActorId,
+        String actionActorId,
+        String providerName,
+        String providerRequestId,
+        String promptName,
+        String promptVersion,
+        String promptHash,
+        String policyVersion,
+        String violationCodes,
+        Integer inputTokens,
+        Integer outputTokens,
+        String finishReason,
+        java.time.Instant anonymizedAt,
         java.time.Instant createdAt) {
+
+    public QueryAuditLog(Long id, String requestId, String httpRequestId, String actorId,
+                         String userQuestion, String generatedSql, String finalSql,
+                         String validationStatus, String validationErrors, boolean confirmed,
+                         String executionStatus, Integer rowCount, String errorMessage,
+                         String modelName, Long latencyMs, java.time.Instant createdAt) {
+        this(id, requestId, httpRequestId, actorId, userQuestion, generatedSql, finalSql,
+                validationStatus, validationErrors, confirmed, executionStatus, rowCount,
+                errorMessage, modelName, latencyMs, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, createdAt);
+    }
 }

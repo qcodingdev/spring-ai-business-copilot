@@ -7,7 +7,6 @@ import net.sf.jsqlparser.util.TablesNamesFinder;
 
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -49,7 +48,7 @@ public class SchemaWhitelistValidator implements SqlValidator {
         }
         for (String t : whitelist) {
             if (t != null && !t.isBlank()) {
-                normalized.add(canonicalizeQualifiedName(t.trim()));
+                normalized.add(SqlIdentifierCanonicalizer.qualifiedName(t.trim()));
             }
         }
         return normalized;
@@ -70,35 +69,9 @@ public class SchemaWhitelistValidator implements SqlValidator {
                 if (!canonical.isEmpty()) {
                     canonical.append('.');
                 }
-                canonical.append(canonicalizeIdentifier(parts.get(i)));
+                canonical.append(SqlIdentifierCanonicalizer.identifier(parts.get(i)));
             }
             return canonical.toString();
         }
-    }
-
-    private static String canonicalizeQualifiedName(String qualifiedName) {
-        String[] parts = qualifiedName.split("\\.");
-        StringBuilder canonical = new StringBuilder();
-        for (String part : parts) {
-            if (!canonical.isEmpty()) {
-                canonical.append('.');
-            }
-            canonical.append(canonicalizeIdentifier(part.trim()));
-        }
-        return canonical.toString();
-    }
-
-    private static String canonicalizeIdentifier(String identifier) {
-        if (identifier.length() >= 2
-                && identifier.startsWith("\"")
-                && identifier.endsWith("\"")) {
-            String exact = identifier.substring(1, identifier.length() - 1)
-                    .replace("\"\"", "\"");
-            if (exact.equals(exact.toLowerCase(Locale.ROOT))) {
-                return exact;
-            }
-            return '"' + exact.replace("\"", "\"\"") + '"';
-        }
-        return identifier.toLowerCase(Locale.ROOT);
     }
 }

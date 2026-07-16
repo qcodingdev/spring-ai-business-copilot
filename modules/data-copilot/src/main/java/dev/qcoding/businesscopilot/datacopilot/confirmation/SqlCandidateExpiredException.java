@@ -10,8 +10,7 @@ import dev.qcoding.businesscopilot.commonweb.api.ErrorCode;
  */
 public class SqlCandidateExpiredException extends BusinessException {
 
-    public SqlCandidateExpiredException(String candidateId) {
-        super(ErrorCode.SQL_CANDIDATE_NOT_EXECUTABLE,
-                "SQL candidate expired: " + candidateId);
+    public SqlCandidateExpiredException() {
+        super(ErrorCode.STATE_CONFLICT);
     }
 }

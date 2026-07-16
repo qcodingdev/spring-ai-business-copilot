@@ -37,8 +37,21 @@ public class GlobalExceptionHandler {
                 ex.errorCode().code(), ex.getMessage());
 
         HttpStatus status = mapToHttpStatus(ex.errorCode());
-        ApiResponse<Void> body = ApiResponse.fail(ex.errorCode(), ex.getMessage());
+        String clientMessage = exposesBusinessMessage(ex.errorCode())
+                ? ex.getMessage()
+                : ex.errorCode().defaultMessage();
+        ApiResponse<Void> body = ApiResponse.fail(ex.errorCode(), clientMessage);
         return ResponseEntity.status(status).body(body);
+    }
+
+    private boolean exposesBusinessMessage(ErrorCode errorCode) {
+        return switch (errorCode) {
+            case BUSINESS_ERROR, VALIDATION_ERROR, DOCUMENT_EMPTY, DOCUMENT_TOO_LARGE,
+                    DOCUMENT_FORMAT_UNSUPPORTED, DOCUMENT_DUPLICATE -> true;
+            case NOT_FOUND, STATE_CONFLICT, AI_MODEL_ERROR, AI_OUTPUT_PARSE_ERROR,
+                    SQL_GUARDRAIL_VIOLATION, SQL_CANDIDATE_NOT_EXECUTABLE,
+                    QUERY_EXECUTION_ERROR, EMBEDDING_DIMENSION_MISMATCH, INTERNAL_ERROR -> false;
+        };
     }
 
     /**
@@ -75,6 +88,7 @@ public class GlobalExceptionHandler {
         return switch (errorCode) {
             case VALIDATION_ERROR -> HttpStatus.BAD_REQUEST;
             case NOT_FOUND -> HttpStatus.NOT_FOUND;
+            case STATE_CONFLICT -> HttpStatus.CONFLICT;
             case BUSINESS_ERROR -> HttpStatus.BAD_REQUEST;
             case SQL_GUARDRAIL_VIOLATION -> HttpStatus.BAD_REQUEST;
             case SQL_CANDIDATE_NOT_EXECUTABLE -> HttpStatus.BAD_REQUEST;

@@ -28,6 +28,7 @@ public record SupportTicket(
         String sentiment,
         String urgency,
         String status,
+        String ownerActorId,
         Instant createdAt,
         Instant updatedAt) {
 }

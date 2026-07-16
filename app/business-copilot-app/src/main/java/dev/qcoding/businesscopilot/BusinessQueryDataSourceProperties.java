@@ -10,8 +10,10 @@ public class BusinessQueryDataSourceProperties {
     private String url;
     private String username;
     private String password;
-    private String driverClassName = "org.postgresql.Driver";
+    private String dialect = "auto";
+    private String driverClassName;
     private int maximumPoolSize = 5;
+    private long connectionTimeoutMs = 5000;
 
     public boolean isEnabled() {
         return enabled;
@@ -53,11 +55,27 @@ public class BusinessQueryDataSourceProperties {
         this.driverClassName = driverClassName;
     }
 
+    public String getDialect() {
+        return dialect;
+    }
+
+    public void setDialect(String dialect) {
+        this.dialect = dialect;
+    }
+
     public int getMaximumPoolSize() {
         return maximumPoolSize;
     }
 
     public void setMaximumPoolSize(int maximumPoolSize) {
         this.maximumPoolSize = maximumPoolSize;
+    }
+
+    public long getConnectionTimeoutMs() {
+        return connectionTimeoutMs;
+    }
+
+    public void setConnectionTimeoutMs(long connectionTimeoutMs) {
+        this.connectionTimeoutMs = connectionTimeoutMs;
     }
 }

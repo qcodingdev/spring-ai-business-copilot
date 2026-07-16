@@ -43,6 +43,7 @@ public class GuardrailsAutoConfiguration {
                 new ReadOnlyStatementValidator(),
                 new ForbiddenKeywordValidator(),
                 new SchemaWhitelistValidator(properties.queryableTables()),
+                new ColumnWhitelistValidator(properties.queryableColumns()),
                 new FunctionAllowlistValidator(properties.allowedAggregateFunctions()),
                 new SensitiveFieldValidator(sensitiveFieldPolicy),
                 new LimitRequiredValidator(

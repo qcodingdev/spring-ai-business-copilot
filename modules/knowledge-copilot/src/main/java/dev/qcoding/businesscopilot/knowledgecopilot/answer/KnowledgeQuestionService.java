@@ -48,6 +48,10 @@ public class KnowledgeQuestionService {
      * @return structured answer response with status, answer, citations, and warnings
      */
     public KnowledgeAnswerResponse ask(@Valid KnowledgeAnswerRequest request) {
+        return askWithAudit(request).response();
+    }
+
+    public QuestionInvocation askWithAudit(@Valid KnowledgeAnswerRequest request) {
         String question = request.question().trim();
         log.info("Knowledge Q&A: question='{}'", truncate(question));
 
@@ -57,7 +61,9 @@ public class KnowledgeQuestionService {
         List<RetrievedKnowledgeChunk> retrievedChunks = retrievalService.retrieve(question);
 
         // 2. 答案生成（含 citation 校验和脱敏）
-        KnowledgeAnswerResponse response = answerService.answer(question, retrievedChunks);
+        KnowledgeAnswerService.AnswerInvocation answerInvocation =
+                answerService.answerWithMetadata(question, retrievedChunks);
+        KnowledgeAnswerResponse response = answerInvocation.response();
 
         long latencyMs = System.currentTimeMillis() - startTime;
         log.info("Knowledge Q&A completed: status={}, citations={}, latencyMs={}",
@@ -65,11 +71,31 @@ public class KnowledgeQuestionService {
                 response.citations() != null ? response.citations().size() : 0,
                 latencyMs);
 
-        return response;
+        String retrievedChunkIds = retrievedChunks.stream()
+                .map(item -> String.valueOf(item.chunk().id()))
+                .collect(java.util.stream.Collectors.joining(","));
+        return new QuestionInvocation(
+                response,
+                retrievedChunkIds.isBlank() ? null : retrievedChunkIds,
+                retrievalService.embeddingModelName(),
+                latencyMs,
+                answerInvocation.promptMetadata(),
+                answerInvocation.aiMetadata(),
+                answerInvocation.violationCodes());
     }
 
     private static String truncate(String text) {
         if (text == null) return "null";
         return text.length() > 100 ? text.substring(0, 100) + "..." : text;
+    }
+
+    public record QuestionInvocation(
+            KnowledgeAnswerResponse response,
+            String retrievedChunkIds,
+            String embeddingModel,
+            Long latencyMs,
+            dev.qcoding.businesscopilot.aicore.PromptTemplateMetadata promptMetadata,
+            dev.qcoding.businesscopilot.aicore.AiInvocationMetadata aiMetadata,
+            String violationCodes) {
     }
 }

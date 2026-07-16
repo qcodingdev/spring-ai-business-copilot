@@ -3,6 +3,7 @@ package dev.qcoding.businesscopilot.supportcopilot;
 import dev.qcoding.businesscopilot.aicore.AiChatService;
 import dev.qcoding.businesscopilot.aicore.PromptTemplateService;
 import dev.qcoding.businesscopilot.guardrails.SensitiveTextMasker;
+import dev.qcoding.businesscopilot.commonsecurity.CommonSecurityAutoConfiguration;
 import dev.qcoding.businesscopilot.supportcopilot.knowledge.FallbackSupportKnowledgeRetriever;
 import dev.qcoding.businesscopilot.supportcopilot.knowledge.SupportKnowledgeRetriever;
 import dev.qcoding.businesscopilot.supportcopilot.ticket.TicketAnalysisService;
@@ -17,7 +18,9 @@ import static org.mockito.Mockito.mock;
 class SupportCopilotAutoConfigurationTest {
 
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
-            .withConfiguration(AutoConfigurations.of(SupportCopilotAutoConfiguration.class))
+            .withConfiguration(AutoConfigurations.of(
+                    CommonSecurityAutoConfiguration.class,
+                    SupportCopilotAutoConfiguration.class))
             .withBean(JdbcTemplate.class, () -> mock(JdbcTemplate.class))
             .withBean(AiChatService.class, () -> mock(AiChatService.class))
             .withBean(PromptTemplateService.class, PromptTemplateService::new)

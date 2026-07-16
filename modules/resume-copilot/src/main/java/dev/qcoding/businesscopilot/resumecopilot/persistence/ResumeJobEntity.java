@@ -1,20 +1,16 @@
 package dev.qcoding.businesscopilot.resumecopilot.persistence;
 
-import com.baomidou.mybatisplus.annotation.IdType;
-import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableName;
-
 import java.time.Instant;
 
-@TableName("resume_jobs")
 public class ResumeJobEntity {
-    @TableId(type = IdType.AUTO)
     private Long id;
     private String title;
     private String sanitizedJd;
     private String criteriaJson;
     private String status;
-    private String criteriaToken;
+    private String criteriaTokenDigest;
+    private String ownerActorId;
+    private String actionActorId;
     private Instant expiresAt;
     private Instant createdAt;
     private Instant updatedAt;
@@ -29,8 +25,12 @@ public class ResumeJobEntity {
     public void setCriteriaJson(String criteriaJson) { this.criteriaJson = criteriaJson; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
-    public String getCriteriaToken() { return criteriaToken; }
-    public void setCriteriaToken(String criteriaToken) { this.criteriaToken = criteriaToken; }
+    public String getCriteriaTokenDigest() { return criteriaTokenDigest; }
+    public void setCriteriaTokenDigest(String criteriaTokenDigest) { this.criteriaTokenDigest = criteriaTokenDigest; }
+    public String getOwnerActorId() { return ownerActorId; }
+    public void setOwnerActorId(String ownerActorId) { this.ownerActorId = ownerActorId; }
+    public String getActionActorId() { return actionActorId; }
+    public void setActionActorId(String actionActorId) { this.actionActorId = actionActorId; }
     public Instant getExpiresAt() { return expiresAt; }
     public void setExpiresAt(Instant expiresAt) { this.expiresAt = expiresAt; }
     public Instant getCreatedAt() { return createdAt; }
