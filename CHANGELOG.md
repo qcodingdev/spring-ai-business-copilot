@@ -33,6 +33,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Made Support Copilot confirm/cancel tokens expiry-aware, atomic, and single-use.
 - Preserved Knowledge Copilot uploads when embeddings are unavailable, kept unindexed documents disabled, and added a reindex recovery flow.
 - Kept the platform datasource and JDBC template as the default candidates when the optional Data Copilot query datasource is enabled.
+- Made the Maven launcher prefer the optional project-local JDK while accepting a CI-provided Java 21 `JAVA_HOME`.
 
 ### Security
 
