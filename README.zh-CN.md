@@ -5,18 +5,18 @@
 ![Java 21](https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&logoColor=white)
 ![Spring Boot 4.1](https://img.shields.io/badge/Spring%20Boot-4.1-6DB33F?logo=springboot&logoColor=white)
 ![Spring AI 2.0](https://img.shields.io/badge/Spring%20AI-2.0-6DB33F)
-![Version](https://img.shields.io/badge/version-2.0.0--SNAPSHOT-5B7CFA)
+![Version](https://img.shields.io/badge/version-2.0.0-5B7CFA)
 ![License](https://img.shields.io/badge/License-MIT-blue)
 
 五个面向真实内部业务流程、可以直接运行和改造的 Spring AI 应用：具备确定性 guardrails、操作者绑定确认、证据引用、持久状态闭环、审计 v2 元数据、PostgreSQL 和统一工作台。
 
 本项目不是另一个 AI 框架，而是一套业务应用样板。你可以直接运行，再选择一个模块接入自己的系统。
 
-![Business Copilot 2.0 快照版首页与工作台](assets/workbench-demo.gif)
+![Business Copilot 2.0 正式版首页与工作台](assets/workbench-demo.gif)
 
-## 2.0 快照版
+## 2.0 正式版
 
-当前分支是 `2.0.0-SNAPSHOT` 预览版，不是正式 2.0 Release。它不增加第六个模块，而是把现有五个业务闭环升级为可信、可诊断、可评测、可交付的样板；正式版仍需通过远端发布门禁：
+当前默认主干是 `2.0.0` 正式版。它不增加第六个模块，而是把现有五个业务闭环升级为可信、可诊断、可评测、可交付的样板：
 
 - Data 查询同时校验 schema/表/列，普通函数默认拒绝，`LIMIT` 必须是受限常量，并支持独立只读 PostgreSQL/MySQL 查询目标。
 - Knowledge 文档具备版本、持久索引任务和失败重试，使用文本/向量混合检索，并校验引用原文片段。

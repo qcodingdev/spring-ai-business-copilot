@@ -18,6 +18,9 @@ AGENTS.md
 .codex/
 .change-evidence.yml
 
+# Internal planning, audit, and implementation documents
+/docs/
+
 # Unpublished screenshot sources; README uses the generated GIF only
 img.png
 assets/demo-*.jpg

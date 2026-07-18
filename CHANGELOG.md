@@ -6,6 +6,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-07-18
+
 ### Added
 
 - Added Flyway V13-V16 migrations for versioned Knowledge documents, durable index jobs, Support state and evidence lifecycle, immutable Report source snapshots, and versioned Resume criteria/retention/review outcomes.
@@ -32,7 +34,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
-- Upgraded every Maven module to the `2.0.0-SNAPSHOT` development line.
+- Upgraded every Maven module to the `2.0.0` release line.
 - Upgraded all module Prompt and policy identities to v2.0 so audits can distinguish the new behavior.
 - Made the unified workbench expose document uploads, report file import and HTML export, resume reviewer correction/feedback, and sanitized-data deletion.
 - Made the public login form expand only after an explicit login action, linked the authenticated brand back to the default workbench home, and moved the viewport to newly generated results.
@@ -98,5 +100,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Kept risky actions behind single-use confirmation tokens and explicit human review.
 - Excluded local AI-agent settings, internal planning documents, and generated review evidence from the public repository.
 
-[Unreleased]: https://github.com/qcodingdev/spring-ai-business-copilot/compare/v1.0.0...main
+[Unreleased]: https://github.com/qcodingdev/spring-ai-business-copilot/compare/v2.0.0...main
+[2.0.0]: https://github.com/qcodingdev/spring-ai-business-copilot/compare/v1.0.0...v2.0.0
 [1.0.0]: https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v1.0.0

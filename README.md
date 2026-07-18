@@ -5,18 +5,18 @@
 ![Java 21](https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&logoColor=white)
 ![Spring Boot 4.1](https://img.shields.io/badge/Spring%20Boot-4.1-6DB33F?logo=springboot&logoColor=white)
 ![Spring AI 2.0](https://img.shields.io/badge/Spring%20AI-2.0-6DB33F)
-![Version](https://img.shields.io/badge/version-2.0.0--SNAPSHOT-5B7CFA)
+![Version](https://img.shields.io/badge/version-2.0.0-5B7CFA)
 ![License](https://img.shields.io/badge/License-MIT-blue)
 
 Five runnable Spring AI business applications for real internal workflows, with deterministic guardrails, actor-bound confirmation, evidence citations, durable lifecycle state, audit v2 metadata, PostgreSQL, and one workbench.
 
 This repository is an application suite, not another AI framework. Clone it, run it, inspect the boundaries, and adapt one module to your own system.
 
-![Business Copilot 2.0 snapshot landing page and workbench](assets/workbench-demo.gif)
+![Business Copilot 2.0 landing page and workbench](assets/workbench-demo.gif)
 
-## 2.0 Snapshot
+## 2.0 Release
 
-The current branch is a `2.0.0-SNAPSHOT` preview, not the formal 2.0 release. It turns the five demos into trusted, diagnosable, and deliverable business samples while the final remote release gates remain pending:
+The current default branch is the `2.0.0` release. It turns the five demos into trusted, diagnosable, and deliverable business samples:
 
 - Data queries use schema/table/column allowlists, deny ordinary functions, require bounded literal limits, and support separate read-only PostgreSQL or MySQL query targets.
 - Knowledge documents are versioned, indexed through durable retryable jobs, retrieved through hybrid text/vector search, and checked against exact citation excerpts.
