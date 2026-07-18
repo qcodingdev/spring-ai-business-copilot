@@ -28,7 +28,7 @@ class AiEmbeddingServiceTest {
 
         assertThatThrownBy(() -> service.embed("test"))
                 .isInstanceOf(AiModelNotEnabledException.class)
-                .hasMessageContaining("disabled");
+                .hasMessageContaining("已被配置项");
     }
 
     @Test
@@ -38,7 +38,7 @@ class AiEmbeddingServiceTest {
 
         assertThatThrownBy(() -> service.embed("test"))
                 .isInstanceOf(AiModelNotEnabledException.class)
-                .hasMessageContaining("No AI embedding model");
+                .hasMessageContaining("未配置 AI 向量模型");
     }
 
     @Test
@@ -52,7 +52,7 @@ class AiEmbeddingServiceTest {
         assertThat(service.isModelEnabled()).isFalse();
         assertThatThrownBy(() -> service.embed("test"))
                 .isInstanceOf(AiModelNotEnabledException.class)
-                .hasMessageContaining("No AI embedding model");
+                .hasMessageContaining("未配置 AI 向量模型");
     }
 
     @Test
@@ -102,7 +102,7 @@ class AiEmbeddingServiceTest {
 
         assertThatThrownBy(() -> service.embed("test"))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("AI embedding model invocation failed");
+                .hasMessageContaining("AI 向量模型调用失败");
     }
 
     @Test

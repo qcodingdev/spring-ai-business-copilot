@@ -33,6 +33,14 @@ services:
     build:
       context: ..
       dockerfile: Dockerfile
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=128m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       postgres:
         condition: service_healthy
@@ -68,8 +76,10 @@ services:
       SPRING_AI_OPENAI_EMBEDDING_BASE_URL: ${SPRING_AI_OPENAI_EMBEDDING_BASE_URL:-https://api.openai.com}
       SPRING_AI_OPENAI_EMBEDDING_API_KEY: ${SPRING_AI_OPENAI_EMBEDDING_API_KEY:-${SPRING_AI_OPENAI_API_KEY:-}}
       SPRING_AI_OPENAI_EMBEDDING_MODEL: ${SPRING_AI_OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+      SPRING_AI_OPENAI_EMBEDDING_DIMENSION: ${SPRING_AI_OPENAI_EMBEDDING_DIMENSION:-1536}
     ports:
       - "${APP_HOST_PORT:-8080}:8080"
+    stop_grace_period: 30s
 
 volumes:
   copilot-pg-data:

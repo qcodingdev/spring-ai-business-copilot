@@ -78,7 +78,7 @@ public class QueryExecutionService {
 
         String requestId = candidate.requestId();
         // The candidate table intentionally does not persist the full user question.
-        String userQuestion = "Confirmed read-only business query";
+        String userQuestion = "已确认的只读业务查询";
         String sql = candidate.sql();
         String modelName = candidate.modelName();
         var aiMetadata = candidate.aiMetadata();
@@ -171,6 +171,6 @@ public class QueryExecutionService {
                 null, null, null,
                 AuditStatus.NOT_CONFIRMED, null, false,
                 null, errorMessage, null, latencyMs));
-        log.info("Recorded NOT_CONFIRMED audit for candidate: {}", candidateId);
+        log.info("已记录未确认查询审计：candidateId={}", candidateId);
     }
 }

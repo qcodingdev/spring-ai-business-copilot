@@ -9,7 +9,7 @@ record QualifiedTableName(String schema, String table) {
 
     static QualifiedTableName parse(String value) {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("Queryable table name must not be blank");
+            throw new IllegalArgumentException("可查询表名不能为空");
         }
         String[] parts = value.trim().split("\\.");
         if (parts.length == 1) {

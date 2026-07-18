@@ -14,8 +14,11 @@ public interface SupportReplyDraftRepository {
 
     Optional<SupportReplyDraft> findById(Long id);
 
-    boolean transitionStatus(Long id, String expectedStatus, String targetStatus,
-                             String actionActorId, Instant now);
+    boolean transitionStatus(Long id, SupportDraftStatus expectedStatus, SupportDraftStatus targetStatus,
+                             SupportDecisionOutcome outcome, String actionActorId, Instant now);
+
+    boolean edit(Long id, SupportDraftStatus expectedStatus, String editedText,
+                 String editReason, String editedByActorId, Instant now);
 
     long count();
 }

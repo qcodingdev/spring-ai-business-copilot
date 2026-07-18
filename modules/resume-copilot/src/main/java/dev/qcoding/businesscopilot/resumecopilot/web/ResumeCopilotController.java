@@ -2,17 +2,26 @@ package dev.qcoding.businesscopilot.resumecopilot.web;
 
 import dev.qcoding.businesscopilot.commonweb.api.ApiResponse;
 import dev.qcoding.businesscopilot.resumecopilot.assessment.ResumeAssessmentService;
+import dev.qcoding.businesscopilot.resumecopilot.ResumeModels;
 import dev.qcoding.businesscopilot.resumecopilot.job.JobCriteriaService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/resume-copilot")
@@ -28,7 +37,18 @@ public class ResumeCopilotController {
 
     @PostMapping("/jobs/criteria")
     public ResponseEntity<ApiResponse<JobCriteriaService.CriteriaResponse>> criteria(@Valid @RequestBody CriteriaRequest request) {
-        return ResponseEntity.ok(ApiResponse.ok(criteriaService.extract(request.title(), request.jobDescription())));
+        return ResponseEntity.ok(ApiResponse.ok(criteriaService.extract(
+                request.title(), request.jobDescription(), request.logicalJobId())));
+    }
+
+    @PostMapping(path = "/jobs/criteria/file", consumes = "multipart/form-data")
+    public ResponseEntity<ApiResponse<JobCriteriaService.CriteriaResponse>> criteriaFile(
+            @RequestPart("title") String title,
+            @RequestPart("file") MultipartFile file,
+            @RequestPart(name = "logicalJobId", required = false) UUID logicalJobId) throws IOException {
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(
+                criteriaService.extractFile(title, file.getOriginalFilename(), file.getContentType(),
+                        file.getBytes(), logicalJobId)));
     }
 
     @PostMapping("/jobs/{jobId}/criteria/confirm")
@@ -43,10 +63,26 @@ public class ResumeCopilotController {
         return ResponseEntity.ok(ApiResponse.ok(assessmentService.assess(request.jobId(), request.resumeText())));
     }
 
+    @PostMapping(path = "/assessments/file", consumes = "multipart/form-data")
+    public ResponseEntity<ApiResponse<ResumeAssessmentService.AssessmentResponse>> assessFile(
+            @RequestPart("jobId") Long jobId,
+            @RequestPart("file") MultipartFile file) throws IOException {
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(
+                assessmentService.assessFile(jobId, file.getOriginalFilename(),
+                        file.getContentType(), file.getBytes())));
+    }
+
+    @GetMapping("/assessments/{assessmentId}/review")
+    public ResponseEntity<ApiResponse<ResumeAssessmentService.ReviewView>> reviewView(
+            @PathVariable long assessmentId) {
+        return ResponseEntity.ok(ApiResponse.ok(assessmentService.reviewView(assessmentId)));
+    }
+
     @PostMapping("/assessments/{assessmentId}/review")
     public ResponseEntity<ApiResponse<ResumeAssessmentService.StatusResponse>> review(
-            @PathVariable long assessmentId, @Valid @RequestBody TokenRequest request) {
-        return ResponseEntity.ok(ApiResponse.ok(assessmentService.review(assessmentId, request.token())));
+            @PathVariable long assessmentId, @Valid @RequestBody ReviewRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(assessmentService.review(
+                assessmentId, request.token(), request.correctedContent(), request.reviewerFeedback())));
     }
 
     @PostMapping("/assessments/{assessmentId}/cancel")
@@ -55,7 +91,23 @@ public class ResumeCopilotController {
         return ResponseEntity.ok(ApiResponse.ok(assessmentService.cancel(assessmentId, request.token())));
     }
 
-    public record CriteriaRequest(@NotBlank String title, @NotBlank String jobDescription) { }
-    public record AssessmentRequest(@NotNull Long jobId, @NotBlank String resumeText) { }
-    public record TokenRequest(@NotBlank String token) { }
+    @DeleteMapping("/submissions/{submissionId}")
+    public ResponseEntity<ApiResponse<Void>> deleteSubmission(@PathVariable long submissionId) {
+        if (!assessmentService.deleteSubmission(submissionId)) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(ApiResponse.ok(null, "脱敏简历提交记录已删除"));
+    }
+
+    public record CriteriaRequest(
+                                  @NotBlank(message = "职位名称不能为空。") String title,
+                                  @NotBlank(message = "职位描述不能为空。") String jobDescription,
+                                  UUID logicalJobId) { }
+    public record AssessmentRequest(
+            @NotNull(message = "职位编号不能为空。") Long jobId,
+            @NotBlank(message = "简历内容不能为空。") String resumeText) { }
+    public record TokenRequest(@NotBlank(message = "确认凭证不能为空。") String token) { }
+    public record ReviewRequest(@NotBlank(message = "复核凭证不能为空。") String token,
+                                ResumeModels.AssessmentContent correctedContent,
+                                String reviewerFeedback) { }
 }

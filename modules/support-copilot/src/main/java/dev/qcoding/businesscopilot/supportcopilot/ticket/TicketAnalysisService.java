@@ -18,6 +18,7 @@ import dev.qcoding.businesscopilot.supportcopilot.knowledge.SupportKnowledgeEvid
 import dev.qcoding.businesscopilot.supportcopilot.knowledge.SupportKnowledgeQuery;
 import dev.qcoding.businesscopilot.supportcopilot.knowledge.SupportKnowledgeResult;
 import dev.qcoding.businesscopilot.supportcopilot.knowledge.SupportKnowledgeRetriever;
+import dev.qcoding.businesscopilot.supportcopilot.draft.SupportDraftStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,8 +37,8 @@ import java.util.stream.Collectors;
 public class TicketAnalysisService {
 
     private static final Logger log = LoggerFactory.getLogger(TicketAnalysisService.class);
-    private static final String CLASSIFICATION_POLICY_VERSION = "support-classification-v1";
-    private static final String REPLY_POLICY_VERSION = "support-reply-guardrails-v1";
+    private static final String CLASSIFICATION_POLICY_VERSION = "support-classification-v2.0";
+    private static final String REPLY_POLICY_VERSION = "support-reply-guardrails-v2.0";
 
     private final TicketClassificationService classificationService;
     private final SupportKnowledgeRetriever knowledgeRetriever;
@@ -96,12 +97,12 @@ public class TicketAnalysisService {
                     null, null, maskedMessage,
                     request.channel() != null ? request.channel() : "sample",
                     classification.category(), classification.sentiment(),
-                    classification.urgency(), "DRAFTED",
+                    classification.urgency(), SupportTicketStatus.CLASSIFIED,
                     actor.actorId(), null, null));
 
             auditService.record(new SupportAuditLog(
                     null, requestId, ticket.id(), "CLASSIFIED",
-                    classification.category(), classification.urgency(),
+                    classification.category().name(), classification.urgency().name(),
                     null, null, modelName,
                     System.currentTimeMillis() - startMs, null,
                     ticket.ownerActorId(), null,
@@ -124,6 +125,7 @@ public class TicketAnalysisService {
             // Build knowledge evidence text and chunk IDs
             String evidenceText = buildEvidenceText(knowledgeResult.evidence());
             String evidenceChunkIds = buildEvidenceChunkIds(knowledgeResult.evidence());
+            String knowledgeVersionIds = buildKnowledgeVersionIds(knowledgeResult.evidence());
 
             long classifyEndMs = System.currentTimeMillis();
 
@@ -136,23 +138,29 @@ public class TicketAnalysisService {
                         null, "", "HIGH",
                         List.of("无知识依据，需人工处理或补充知识库内容"),
                         List.of(), null, null, true);
-                ticketRepository.transitionStatus(ticket.id(), "DRAFTED", "NEEDS_HUMAN");
+                ticketRepository.transitionStatus(
+                        ticket.id(), SupportTicketStatus.CLASSIFIED, SupportTicketStatus.NEEDS_HUMAN);
             } else {
                 ReplyDraftRequest draftRequest = new ReplyDraftRequest(
                         ticket.id(), maskedMessage,
                         classification.category(), classification.sentiment(),
                         classification.urgency(), classification.summary(),
-                        classification.needsHuman(), evidenceText, evidenceChunkIds);
+                        classification.needsHuman(), evidenceText, evidenceChunkIds, knowledgeVersionIds);
                 draftInvocation = draftService.generateWithMetadata(draftRequest);
                 draftResponse = draftInvocation.response();
 
                 // Update ticket with draft info
                 if (draftResponse.draftId() != null) {
                     if (draftResponse.needsHuman()) {
-                        ticketRepository.transitionStatus(ticket.id(), "DRAFTED", "NEEDS_HUMAN");
+                        ticketRepository.transitionStatus(
+                                ticket.id(), SupportTicketStatus.CLASSIFIED, SupportTicketStatus.NEEDS_HUMAN);
+                    } else {
+                        ticketRepository.transitionStatus(
+                                ticket.id(), SupportTicketStatus.CLASSIFIED, SupportTicketStatus.DRAFTED);
                     }
                 } else if (draftResponse.needsHuman()) {
-                    ticketRepository.transitionStatus(ticket.id(), "DRAFTED", "NEEDS_HUMAN");
+                    ticketRepository.transitionStatus(
+                            ticket.id(), SupportTicketStatus.CLASSIFIED, SupportTicketStatus.NEEDS_HUMAN);
                 }
             }
 
@@ -165,7 +173,7 @@ public class TicketAnalysisService {
 
             auditService.record(new SupportAuditLog(
                     null, requestId, ticket.id(), eventType,
-                    classification.category(), classification.urgency(),
+                    classification.category().name(), classification.urgency().name(),
                     draftResponse.riskLevel(), evidenceChunkIds, draftModel,
                     totalMs, null, ticket.ownerActorId(), null,
                     draftAi != null ? draftAi.providerName() : null,
@@ -179,14 +187,14 @@ public class TicketAnalysisService {
                     draftAi != null ? draftAi.finishReason() : null,
                     null, null));
 
-            log.info("Ticket analysis complete: ticketId={}, category={}, needsHuman={}, latencyMs={}",
+            log.info("工单分析完成：ticketId={}，category={}，needsHuman={}，latencyMs={}",
                     ticket.id(), classification.category(), draftResponse.needsHuman(), totalMs);
 
             return new TicketAnalysisResult(
                     requestId, ticket.id(), classification, draftResponse, knowledgeResult);
 
         } catch (BusinessException ex) {
-            log.error("Ticket analysis failed: requestId={}", requestId, ex);
+            log.error("工单分析失败：requestId={}", requestId, ex);
             auditService.record(new SupportAuditLog(
                     null, requestId, null, "FAILED",
                     null, null, null, null, modelName,
@@ -196,7 +204,7 @@ public class TicketAnalysisService {
                     ex.errorCode().code(), null, null, null, null, null));
             throw ex;
         } catch (Exception ex) {
-            log.error("Ticket analysis failed unexpectedly: requestId={}", requestId, ex);
+            log.error("工单分析发生未预期异常：requestId={}", requestId, ex);
             auditService.record(new SupportAuditLog(
                     null, requestId, null, "FAILED",
                     null, null, null, null, modelName,
@@ -228,6 +236,16 @@ public class TicketAnalysisService {
         if (evidence == null || evidence.isEmpty()) return "";
         return evidence.stream()
                 .map(SupportKnowledgeEvidence::chunkId)
+                .collect(Collectors.joining(","));
+    }
+
+    private String buildKnowledgeVersionIds(List<SupportKnowledgeEvidence> evidence) {
+        if (evidence == null || evidence.isEmpty()) {
+            return "";
+        }
+        return evidence.stream()
+                .map(SupportKnowledgeEvidence::versionReference)
+                .distinct()
                 .collect(Collectors.joining(","));
     }
 

@@ -1,0 +1,5 @@
+# expected	reply_text	evidence_ids	citation_id
+true	可根据知识库说明退款申请流程。	chunk-1	chunk-1
+false	我们保证退款并马上处理。	chunk-1	chunk-1
+false	请参考处理流程。	chunk-1	chunk-999
+false	这是确定回复。		

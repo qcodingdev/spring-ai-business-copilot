@@ -54,7 +54,7 @@ class TicketAnalysisServiceTest {
         assertNull(result.draft().draftId());
         assertTrue(result.draft().needsHuman());
         assertEquals(0, draftService.calls);
-        assertEquals("NEEDS_HUMAN", ticketRepository.lastStatus);
+        assertEquals(SupportTicketStatus.NEEDS_HUMAN, ticketRepository.lastStatus);
         assertEquals("NEEDS_HUMAN", auditRepository.saved.getLast().eventType());
     }
 
@@ -68,9 +68,9 @@ class TicketAnalysisServiceTest {
         @Override
         public TicketClassificationResponse classify(TicketClassificationRequest request) {
             return new TicketClassificationResponse(
-                    "PRODUCT_USAGE",
-                    "NEUTRAL",
-                    "LOW",
+                    dev.qcoding.businesscopilot.supportcopilot.classification.TicketCategory.PRODUCT_USAGE,
+                    dev.qcoding.businesscopilot.supportcopilot.classification.TicketSentiment.NEUTRAL,
+                    dev.qcoding.businesscopilot.supportcopilot.classification.TicketUrgency.LOW,
                     "客户咨询产品使用问题",
                     false,
                     List.of());
@@ -111,7 +111,7 @@ class TicketAnalysisServiceTest {
     }
 
     private static class InMemoryTicketRepository implements SupportTicketRepository {
-        private String lastStatus;
+        private SupportTicketStatus lastStatus;
 
         @Override
         public SupportTicket save(SupportTicket ticket) {
@@ -132,7 +132,8 @@ class TicketAnalysisServiceTest {
         }
 
         @Override
-        public boolean transitionStatus(Long id, String expectedStatus, String targetStatus) {
+        public boolean transitionStatus(Long id, SupportTicketStatus expectedStatus,
+                                        SupportTicketStatus targetStatus) {
             lastStatus = targetStatus;
             return true;
         }

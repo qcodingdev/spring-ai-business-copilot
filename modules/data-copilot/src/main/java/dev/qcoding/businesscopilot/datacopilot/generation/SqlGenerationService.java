@@ -21,6 +21,7 @@ import dev.qcoding.businesscopilot.guardrails.SqlValidationResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -74,9 +75,10 @@ public class SqlGenerationService {
 
         // 2. Render prompt
         RenderedPrompt prompt = promptTemplateService.renderWithMetadata(
-                "data-copilot/sql-generation.st", "v1", Map.of(
+                "data-copilot/sql-generation.st", "v2", Map.of(
                 "schemaContext", schemaContext.textSummary(),
                 "question", request.question(),
+                "currentDate", LocalDate.now().toString(),
                 "maxRows", String.valueOf(guardrailsProperties.defaultMaxRows())));
 
         // 3. Call LLM and parse structured output

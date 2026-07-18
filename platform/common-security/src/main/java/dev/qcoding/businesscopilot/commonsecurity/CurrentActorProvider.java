@@ -1,6 +1,6 @@
 package dev.qcoding.businesscopilot.commonsecurity;
 
-/** Resolves the actor associated with the current business request. */
+/** 解析当前业务请求关联的操作者。 */
 @FunctionalInterface
 public interface CurrentActorProvider {
 

@@ -18,14 +18,25 @@ RUN --mount=type=cache,target=/root/.m2/repository \
     mvn -q -B clean package -DskipTests -pl app/business-copilot-app -am
 
 # ---------- 运行阶段 ----------
-FROM eclipse-temurin:21-jre-jammy
+FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
-# 拷贝构建产物
-COPY --from=builder /build/app/business-copilot-app/target/business-copilot-app-*.jar app.jar
+# curl 仅用于容器健康检查；应用进程使用固定的无特权 UID/GID。
+RUN apk add --no-cache curl \
+    && addgroup -g 10001 -S app \
+    && adduser -u 10001 -S -D -H -G app app
+
+# 拷贝构建产物，并确保运行用户只需要读取应用文件。
+COPY --from=builder --chown=10001:10001 \
+    /build/app/business-copilot-app/target/business-copilot-app-*.jar app.jar
 
 # 通过环境变量读取配置（datasource、Spring AI 等）
 ENV JAVA_OPTS=""
 EXPOSE 8080
 
-ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
+USER 10001:10001
+STOPSIGNAL SIGTERM
+HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=6 \
+    CMD curl --fail --silent --show-error http://127.0.0.1:8080/actuator/health || exit 1
+
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar app.jar"]

@@ -13,8 +13,18 @@ package dev.qcoding.businesscopilot.knowledgecopilot.document;
  */
 public record DocumentUploadResponse(
         Long documentId,
+        java.util.UUID logicalDocumentId,
+        int version,
         String title,
         int chunkCount,
         boolean enabled,
-        boolean indexed) {
+        boolean indexed,
+        Long indexJobId,
+        String indexStatus) {
+
+    public DocumentUploadResponse(Long documentId, String title, int chunkCount,
+                                  boolean enabled, boolean indexed) {
+        this(documentId, null, 1, title, chunkCount, enabled, indexed,
+                null, indexed ? "INDEXED" : "PENDING");
+    }
 }

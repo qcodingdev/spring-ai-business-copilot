@@ -60,7 +60,7 @@ class KnowledgeAnswerServiceTest {
         return new LlmAnswerOutput(
                 "ANSWERED",
                 "This is the answer.",
-                List.of(new LlmAnswerOutput.CitationEntry(chunkId, "excerpt")),
+                List.of(new LlmAnswerOutput.CitationEntry(chunkId)),
                 List.of());
     }
 
@@ -80,6 +80,7 @@ class KnowledgeAnswerServiceTest {
         assertThat(response.answer()).isEqualTo("This is the answer.");
         assertThat(response.citations()).hasSize(1);
         assertThat(response.citations().get(0).chunkId()).isEqualTo(1L);
+        assertThat(response.citations().get(0).excerpt()).isEqualTo("preview");
         assertThat(response.modelName()).isEqualTo("test-model");
     }
 
@@ -146,7 +147,7 @@ class KnowledgeAnswerServiceTest {
         LlmAnswerOutput badCitationOutput = new LlmAnswerOutput(
                 "ANSWERED",
                 "answer",
-                List.of(new LlmAnswerOutput.CitationEntry(999L, "phantom chunk")),
+                List.of(new LlmAnswerOutput.CitationEntry(999L)),
                 List.of());
         when(aiChatService.generateJsonWithMetadata(anyString(), eq(LlmAnswerOutput.class)))
                 .thenReturn(invocation(badCitationOutput));
@@ -175,7 +176,7 @@ class KnowledgeAnswerServiceTest {
         KnowledgeAnswerResponse response = service.answer("question", retrieved);
 
         assertThat(response.status()).isEqualTo(KnowledgeAnswerStatus.REJECTED);
-        assertThat(response.warnings()).anyMatch(w -> w.contains("citation"));
+        assertThat(response.warnings()).anyMatch(w -> w.contains("引用"));
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -191,7 +192,7 @@ class KnowledgeAnswerServiceTest {
         KnowledgeAnswerResponse response = service.answer("question", retrieved);
 
         assertThat(response.status()).isEqualTo(KnowledgeAnswerStatus.REJECTED);
-        assertThat(response.warnings()).anyMatch(w -> w.contains("could not be parsed"));
+        assertThat(response.warnings()).anyMatch(w -> w.contains("无法解析"));
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -205,7 +206,7 @@ class KnowledgeAnswerServiceTest {
         LlmAnswerOutput sensitiveOutput = new LlmAnswerOutput(
                 "ANSWERED",
                 "请联系 13812345678 获取更多信息。",
-                List.of(new LlmAnswerOutput.CitationEntry(1L, "excerpt")),
+                List.of(new LlmAnswerOutput.CitationEntry(1L)),
                 List.of());
         when(aiChatService.generateJsonWithMetadata(anyString(), eq(LlmAnswerOutput.class)))
                 .thenReturn(invocation(sensitiveOutput));
@@ -216,7 +217,7 @@ class KnowledgeAnswerServiceTest {
         // 手机号应该被脱敏
         assertThat(response.answer()).doesNotContain("13812345678");
         assertThat(response.answer()).contains("****");
-        assertThat(response.warnings()).anyMatch(w -> w.contains("masked"));
+        assertThat(response.warnings()).anyMatch(w -> w.contains("脱敏"));
     }
 
     @Test
@@ -225,7 +226,7 @@ class KnowledgeAnswerServiceTest {
         LlmAnswerOutput secretOutput = new LlmAnswerOutput(
                 "ANSWERED",
                 "API key is token=abc123secret for access.",
-                List.of(new LlmAnswerOutput.CitationEntry(1L, "excerpt")),
+                List.of(new LlmAnswerOutput.CitationEntry(1L)),
                 List.of());
         when(aiChatService.generateJsonWithMetadata(anyString(), eq(LlmAnswerOutput.class)))
                 .thenReturn(invocation(secretOutput));
@@ -235,7 +236,7 @@ class KnowledgeAnswerServiceTest {
         assertThat(response.status()).isEqualTo(KnowledgeAnswerStatus.ANSWERED);
         assertThat(response.answer()).doesNotContain("abc123secret");
         assertThat(response.answer()).contains("********");
-        assertThat(response.warnings()).anyMatch(w -> w.contains("masked"));
+        assertThat(response.warnings()).anyMatch(w -> w.contains("脱敏"));
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -251,7 +252,7 @@ class KnowledgeAnswerServiceTest {
         KnowledgeAnswerResponse response = service.answer("question", retrieved);
 
         assertThat(response.status()).isEqualTo(KnowledgeAnswerStatus.REJECTED);
-        assertThat(response.warnings()).anyMatch(w -> w.contains("empty output"));
+        assertThat(response.warnings()).anyMatch(w -> w.contains("空结果"));
     }
 
     private AiInvocationResult<LlmAnswerOutput> invocation(LlmAnswerOutput output) {

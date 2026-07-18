@@ -8,6 +8,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Added Flyway V13-V16 migrations for versioned Knowledge documents, durable index jobs, Support state and evidence lifecycle, immutable Report source snapshots, and versioned Resume criteria/retention/review outcomes.
+- Added bounded shared TXT/Markdown/PDF/DOCX extraction through `platform/document-processing`.
+- Added Knowledge hybrid text/vector retrieval, retryable asynchronous indexing, exact citation excerpt validation, and citation quality metrics.
+- Added Support draft editing, feedback, decision outcomes, explicit ticket/draft state enums, and versioned knowledge evidence binding.
+- Added bounded Report CSV/JSON source import, freshness metadata, immutable snapshots, and deterministic escaped HTML export.
+- Added Resume JD/resume file ingestion, criteria versioning, reviewer corrections and feedback, review workbench reads, and automatic/manual sanitized-submission deletion.
+- Added fixed evaluation datasets for Knowledge citations, Support reply guardrails, Report grounding, and Resume hiring compliance.
+- Added CycloneDX SBOM generation, MySQL 5.7/8.4 compatibility jobs, dependency review, repository/container Trivy gates, and a non-root read-only runtime container.
 - Added a narrow `common-security` module for authenticated actors, roles, object access policies, and confirmation-token digests.
 - Added Flyway V11/V12 migrations for persistent trusted-confirmation state, audit v2 metadata, and configurable audit anonymization/deletion.
 - Added explicit auto-configuration for all five Copilot modules without relying on the bundled application's root package scan.
@@ -24,6 +32,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- Upgraded every Maven module to the `2.0.0-SNAPSHOT` development line.
+- Upgraded all module Prompt and policy identities to v2.0 so audits can distinguish the new behavior.
+- Made the unified workbench expose document uploads, report file import and HTML export, resume reviewer correction/feedback, and sanitized-data deletion.
 - Persisted Data SQL candidates and bound Data/Support/Report/Resume confirmation state to owner, object status, expiry, and conditional database transitions.
 - Replaced Resume Mapper scanning with an explicit Spring JDBC repository.
 - Expanded AI and business audit records with creator/action actors, provider/model, Prompt identity, policy, latency, token usage, finish reason, and provider request IDs.
@@ -44,6 +55,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Security
 
+- Bound Knowledge document access, durable jobs, Support decisions, Report snapshots, and Resume reviews to authenticated owners/reviewers and conditional state transitions.
+- Revalidated reviewer-edited Support/Resume content before accepting it as a business outcome.
+- Added bounded document/file parsing, encrypted-PDF rejection, source freshness checks, retention cleanup, and immutable report evidence.
+- Made the application container run as UID/GID `10001`, drop Linux capabilities in Compose, use a read-only root filesystem, and enforce `no-new-privileges`.
 - Enforced fully-qualified SQL column allowlists, rejected `SELECT *`/`table.*`, and normalized PostgreSQL/MySQL quoted identifiers before policy checks.
 - Made high-risk Data, Support, Report, and Resume state transitions fail closed when required audit persistence fails.
 - Removed the implicit non-request `system/ADMIN` actor fallback; background hosts must provide an explicit controlled actor provider.

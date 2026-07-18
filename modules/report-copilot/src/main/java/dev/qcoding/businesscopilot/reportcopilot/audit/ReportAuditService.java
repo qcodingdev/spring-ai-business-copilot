@@ -19,7 +19,7 @@ public class ReportAuditService {
         try {
             recordRequired(event);
         } catch (RuntimeException ex) {
-            log.error("Failed to persist Report Copilot audit event: eventType={}, draftId={}", event.eventType(), event.draftId(), ex);
+            log.error("报表模块审计事件写入失败：eventType={}，draftId={}", event.eventType(), event.draftId(), ex);
         }
     }
 

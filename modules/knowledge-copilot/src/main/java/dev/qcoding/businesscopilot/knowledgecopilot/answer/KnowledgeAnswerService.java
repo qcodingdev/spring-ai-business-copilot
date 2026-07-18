@@ -18,8 +18,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
+import java.util.LinkedHashMap;
 
 /**
  * Generates structured answers from retrieved knowledge chunks via LLM.
@@ -77,7 +76,7 @@ public class KnowledgeAnswerService {
             String question, List<RetrievedKnowledgeChunk> retrievedChunks) {
         // 1. 召回为空 → 直接拒答
         if (retrievedChunks == null || retrievedChunks.isEmpty()) {
-            log.info("No chunks retrieved — returning NO_EVIDENCE for question: {}", truncate(question));
+            log.info("未召回知识分片，返回无依据状态");
             return result(new KnowledgeAnswerResponse(
                     KnowledgeAnswerStatus.NO_EVIDENCE, null, List.of(), List.of(),
                     aiChatService.modelName()), null, null, "NO_RETRIEVED_EVIDENCE");
@@ -87,13 +86,13 @@ public class KnowledgeAnswerService {
         String contextChunks = formatContextChunks(retrievedChunks);
 
         // 3. 渲染 prompt 模板
-        RenderedPrompt prompt = promptTemplateService.renderWithMetadata(PROMPT_LOCATION, "v1", Map.of(
+        RenderedPrompt prompt = promptTemplateService.renderWithMetadata(PROMPT_LOCATION, "v2.0", Map.of(
                 "contextChunks", contextChunks,
                 "question", question));
 
         // 4. 调用 LLM 生成答案
         String modelName = aiChatService.modelName();
-        log.debug("Invoking LLM model={} for question: {}", modelName, truncate(question));
+        log.debug("调用问答模型：model={}，脱敏后问题长度={}", modelName, question.length());
 
         AiInvocationMetadata aiMetadata;
         LlmAnswerOutput llmOutput;
@@ -107,23 +106,23 @@ public class KnowledgeAnswerService {
             }
         } catch (BusinessException ex) {
             // JSON 解析失败 → 返回 REJECTED
-            log.error("Failed to parse LLM output as JSON", ex);
+            log.error("问答模型结构化输出解析失败", ex);
             return result(new KnowledgeAnswerResponse(
                     KnowledgeAnswerStatus.REJECTED, null, List.of(),
-                    List.of("AI model output could not be parsed"),
+                    List.of("模型输出无法解析，请稍后重试或检查模型兼容性"),
                     modelName), prompt.metadata(), null, ex.errorCode().code());
         }
 
         if (llmOutput == null) {
             return result(new KnowledgeAnswerResponse(
                     KnowledgeAnswerStatus.REJECTED, null, List.of(),
-                    List.of("AI model returned empty output"),
+                    List.of("模型返回了空结果"),
                     modelName), prompt.metadata(), aiMetadata, "EMPTY_MODEL_OUTPUT");
         }
 
         // 5. 处理 NO_EVIDENCE 状态
         if (!"ANSWERED".equals(llmOutput.status())) {
-            log.info("LLM returned status={} for question: {}", llmOutput.status(), truncate(question));
+            log.info("问答模型返回状态：{}", llmOutput.status());
             return result(new KnowledgeAnswerResponse(
                     KnowledgeAnswerStatus.NO_EVIDENCE, null, List.of(),
                     llmOutput.warnings() != null ? llmOutput.warnings() : List.of(),
@@ -138,39 +137,42 @@ public class KnowledgeAnswerService {
                 citationGuardrailService.validate(citations, retrievedChunks);
 
         if (!validation.valid()) {
-            log.warn("Citation validation failed — rejecting answer. Violations: {}",
+            log.warn("引用校验失败，拒绝返回答案：{}",
                     validation.violations());
             List<String> warnings = new ArrayList<>();
-            warnings.add("Citation guardrail violation: answer rejected");
+            warnings.add("引用未通过可信校验，答案已拒绝");
             warnings.addAll(validation.violations());
             return result(new KnowledgeAnswerResponse(
                     KnowledgeAnswerStatus.REJECTED, null, List.of(), warnings, modelName),
                     prompt.metadata(), aiMetadata, "CITATION_VALIDATION_FAILED");
         }
 
-        // 8. 敏感内容脱敏检查
+        // 8. 引用摘录必须由服务端从召回分片生成，不能信任模型改写的摘录。
+        citations = authoritativeCitations(citations, retrievedChunks);
+
+        // 9. 敏感内容脱敏检查
         String answer = llmOutput.answer() != null ? llmOutput.answer() : "";
         List<String> warnings = llmOutput.warnings() != null ? new ArrayList<>(llmOutput.warnings()) : new ArrayList<>();
 
         if (sensitiveTextMasker.containsSensitive(answer)) {
-            log.warn("Sensitive content detected in answer — masking");
+            log.warn("答案中检测到敏感内容，已执行脱敏");
             answer = sensitiveTextMasker.mask(answer);
-            warnings.add("Sensitive content was detected and masked in the answer");
+            warnings.add("答案中的敏感内容已脱敏");
         }
 
-        // 9. ANSWERED 状态必须至少有一个 citation（双重检查）
+        // 10. ANSWERED 状态必须至少有一个 citation（双重检查）
         if (citations.isEmpty()) {
-            log.warn("ANSWERED status but no citations after validation — rejecting");
+            log.warn("ANSWERED 状态在校验后没有有效引用，拒绝返回答案");
             return result(new KnowledgeAnswerResponse(
                     KnowledgeAnswerStatus.REJECTED, null, List.of(),
-                    List.of("ANSWERED status requires at least one citation, but none survived validation"),
+                    List.of("答案缺少有效引用，已拒绝返回"),
                     modelName), prompt.metadata(), aiMetadata, "CITATION_REQUIRED");
         }
 
-        log.info("Answer generated successfully with {} citations for question: {}",
-                citations.size(), truncate(question));
+        log.info("知识答案生成成功，可信引用数={}", citations.size());
         return result(new KnowledgeAnswerResponse(
-                KnowledgeAnswerStatus.ANSWERED, answer, citations, warnings, modelName),
+                KnowledgeAnswerStatus.ANSWERED, answer, citations, warnings, modelName,
+                new KnowledgeAnswerMetrics(1.0d, 1.0d, citations.size(), retrievedChunks.size())),
                 prompt.metadata(), aiMetadata, null);
     }
 
@@ -205,13 +207,34 @@ public class KnowledgeAnswerService {
             return List.of();
         }
         return llmOutput.citations().stream()
-                .map(c -> new KnowledgeCitation(c.chunkId(), c.excerpt()))
+                .map(c -> new KnowledgeCitation(c.chunkId(), null))
                 .toList();
     }
 
-    private static String truncate(String text) {
-        if (text == null) return "null";
-        return text.length() > 100 ? text.substring(0, 100) + "..." : text;
+    private List<KnowledgeCitation> authoritativeCitations(
+            List<KnowledgeCitation> citations,
+            List<RetrievedKnowledgeChunk> retrievedChunks) {
+        Map<Long, RetrievedKnowledgeChunk> byChunkId = new LinkedHashMap<>();
+        for (RetrievedKnowledgeChunk retrieved : retrievedChunks) {
+            byChunkId.put(retrieved.chunk().id(), retrieved);
+        }
+        Map<Long, KnowledgeCitation> grounded = new LinkedHashMap<>();
+        for (KnowledgeCitation citation : citations) {
+            RetrievedKnowledgeChunk retrieved = byChunkId.get(citation.chunkId());
+            if (retrieved == null) {
+                continue;
+            }
+            String sourceText = retrieved.chunk().contentPreview();
+            if (sourceText == null || sourceText.isBlank()) {
+                sourceText = retrieved.chunk().content();
+            }
+            String excerpt = sourceText == null ? "" : sourceText.strip();
+            if (excerpt.length() > 240) {
+                excerpt = excerpt.substring(0, 240) + "…";
+            }
+            grounded.putIfAbsent(citation.chunkId(), new KnowledgeCitation(citation.chunkId(), excerpt));
+        }
+        return List.copyOf(grounded.values());
     }
 
     public record AnswerInvocation(

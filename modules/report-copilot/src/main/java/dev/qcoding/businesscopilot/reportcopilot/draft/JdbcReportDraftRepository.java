@@ -16,7 +16,6 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
 import java.sql.PreparedStatement;
-import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
@@ -33,14 +32,16 @@ public class JdbcReportDraftRepository implements ReportDraftRepository {
     private final JdbcTemplate jdbcTemplate;
     private final CurrentActorProvider actorProvider;
     private final ConfirmationTokenService tokenService;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
     public JdbcReportDraftRepository(JdbcTemplate jdbcTemplate,
                                      CurrentActorProvider actorProvider,
-                                     ConfirmationTokenService tokenService) {
+                                     ConfirmationTokenService tokenService,
+                                     ObjectMapper objectMapper) {
         this.jdbcTemplate = jdbcTemplate;
         this.actorProvider = actorProvider;
         this.tokenService = tokenService;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -76,7 +77,7 @@ public class JdbcReportDraftRepository implements ReportDraftRepository {
         jdbcTemplate.update(connection -> {
             PreparedStatement statement = connection.prepareStatement(
                     "INSERT INTO report_drafts (request_id, structured_content, cited_source_ids, status, review_reasons, confirmation_token_digest, owner_actor_id, expires_at, created_at, updated_at) "
-                            + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", Statement.RETURN_GENERATED_KEYS);
+                            + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", new String[]{"id"});
             statement.setLong(1, requestId);
             statement.setString(2, contentJson);
             statement.setString(3, citedSourceIds);
@@ -115,14 +116,17 @@ public class JdbcReportDraftRepository implements ReportDraftRepository {
         KeyHolder keyHolder = new GeneratedKeyHolder();
         jdbcTemplate.update(connection -> {
             PreparedStatement statement = connection.prepareStatement(
-                    "INSERT INTO report_requests (report_type, period_start, period_end, title, owner_actor_id, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-                    Statement.RETURN_GENERATED_KEYS);
+                    "INSERT INTO report_requests (report_type, period_start, period_end, title, owner_actor_id, template_id, template_version, created_at) "
+                            + "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    new String[]{"id"});
             statement.setString(1, preview.reportType().name());
             statement.setObject(2, preview.period().periodStart());
             statement.setObject(3, preview.period().periodEnd());
             statement.setString(4, preview.title());
             statement.setString(5, ownerActorId);
-            statement.setTimestamp(6, Timestamp.from(now));
+            statement.setString(6, preview.templateId());
+            statement.setString(7, preview.templateVersion());
+            statement.setTimestamp(8, Timestamp.from(now));
             return statement;
         }, keyHolder);
         return keyHolder.getKey().longValue();
@@ -130,9 +134,15 @@ public class JdbcReportDraftRepository implements ReportDraftRepository {
 
     private void insertSources(long requestId, List<ReportSource> sources, Instant now) {
         for (ReportSource source : sources) {
-            jdbcTemplate.update("INSERT INTO report_sources (request_id, source_type, source_ref, source_title, sanitized_content, source_hash, created_at) "
-                            + "VALUES (?, ?, ?, ?, ?, ?, ?)", requestId, source.sourceType().name(), source.sourceId(),
-                    source.title(), source.sanitizedContent(), source.sourceHash(), Timestamp.from(now));
+            jdbcTemplate.update("INSERT INTO report_sources (request_id, source_type, source_ref, source_title, sanitized_content, source_hash, "
+                            + "snapshot_id, provider_id, source_version, observed_at, source_timezone, source_unit, valid_until, freshness_status, created_at) "
+                            + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    requestId, source.sourceType().name(), source.sourceId(),
+                    source.title(), source.sanitizedContent(), source.sourceHash(),
+                    source.snapshotId(), source.providerId(), source.sourceVersion(),
+                    Timestamp.from(source.observedAt()), source.sourceTimezone(), source.sourceUnit(),
+                    source.validUntil() == null ? null : Timestamp.from(source.validUntil()),
+                    source.freshness().name(), Timestamp.from(now));
         }
     }
 
@@ -140,13 +150,13 @@ public class JdbcReportDraftRepository implements ReportDraftRepository {
         try {
             return objectMapper.writeValueAsString(content);
         } catch (JacksonException ex) {
-            throw new IllegalStateException("Unable to serialize report draft content", ex);
+            throw new IllegalStateException("报告草稿内容序列化失败", ex);
         }
     }
 
     private String joinReviewReasons(List<String> reviewReasons) {
         if (reviewReasons == null || reviewReasons.isEmpty()) {
-            return "Report output requires manual evidence review.";
+            return "报告输出需要人工复核证据。";
         }
         return reviewReasons.stream().filter(reason -> reason != null && !reason.isBlank()).limit(20)
                 .collect(Collectors.joining("\n"));
@@ -164,7 +174,7 @@ public class JdbcReportDraftRepository implements ReportDraftRepository {
         try {
             return objectMapper.readValue(contentJson, LlmReportOutput.class);
         } catch (JacksonException ex) {
-            throw new IllegalStateException("Unable to deserialize report draft content", ex);
+            throw new IllegalStateException("报告草稿内容反序列化失败", ex);
         }
     }
 

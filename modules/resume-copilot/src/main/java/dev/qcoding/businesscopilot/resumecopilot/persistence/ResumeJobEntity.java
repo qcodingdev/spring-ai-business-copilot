@@ -1,6 +1,7 @@
 package dev.qcoding.businesscopilot.resumecopilot.persistence;
 
 import java.time.Instant;
+import java.util.UUID;
 
 public class ResumeJobEntity {
     private Long id;
@@ -14,6 +15,10 @@ public class ResumeJobEntity {
     private Instant expiresAt;
     private Instant createdAt;
     private Instant updatedAt;
+    private UUID logicalJobId;
+    private int criteriaVersion;
+    private boolean currentVersion;
+    private Instant effectiveFrom;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -37,4 +42,12 @@ public class ResumeJobEntity {
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
+    public UUID getLogicalJobId() { return logicalJobId; }
+    public void setLogicalJobId(UUID logicalJobId) { this.logicalJobId = logicalJobId; }
+    public int getCriteriaVersion() { return criteriaVersion; }
+    public void setCriteriaVersion(int criteriaVersion) { this.criteriaVersion = criteriaVersion; }
+    public boolean isCurrentVersion() { return currentVersion; }
+    public void setCurrentVersion(boolean currentVersion) { this.currentVersion = currentVersion; }
+    public Instant getEffectiveFrom() { return effectiveFrom; }
+    public void setEffectiveFrom(Instant effectiveFrom) { this.effectiveFrom = effectiveFrom; }
 }

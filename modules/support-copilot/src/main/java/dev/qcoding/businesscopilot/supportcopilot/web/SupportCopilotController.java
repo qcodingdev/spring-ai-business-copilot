@@ -25,7 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 /**
- * REST API for the Support Copilot module.
+ * Support Copilot 模块的 REST API。
  *
  * <p>Support Copilot REST 控制器。提供工单分析、草稿确认/取消和审计日志查询：
  * <ul>
@@ -70,6 +70,7 @@ public class SupportCopilotController {
                 result.classification().sentiment(),
                 result.classification().urgency(),
                 result.classification().summary(),
+                result.classification().reasons(),
                 result.draft(),
                 buildEvidenceResponse(result.knowledgeResult()),
                 result.draft() != null && result.draft().needsHuman());
@@ -89,7 +90,7 @@ public class SupportCopilotController {
         var result = confirmationService.confirm(draftId, request.confirmationToken());
 
         return ResponseEntity.ok(ApiResponse.ok(
-                new DraftConfirmResponse(result.draftId(), result.status())));
+                new DraftConfirmResponse(result.draftId(), result.status().name())));
     }
 
     /** POST /api/support-copilot/reply-drafts/{draftId}/cancel — 取消草稿 */
@@ -100,7 +101,16 @@ public class SupportCopilotController {
         var result = confirmationService.cancel(draftId, request.confirmationToken());
 
         return ResponseEntity.ok(ApiResponse.ok(
-                new DraftConfirmResponse(result.draftId(), result.status())));
+                new DraftConfirmResponse(result.draftId(), result.status().name())));
+    }
+
+    @PostMapping("/reply-drafts/{draftId}/edit")
+    public ResponseEntity<ApiResponse<DraftEditResponse>> editDraft(
+            @PathVariable Long draftId,
+            @Valid @RequestBody DraftEditRequest request) {
+        var result = confirmationService.edit(draftId, request.editedText(), request.reason());
+        return ResponseEntity.ok(ApiResponse.ok(
+                new DraftEditResponse(result.draftId(), result.editedText(), result.status().name())));
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -118,50 +128,60 @@ public class SupportCopilotController {
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // helpers
+    // 辅助方法
     // ═══════════════════════════════════════════════════════════════
 
     private List<EvidenceItem> buildEvidenceResponse(SupportKnowledgeResult result) {
         if (result == null || result.evidence() == null) return List.of();
         return result.evidence().stream()
                 .map(e -> new EvidenceItem(e.chunkId(), e.sourceTitle(),
-                        e.sectionTitle(), e.snippet(), e.similarity()))
+                        e.sectionTitle(), e.snippet(), e.similarity(), e.versionReference()))
                 .toList();
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // DTOs
+    // 数据传输对象
     // ═══════════════════════════════════════════════════════════════
 
-    /** Full ticket analyze response. */
+    /** 完整工单分析响应。 */
     public record TicketAnalyzeResponse(
             String requestId,
             Long ticketId,
-            String category,
-            String sentiment,
-            String urgency,
+            dev.qcoding.businesscopilot.supportcopilot.classification.TicketCategory category,
+            dev.qcoding.businesscopilot.supportcopilot.classification.TicketSentiment sentiment,
+            dev.qcoding.businesscopilot.supportcopilot.classification.TicketUrgency urgency,
             String summary,
+            List<String> reasons,
             ReplyDraftResponse draft,
             List<EvidenceItem> evidence,
             boolean needsHuman) {
     }
 
-    /** Knowledge evidence item for response. */
+    /** 响应中的知识证据项。 */
     public record EvidenceItem(
             String chunkId,
             String sourceTitle,
             String sectionTitle,
             String snippet,
-            double similarity) {
+            double similarity,
+            String knowledgeVersion) {
     }
 
-    /** Request to confirm or cancel a draft. */
+    /** 确认或取消草稿的请求。 */
     public record DraftConfirmRequest(
-            @jakarta.validation.constraints.NotBlank(message = "confirmationToken 不能为空")
+            @jakarta.validation.constraints.NotBlank(message = "确认凭证不能为空。")
             String confirmationToken) {
     }
 
-    /** Response for draft confirm/cancel. */
+    /** 草稿确认或取消响应。 */
     public record DraftConfirmResponse(Long draftId, String status) {
+    }
+
+    public record DraftEditRequest(
+            @jakarta.validation.constraints.NotBlank(message = "修订后的回复内容不能为空。") String editedText,
+            @jakarta.validation.constraints.Size(max = 500, message = "修订原因不能超过 500 个字符。") String reason) {
+    }
+
+    public record DraftEditResponse(Long draftId, String editedText, String status) {
     }
 }

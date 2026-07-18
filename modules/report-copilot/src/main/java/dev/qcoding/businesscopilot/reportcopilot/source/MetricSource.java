@@ -11,5 +11,15 @@ public record MetricSource(
         String unit,
         LocalDate periodStart,
         LocalDate periodEnd,
-        Instant collectedAt) {
+        Instant collectedAt,
+        String providerId,
+        String sourceVersion,
+        String sourceTimezone,
+        Instant validUntil) {
+
+    public MetricSource(String name, BigDecimal value, String unit, LocalDate periodStart,
+                        LocalDate periodEnd, Instant collectedAt) {
+        this(name, value, unit, periodStart, periodEnd, collectedAt,
+                "client-metric", "1", "UTC", null);
+    }
 }

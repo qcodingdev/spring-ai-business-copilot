@@ -76,7 +76,7 @@ public class SqlConfirmationService {
                 null,
                 null);
         store.save(candidate);
-        log.info("Created executable SQL candidate: id={}, owner={}, expiresAt={}",
+        log.info("已创建待确认 SQL：id={}，owner={}，expiresAt={}",
                 candidate.candidateId(), actor.actorId(), candidate.expiresAt());
         return candidate;
     }
@@ -112,7 +112,7 @@ public class SqlConfirmationService {
         if (!store.consume(candidateId, actor.actorId(), now)) {
             throw new BusinessException(ErrorCode.STATE_CONFLICT);
         }
-        log.info("Confirmed SQL candidate: id={}, actor={}", candidateId, actor.actorId());
+        log.info("SQL 已确认：id={}，actor={}", candidateId, actor.actorId());
         return new SqlCandidate(
                 candidate.candidateId(), candidate.sql(), null, null, SqlCandidateStatus.CONSUMED,
                 candidate.ownerActorId(), candidate.requestId(), candidate.modelName(),

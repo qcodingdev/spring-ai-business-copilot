@@ -1,6 +1,6 @@
 package dev.qcoding.businesscopilot.commonsecurity;
 
-/** Stable single-organization roles used by business object policies. */
+/** 业务对象策略使用的稳定单组织角色。 */
 public enum BusinessRole {
     ADMIN,
     OPERATOR,

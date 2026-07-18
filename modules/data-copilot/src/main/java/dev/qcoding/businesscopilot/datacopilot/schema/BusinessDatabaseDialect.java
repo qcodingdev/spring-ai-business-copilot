@@ -66,7 +66,7 @@ public enum BusinessDatabaseDialect {
 
     public static BusinessDatabaseDialect resolve(String configuredDialect, String jdbcUrl) {
         if (jdbcUrl == null || jdbcUrl.isBlank()) {
-            throw new IllegalArgumentException("Business query datasource URL must not be blank");
+            throw new IllegalArgumentException("业务查询数据源 JDBC URL 不能为空");
         }
         BusinessDatabaseDialect detected = detect(jdbcUrl);
         if (configuredDialect == null || configuredDialect.isBlank()
@@ -78,11 +78,11 @@ public enum BusinessDatabaseDialect {
             configured = valueOf(configuredDialect.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException ex) {
             throw new IllegalArgumentException(
-                    "Unsupported business query database dialect: " + configuredDialect, ex);
+                    "不支持的业务查询数据库类型：" + configuredDialect, ex);
         }
         if (configured != detected) {
             throw new IllegalArgumentException(
-                    "Business query database dialect does not match JDBC URL");
+                    "业务查询数据库方言与 JDBC URL 不匹配");
         }
         return configured;
     }
@@ -94,6 +94,6 @@ public enum BusinessDatabaseDialect {
             }
         }
         throw new IllegalArgumentException(
-                "Only PostgreSQL and MySQL business query JDBC URLs are supported");
+                "业务查询数据源仅支持 PostgreSQL 和 MySQL JDBC URL");
     }
 }

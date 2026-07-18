@@ -17,6 +17,12 @@ public class ResumeAssessmentEntity {
     private Instant expiresAt;
     private Instant createdAt;
     private Instant updatedAt;
+    private int criteriaVersion;
+    private String originalContentJson;
+    private String correctedContentJson;
+    private String reviewerFeedback;
+    private String decisionOutcome;
+    private Instant reviewedAt;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -46,4 +52,16 @@ public class ResumeAssessmentEntity {
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
+    public int getCriteriaVersion() { return criteriaVersion; }
+    public void setCriteriaVersion(int criteriaVersion) { this.criteriaVersion = criteriaVersion; }
+    public String getOriginalContentJson() { return originalContentJson; }
+    public void setOriginalContentJson(String originalContentJson) { this.originalContentJson = originalContentJson; }
+    public String getCorrectedContentJson() { return correctedContentJson; }
+    public void setCorrectedContentJson(String correctedContentJson) { this.correctedContentJson = correctedContentJson; }
+    public String getReviewerFeedback() { return reviewerFeedback; }
+    public void setReviewerFeedback(String reviewerFeedback) { this.reviewerFeedback = reviewerFeedback; }
+    public String getDecisionOutcome() { return decisionOutcome; }
+    public void setDecisionOutcome(String decisionOutcome) { this.decisionOutcome = decisionOutcome; }
+    public Instant getReviewedAt() { return reviewedAt; }
+    public void setReviewedAt(Instant reviewedAt) { this.reviewedAt = reviewedAt; }
 }

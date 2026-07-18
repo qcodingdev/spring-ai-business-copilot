@@ -11,7 +11,7 @@ import java.util.List;
  */
 public class SqlGuardrailService {
 
-    public static final String POLICY_VERSION = "sql-guardrails-v1.1";
+    public static final String POLICY_VERSION = "sql-guardrails-v2.0";
 
     private final List<SqlValidator> validators;
 
@@ -23,7 +23,7 @@ public class SqlGuardrailService {
     public SqlValidationResult validate(String sql, GuardrailsProperties properties) {
         if (sql == null || sql.isBlank()) {
             return SqlValidationResult.fail(sql, List.of(
-                    SqlViolation.of(SqlViolationCode.UNPARSEABLE, "PreCheck", "SQL is empty")));
+                    SqlViolation.of(SqlViolationCode.UNPARSEABLE, "预检查", "SQL 为空")));
         }
         // Pre-check for multiple statements at text level (before parser)
         boolean multiStatement = looksLikeMultipleStatements(sql);

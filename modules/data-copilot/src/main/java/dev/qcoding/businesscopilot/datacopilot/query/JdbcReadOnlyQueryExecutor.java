@@ -68,7 +68,7 @@ public class JdbcReadOnlyQueryExecutor implements ReadOnlyQueryExecutor {
                     validationResult.violations().stream()
                             .map(v -> v.code() + ": " + v.message())
                             .toList());
-            log.warn("Second guardrails check rejected SQL: {}", violationDetails);
+            log.warn("SQL 执行前二次安全校验未通过：{}", violationDetails);
             throw new BusinessException(ErrorCode.SQL_GUARDRAIL_VIOLATION,
                     "SQL 未通过安全校验");
         }
@@ -91,7 +91,7 @@ public class JdbcReadOnlyQueryExecutor implements ReadOnlyQueryExecutor {
             // JdbcTemplate 把 SQLException 包装成 DataAccessException，这里取出原始 SQLException
             SQLException sqlEx = extractSqlException(ex);
             String userMessage = sqlEx != null ? translateSQLException(sqlEx) : "查询执行失败";
-            log.error("Query execution failed: {}", userMessage, ex);
+            log.error("查询执行失败：{}", userMessage, ex);
             throw new QueryExecutionException(userMessage, ex);
         }
     }

@@ -97,7 +97,13 @@ class PostgresPgvectorIntegrationTest {
         assertThat(extension).isEqualTo("vector");
         assertThat(actorColumns).isEqualTo(5);
         assertThat(httpRequestColumns).isEqualTo(5);
-        assertThat(latestMigration).isEqualTo("12");
+        assertThat(latestMigration).isEqualTo("18");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT format_type(atttypid, atttypmod) "
+                        + "FROM pg_attribute "
+                        + "WHERE attrelid = 'knowledge_chunk_embeddings'::regclass "
+                        + "AND attname = 'embedding'",
+                String.class)).isEqualTo("vector");
     }
 
     @Test
@@ -113,11 +119,13 @@ class PostgresPgvectorIntegrationTest {
         Flyway.configure().dataSource(upgradeDataSource).target("7").load().migrate();
         JdbcTemplate upgradeJdbcTemplate = new JdbcTemplate(upgradeDataSource);
 
-        Long indexedDocumentId = insertDocument(upgradeJdbcTemplate, "Indexed document", "b".repeat(64));
+        Long indexedDocumentId = insertLegacyDocument(
+                upgradeJdbcTemplate, "Indexed document", "b".repeat(64));
         Long indexedChunkId = insertChunk(upgradeJdbcTemplate, indexedDocumentId, 0, "indexed content");
         new JdbcKnowledgeEmbeddingRepository(upgradeJdbcTemplate).saveAll(List.of(
                 new KnowledgeChunkEmbedding(null, indexedChunkId, "integration-model", vector(0, 1.0f), null)));
-        Long unindexedDocumentId = insertDocument(upgradeJdbcTemplate, "Unindexed document", "c".repeat(64));
+        Long unindexedDocumentId = insertLegacyDocument(
+                upgradeJdbcTemplate, "Unindexed document", "c".repeat(64));
 
         Flyway.configure().dataSource(upgradeDataSource).load().migrate();
 
@@ -142,7 +150,13 @@ class PostgresPgvectorIntegrationTest {
                 """, Integer.class)).isEqualTo(10);
         assertThat(upgradeJdbcTemplate.queryForObject(
                 "SELECT version FROM flyway_schema_history WHERE success = TRUE ORDER BY installed_rank DESC LIMIT 1",
-                String.class)).isEqualTo("12");
+                String.class)).isEqualTo("18");
+        assertThat(upgradeJdbcTemplate.queryForObject(
+                "SELECT format_type(atttypid, atttypmod) "
+                        + "FROM pg_attribute "
+                        + "WHERE attrelid = 'knowledge_chunk_embeddings'::regclass "
+                        + "AND attname = 'embedding'",
+                String.class)).isEqualTo("vector");
     }
 
     @Test
@@ -221,22 +235,28 @@ class PostgresPgvectorIntegrationTest {
     void pgvectorSimilaritySearchReturnsTheClosestEnabledChunk() {
         Long documentId = jdbcTemplate.queryForObject("""
                 INSERT INTO knowledge_documents (
-                    title, source_type, source_name, category, content_hash, enabled
-                ) VALUES (?, 'upload', ?, 'integration-test', ?, TRUE)
+                    title, source_type, source_name, category, content_hash, enabled,
+                    logical_document_id, version_no, current_version, index_status,
+                    content_type, owner_actor_id
+                ) VALUES (?, 'upload', ?, 'integration-test', ?, TRUE,
+                          gen_random_uuid(), 1, TRUE, 'INDEXED', 'text/plain', 'integration-test')
                 RETURNING id
                 """, Long.class, "Vector test", "vector-test.txt", "a".repeat(64));
         Long firstChunkId = insertChunk(documentId, 0, "closest chunk");
         Long secondChunkId = insertChunk(documentId, 1, "distant chunk");
+        Long legacyChunkId = insertChunk(documentId, 2, "legacy dimension chunk");
 
         float[] firstVector = vector(0, 1.0f);
         float[] secondVector = vector(1, 1.0f);
         JdbcKnowledgeEmbeddingRepository repository = new JdbcKnowledgeEmbeddingRepository(jdbcTemplate);
         repository.saveAll(List.of(
                 new KnowledgeChunkEmbedding(null, firstChunkId, "integration-model", firstVector, null),
-                new KnowledgeChunkEmbedding(null, secondChunkId, "integration-model", secondVector, null)));
+                new KnowledgeChunkEmbedding(null, secondChunkId, "integration-model", secondVector, null),
+                new KnowledgeChunkEmbedding(null, legacyChunkId, "legacy-model",
+                        new float[]{1.0f, 0.0f, 0.0f}, null)));
 
         List<KnowledgeEmbeddingRepository.SimilaritySearchResult> results =
-                repository.findSimilarChunks(firstVector, 5, 0.5);
+                repository.findSimilarChunks(firstVector, "integration-model", 5, 0.5);
 
         assertThat(results).extracting(KnowledgeEmbeddingRepository.SimilaritySearchResult::chunkId)
                 .containsExactly(firstChunkId);
@@ -276,7 +296,18 @@ class PostgresPgvectorIntegrationTest {
         return insertChunk(jdbcTemplate, documentId, index, content);
     }
 
-    private static Long insertDocument(JdbcTemplate target, String title, String contentHash) {
+    @Test
+    void expandedSampleDataSupportsTrendAndRankingQueries() {
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM customers", Integer.class))
+                .isGreaterThanOrEqualTo(120);
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM orders", Integer.class))
+                .isGreaterThanOrEqualTo(720);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(DISTINCT date_trunc('month', created_at)) FROM orders",
+                Integer.class)).isGreaterThanOrEqualTo(12);
+    }
+
+    private static Long insertLegacyDocument(JdbcTemplate target, String title, String contentHash) {
         return target.queryForObject("""
                 INSERT INTO knowledge_documents (
                     title, source_type, source_name, category, content_hash, enabled

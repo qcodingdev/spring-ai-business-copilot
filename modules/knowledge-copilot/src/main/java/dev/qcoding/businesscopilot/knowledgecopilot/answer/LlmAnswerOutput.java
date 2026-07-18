@@ -15,10 +15,9 @@ record LlmAnswerOutput(
 
         List<CitationEntry> citations,
 
-        List<String> warnings) {
+    List<String> warnings) {
 
     record CitationEntry(
-            Long chunkId,
-            String excerpt) {
+            Long chunkId) {
     }
 }

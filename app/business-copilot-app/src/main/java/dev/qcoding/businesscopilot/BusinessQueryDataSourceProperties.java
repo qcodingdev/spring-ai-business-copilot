@@ -2,7 +2,7 @@ package dev.qcoding.businesscopilot;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-/** Optional dedicated, read-only Data Copilot query connection. */
+/** Data Copilot 可选的独立只读业务查询连接。 */
 @ConfigurationProperties(prefix = "business-copilot.data-copilot.datasource")
 public class BusinessQueryDataSourceProperties {
 

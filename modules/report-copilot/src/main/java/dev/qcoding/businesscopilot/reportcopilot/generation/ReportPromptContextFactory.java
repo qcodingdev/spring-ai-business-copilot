@@ -15,6 +15,8 @@ public class ReportPromptContextFactory {
                 "periodStart", preview.period().periodStart().toString(),
                 "periodEnd", preview.period().periodEnd().toString(),
                 "title", preview.title(),
+                "templateId", preview.templateId(),
+                "templateVersion", preview.templateVersion(),
                 "evidencePack", formatEvidencePack(preview));
     }
 
@@ -26,6 +28,14 @@ public class ReportPromptContextFactory {
         return "sourceId=" + source.sourceId()
                 + "\ntype=" + source.sourceType()
                 + "\ntitle=" + source.title()
+                + "\nsnapshotId=" + source.snapshotId()
+                + "\nproviderId=" + source.providerId()
+                + "\nsourceVersion=" + source.sourceVersion()
+                + "\nobservedAt=" + source.observedAt()
+                + "\ntimezone=" + source.sourceTimezone()
+                + "\nunit=" + source.sourceUnit()
+                + "\nvalidUntil=" + source.validUntil()
+                + "\nfreshness=" + source.freshness()
                 + "\ncontent:\n" + source.sanitizedContent()
                 + "\nmetadata=" + source.attributes();
     }

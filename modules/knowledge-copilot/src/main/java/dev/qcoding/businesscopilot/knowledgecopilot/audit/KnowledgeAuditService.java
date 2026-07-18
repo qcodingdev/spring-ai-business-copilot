@@ -31,7 +31,7 @@ public class KnowledgeAuditService {
         try {
             return repository.save(auditLog);
         } catch (RuntimeException ex) {
-            log.error("Failed to persist knowledge QA audit log for requestId={}", auditLog.requestId(), ex);
+            log.error("知识问答审计日志写入失败：requestId={}", auditLog.requestId(), ex);
             return null;
         }
     }

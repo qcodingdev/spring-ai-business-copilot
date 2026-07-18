@@ -3,51 +3,146 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>AI Business Copilot</title>
+  <title>QCoding AI Copilot</title>
   <link rel="stylesheet" th:href="@{/css/app.css}"/>
+  <link rel="icon" type="image/png" th:href="@{/images/qcoding-logo.png}"/>
   <meta name="_csrf" th:content="${_csrf.token}"/>
   <meta name="_csrf_header" th:content="${_csrf.headerName}"/>
 </head>
-<body>
-<div class="container">
-
-  <header>
-    <div>
-      <h1>AI Business Copilot</h1>
-      <p class="subtitle">企业智能助手工作台</p>
+<body class="workbench-page">
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <img class="brand-logo" th:src="@{/images/qcoding-logo.png}" alt="QCoding Logo"/>
+      <span class="brand-copy">
+        <strong>QCoding AI Copilot</strong>
+        <small>AI 应用开发 · Java 技术实践</small>
+      </span>
     </div>
-    <div class="user-actions">
-      <span th:text="${currentUser}">user</span>
-      <form th:action="@{/logout}" method="post">
-        <button type="submit" class="btn-secondary table-action-button">退出</button>
-      </form>
-    </div>
-  </header>
 
-  <!-- 模块切换 -->
-  <nav class="tab-bar">
-    <button class="tab active" data-tab="data-copilot">Data Copilot</button>
-    <button class="tab" data-tab="knowledge-copilot">Knowledge Copilot</button>
-    <button class="tab" data-tab="support-copilot">Support Copilot</button>
-    <button class="tab" data-tab="report-copilot">Report Copilot</button>
-    <button class="tab" data-tab="resume-copilot">Resume Copilot</button>
-  </nav>
+    <div class="sidebar-status">
+      <span class="status-dot" aria-hidden="true"></span>
+      <span>
+        <strong>安全执行模式</strong>
+        <small>Guardrails 已启用</small>
+      </span>
+    </div>
+
+    <!-- 模块切换 -->
+    <nav class="tab-bar" role="tablist" aria-label="业务助手模块">
+      <button class="tab active" type="button" role="tab" aria-selected="true"
+              data-tab="data-copilot"
+              data-title="Data Copilot"
+              data-description="用自然语言生成、校验并执行只读业务查询">
+        <span class="tab-icon" aria-hidden="true">D</span>
+        <span class="tab-copy"><strong>数据查询</strong><small>Data Copilot</small></span>
+      </button>
+      <button class="tab" type="button" role="tab" aria-selected="false"
+              data-tab="knowledge-copilot"
+              data-title="Knowledge Copilot"
+              data-description="从企业文档中检索证据并生成可追溯答案">
+        <span class="tab-icon" aria-hidden="true">K</span>
+        <span class="tab-copy"><strong>知识问答</strong><small>Knowledge Copilot</small></span>
+      </button>
+      <button class="tab" type="button" role="tab" aria-selected="false"
+              data-tab="support-copilot"
+              data-title="Support Copilot"
+              data-description="分析客服工单、检索依据并产出待确认回复">
+        <span class="tab-icon" aria-hidden="true">S</span>
+        <span class="tab-copy"><strong>客服处理</strong><small>Support Copilot</small></span>
+      </button>
+      <button class="tab" type="button" role="tab" aria-selected="false"
+              data-tab="report-copilot"
+              data-title="Report Copilot"
+              data-description="汇总业务证据，生成可复核、可导出的报告草稿">
+        <span class="tab-icon" aria-hidden="true">R</span>
+        <span class="tab-copy"><strong>报告生成</strong><small>Report Copilot</small></span>
+      </button>
+      <button class="tab" type="button" role="tab" aria-selected="false"
+              data-tab="resume-copilot"
+              data-title="Resume Copilot"
+              data-description="依据确认后的职位标准完成单份简历证据化评估">
+        <span class="tab-icon" aria-hidden="true">CV</span>
+        <span class="tab-copy"><strong>简历评估</strong><small>Resume Copilot</small></span>
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <span>QCoding AI</span>
+      <span class="sidebar-footer-badge">5 modules</span>
+    </div>
+  </aside>
+
+  <main class="workspace">
+    <header class="topbar">
+      <div class="module-heading">
+        <p class="eyebrow">QCoding AI 应用工作台</p>
+        <h1 id="active-module-title">Data Copilot</h1>
+        <p id="active-module-description" class="subtitle">用自然语言生成、校验并执行只读业务查询</p>
+      </div>
+      <div class="user-actions">
+        <span class="user-avatar" aria-hidden="true" th:text="${#strings.substring(currentUser, 0, 1).toUpperCase()}">U</span>
+        <span class="user-name" th:text="${currentUser}">user</span>
+        <form th:action="@{/logout}" method="post">
+          <button type="submit" class="btn-secondary table-action-button">退出</button>
+        </form>
+      </div>
+    </header>
+
+    <section class="trust-strip" aria-label="安全执行能力">
+      <div><span class="trust-icon">01</span><span><strong>业务边界</strong><small>模块化 Guardrails</small></span></div>
+      <div><span class="trust-icon">02</span><span><strong>人工确认</strong><small>高风险动作需确认</small></span></div>
+      <div><span class="trust-icon">03</span><span><strong>全链路审计</strong><small>输入、模型与结果可追溯</small></span></div>
+    </section>
+
+    <div class="workspace-content">
 
   <!-- ═══════════════════════════════════════════════════════════ -->
   <!-- Data Copilot 面板 -->
   <!-- ═══════════════════════════════════════════════════════════ -->
-  <div id="tab-data-copilot" class="tab-content">
+  <div id="tab-data-copilot" class="tab-content" role="tabpanel">
 
     <!-- 问题输入区 -->
-    <section class="panel" id="question-panel">
-      <label for="question-input">业务问题</label>
-      <textarea id="question-input" rows="3" placeholder="例如：上个月销售额最高的前5个客户是谁？"></textarea>
-      <button id="generate-btn" type="button">生成 SQL</button>
-    </section>
+    <div class="hero-grid">
+      <section class="panel panel-emphasis" id="question-panel">
+        <div class="panel-heading">
+          <div>
+        <span class="section-kicker">自然语言转 SQL</span>
+            <h2>你想了解什么业务数据？</h2>
+          </div>
+          <span class="badge badge-pass">只读模式</span>
+        </div>
+        <label for="question-input">业务问题</label>
+        <textarea id="question-input" rows="4" placeholder="例如：上个月销售额最高的前 5 个客户是谁？"></textarea>
+        <div class="prompt-suggestions" aria-label="示例业务问题">
+          <button type="button" class="prompt-chip" data-question="本月各产品分类的销售额和订单数分别是多少？">分类销售概览</button>
+          <button type="button" class="prompt-chip" data-question="最近 30 天退款金额最高的 5 个订单是什么？">退款风险</button>
+          <button type="button" class="prompt-chip" data-question="上个月销售额最高的前 5 个客户是谁？">高价值客户</button>
+        </div>
+        <div class="composer-footer">
+          <span class="input-hint">生成后将先展示 SQL 与安全校验，不会自动执行。</span>
+          <button id="generate-btn" type="button">生成并校验 SQL</button>
+        </div>
+      </section>
+
+      <aside class="panel assurance-panel" aria-label="查询执行边界">
+        <span class="section-kicker">执行约束</span>
+        <h2>每次查询都经过三道边界</h2>
+        <ol class="assurance-list">
+          <li><span>1</span><div><strong>Schema 白名单</strong><small>只允许访问显式授权的表与字段</small></div></li>
+          <li><span>2</span><div><strong>SQL Guardrails</strong><small>拒绝写操作、未知函数和无界结果</small></div></li>
+          <li><span>3</span><div><strong>确认后执行</strong><small>确认凭证绑定操作者、候选 SQL 与有效期</small></div></li>
+        </ol>
+        <div class="assurance-foot"><span class="status-dot"></span> 查询日志自动写入审计记录</div>
+      </aside>
+    </div>
 
     <!-- SQL 候选区 -->
     <section class="panel" id="candidate-panel" hidden>
-      <h2>SQL 候选</h2>
+      <div class="panel-heading">
+        <div><span class="section-kicker">生成的查询</span><h2>SQL 候选</h2></div>
+        <span class="badge badge-info">待确认</span>
+      </div>
       <div class="field-group">
         <label>SQL</label>
         <pre id="candidate-sql" class="code-block"></pre>
@@ -65,7 +160,9 @@
 
     <!-- Guardrails 区 -->
     <section class="panel" id="guardrails-panel" hidden>
-      <h2>安全校验</h2>
+      <div class="panel-heading">
+        <div><span class="section-kicker">规则检查</span><h2>安全校验</h2></div>
+      </div>
       <div id="guardrails-pass" hidden>
         <span class="badge badge-pass">通过</span>
         <span>SQL 通过安全校验，可以执行。</span>
@@ -77,7 +174,8 @@
     </section>
 
     <!-- 确认执行按钮 -->
-    <section id="confirm-panel" hidden>
+    <section id="confirm-panel" class="confirmation-bar" hidden>
+      <span><strong>SQL 已准备好</strong><small>确认后使用一次性凭证执行，并记录完整审计。</small></span>
       <input type="hidden" id="candidate-id"/>
       <input type="hidden" id="confirmation-token"/>
       <button id="execute-btn" type="button" disabled>确认执行</button>
@@ -85,7 +183,10 @@
 
     <!-- 结果表格 -->
     <section class="panel" id="result-panel" hidden>
-      <h2>查询结果 <span id="result-row-count" class="badge"></span></h2>
+      <div class="panel-heading">
+        <div><span class="section-kicker">查询结果</span><h2>查询结果</h2></div>
+        <span id="result-row-count" class="badge"></span>
+      </div>
       <div id="result-truncated" hidden>
         <span class="badge badge-warn">结果已截断</span>
       </div>
@@ -102,20 +203,27 @@
 
     <!-- AI 解释区 -->
     <section class="panel" id="explanation-panel" hidden>
-      <h2>AI 解释</h2>
+      <div class="panel-heading">
+        <div><span class="section-kicker">业务洞察</span><h2>AI 解释</h2></div>
+        <span id="explanation-degraded" class="badge badge-warn" hidden>降级</span>
+      </div>
       <p id="explanation-text"></p>
-      <span id="explanation-degraded" class="badge badge-warn" hidden>降级</span>
     </section>
 
     <!-- 审计记录预览 -->
     <section class="panel" id="audit-panel">
-      <h2>最近查询记录</h2>
-      <table id="audit-table">
-        <thead>
-          <tr><th>时间</th><th>问题</th><th>状态</th><th>行数</th></tr>
-        </thead>
-        <tbody id="audit-tbody"></tbody>
-      </table>
+      <div class="panel-heading">
+        <div><span class="section-kicker">审计链路</span><h2>最近查询记录</h2></div>
+        <span class="panel-note">最近 10 条</span>
+      </div>
+      <div class="table-scroll">
+        <table id="audit-table">
+          <thead>
+            <tr><th>时间</th><th>问题</th><th>状态</th><th>行数</th></tr>
+          </thead>
+          <tbody id="audit-tbody"></tbody>
+        </table>
+      </div>
     </section>
 
   </div><!-- /tab-data-copilot -->
@@ -123,39 +231,66 @@
   <!-- ═══════════════════════════════════════════════════════════ -->
   <!-- Knowledge Copilot 面板 -->
   <!-- ═══════════════════════════════════════════════════════════ -->
-  <div id="tab-knowledge-copilot" class="tab-content" hidden>
+  <div id="tab-knowledge-copilot" class="tab-content" role="tabpanel" hidden>
 
     <!-- 文档上传 -->
     <section class="panel" id="kc-upload-panel">
-      <h2>上传知识文档</h2>
+      <div class="panel-heading">
+        <div><span class="section-kicker">知识接入</span><h2>添加知识文档</h2></div>
+        <span class="badge badge-info">异步索引</span>
+      </div>
       <div class="upload-form">
-        <div class="field-group">
-          <label for="kc-file-name">文件名</label>
-          <input type="text" id="kc-file-name" placeholder="例如：员工手册.md" class="text-input"/>
+        <div id="kc-dropzone" class="dropzone" role="button" tabindex="0" aria-controls="kc-file-input">
+          <input id="kc-file-input" type="file" accept=".txt,.md,.markdown,.pdf,.docx,text/plain,text/markdown,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden/>
+          <span class="dropzone-icon" aria-hidden="true">↑</span>
+          <strong>拖拽文件到这里，或点击选择</strong>
+          <small>支持 TXT、Markdown、PDF、DOCX，单文件最大 2 MB</small>
+          <span id="kc-selected-file" class="selected-file" hidden></span>
         </div>
-        <div class="field-group">
-          <label for="kc-file-category">分类（可选）</label>
-          <input type="text" id="kc-file-category" placeholder="例如：HR" class="text-input"/>
+        <div class="sample-downloads" aria-label="知识库示例文档">
+          <span>下载虚构示例后上传体验：</span>
+          <a th:href="@{/samples/knowledge/product-faq.md}" download>产品 FAQ</a>
+          <a th:href="@{/samples/knowledge/refund-policy.md}" download>退款政策</a>
+          <a th:href="@{/samples/knowledge/incident-response.md}" download>故障响应</a>
+          <a th:href="@{/samples/knowledge/employee-handbook.md}" download>员工手册</a>
+        </div>
+
+        <div class="upload-divider"><span>或粘贴文本</span></div>
+
+        <div class="upload-fields">
+          <div class="field-group">
+            <label for="kc-file-name">文件名</label>
+            <input type="text" id="kc-file-name" placeholder="例如：员工手册.md" class="text-input"/>
+          </div>
+          <div class="field-group">
+            <label for="kc-file-category">业务分类（可选）</label>
+            <input type="text" id="kc-file-category" placeholder="例如：人事制度" class="text-input"/>
+          </div>
         </div>
         <div class="field-group">
           <label for="kc-file-content">文档内容（Markdown / 纯文本）</label>
           <textarea id="kc-file-content" rows="8" placeholder="粘贴文档内容…"></textarea>
         </div>
-        <button id="kc-upload-btn" type="button">上传文档</button>
-        <span id="kc-upload-status" class="inline-status" hidden></span>
+        <div class="composer-footer">
+          <span id="kc-upload-status" class="inline-status" hidden></span>
+          <button id="kc-upload-btn" type="button">上传并建立索引</button>
+        </div>
       </div>
     </section>
 
     <!-- 文档列表 -->
     <section class="panel" id="kc-docs-panel">
-      <h2>已上传文档 <span id="kc-docs-count" class="badge"></span></h2>
+      <div class="panel-heading">
+        <div><span class="section-kicker">文档清单</span><h2>知识文档</h2></div>
+        <span id="kc-docs-count" class="badge"></span>
+      </div>
       <div id="kc-docs-empty" class="empty-state" hidden>
         <p>暂无文档，请先上传。</p>
       </div>
       <div class="table-scroll">
         <table id="kc-docs-table">
           <thead>
-            <tr><th>ID</th><th>标题</th><th>分类</th><th>来源</th><th>启用</th><th>上传时间</th><th>操作</th></tr>
+            <tr><th>文档</th><th>分类</th><th>版本</th><th>索引状态</th><th>检索</th><th>更新时间</th><th>操作</th></tr>
           </thead>
           <tbody id="kc-docs-tbody"></tbody>
         </table>
@@ -163,19 +298,30 @@
     </section>
 
     <!-- 问答区 -->
-    <section class="panel" id="kc-qa-panel">
-      <h2>知识问答</h2>
+    <section class="panel panel-emphasis" id="kc-qa-panel">
+      <div class="panel-heading">
+        <div><span class="section-kicker">有依据的问答</span><h2>向企业知识库提问</h2></div>
+        <span class="badge badge-pass">引用必选</span>
+      </div>
       <label for="kc-question-input">输入问题</label>
-      <textarea id="kc-question-input" rows="3" placeholder="例如：公司年假政策是什么？"></textarea>
-      <button id="kc-ask-btn" type="button">提问</button>
+      <textarea id="kc-question-input" rows="4" placeholder="例如：公司年假政策是什么？"></textarea>
+      <div class="prompt-suggestions">
+        <button type="button" class="prompt-chip" data-target="kc-question-input" data-question="公司年假政策是什么？">年假政策</button>
+        <button type="button" class="prompt-chip" data-target="kc-question-input" data-question="退款申请需要满足哪些条件？">退款条件</button>
+        <button type="button" class="prompt-chip" data-target="kc-question-input" data-question="发生生产事故时应该如何升级响应？">事故响应</button>
+      </div>
+      <div class="composer-footer">
+        <span class="input-hint">证据不足时系统会拒绝生成确定性答案。</span>
+        <button id="kc-ask-btn" type="button">检索并生成答案</button>
+      </div>
     </section>
 
     <!-- 答案区 -->
     <section class="panel" id="kc-answer-panel" hidden>
-      <h2>
-        答案
+      <div class="panel-heading">
+        <div><span class="section-kicker">有依据的答案</span><h2>答案</h2></div>
         <span id="kc-answer-status-badge" class="badge"></span>
-      </h2>
+      </div>
       <div id="kc-answer-text" class="answer-text"></div>
       <div id="kc-answer-no-evidence" class="empty-state" hidden>
         <p>知识库中没有足够的信息来回答此问题。</p>
@@ -184,19 +330,26 @@
 
     <!-- 引用区 -->
     <section class="panel" id="kc-citations-panel" hidden>
-      <h2>引用来源</h2>
+      <div class="panel-heading">
+        <div><span class="section-kicker">证据</span><h2>引用来源</h2></div>
+      </div>
       <ul id="kc-citations-list" class="citation-list"></ul>
     </section>
 
     <!-- 警告区 -->
     <section class="panel" id="kc-warnings-panel" hidden>
-      <h2>警告</h2>
+      <div class="panel-heading">
+        <div><span class="section-kicker">安全规则提醒</span><h2>警告</h2></div>
+      </div>
       <ul id="kc-warnings-list" class="warnings-list"></ul>
     </section>
 
     <!-- 审计日志 -->
     <section class="panel" id="kc-audit-panel">
-      <h2>最近问答记录</h2>
+      <div class="panel-heading">
+        <div><span class="section-kicker">审计链路</span><h2>最近问答记录</h2></div>
+        <span class="panel-note">问题、模型与答案状态</span>
+      </div>
       <div class="table-scroll">
         <table id="kc-audit-table">
           <thead>
@@ -212,11 +365,14 @@
   <!-- ═══════════════════════════════════════════════════════════ -->
   <!-- Support Copilot 面板 -->
   <!-- ═══════════════════════════════════════════════════════════ -->
-  <div id="tab-support-copilot" class="tab-content" hidden>
+  <div id="tab-support-copilot" class="tab-content" role="tabpanel" hidden>
 
     <!-- 工单输入区 -->
-    <section class="panel" id="sc-ticket-panel">
-      <h2>客服工单分析</h2>
+    <section class="panel panel-emphasis" id="sc-ticket-panel">
+      <div class="panel-heading">
+        <div><span class="section-kicker">工单智能分析</span><h2>分析客户问题</h2></div>
+        <span class="badge badge-info">自动脱敏</span>
+      </div>
       <div class="field-group">
         <label for="sc-ticket-input">客户消息</label>
         <textarea id="sc-ticket-input" rows="4" placeholder="粘贴客户消息..."></textarea>
@@ -230,12 +386,18 @@
           <option value="chat">在线客服（chat）</option>
         </select>
       </div>
-      <button id="sc-analyze-btn" type="button">分析工单</button>
+      <div class="composer-footer">
+        <span class="input-hint">高风险分类将默认建议转人工处理。</span>
+        <button id="sc-analyze-btn" type="button">分析并生成回复草稿</button>
+      </div>
     </section>
 
     <!-- 示例工单快捷填充 -->
-    <section class="panel" id="sc-samples-panel">
-      <h2>示例工单</h2>
+    <section class="panel quick-start-panel" id="sc-samples-panel">
+      <div class="panel-heading">
+        <div><span class="section-kicker">快速开始</span><h2>使用示例工单</h2></div>
+      </div>
+      <p class="panel-description">选择一种典型场景，快速体验分类、证据检索和草稿确认流程。</p>
       <div class="sample-buttons" id="sc-sample-buttons">
         <button class="sample-btn" data-category="refund">退款咨询</button>
         <button class="sample-btn" data-category="activation">开通问题</button>
@@ -246,7 +408,9 @@
 
     <!-- 分类结果 -->
     <section class="panel" id="sc-classification-panel" hidden>
-      <h2>工单分类</h2>
+      <div class="panel-heading">
+        <div><span class="section-kicker">分类结果</span><h2>工单分类</h2></div>
+      </div>
       <div class="meta-grid">
         <div class="meta-item">
           <span class="meta-label">分类</span>
@@ -277,7 +441,9 @@
 
     <!-- 知识依据 -->
     <section class="panel" id="sc-evidence-panel" hidden>
-      <h2>知识依据</h2>
+      <div class="panel-heading">
+        <div><span class="section-kicker">知识证据</span><h2>知识依据</h2></div>
+      </div>
       <div id="sc-evidence-empty" class="empty-state" hidden>
         <p>未找到相关依据，建议转人工处理。</p>
       </div>
@@ -286,11 +452,20 @@
 
     <!-- 回复草稿 -->
     <section class="panel" id="sc-draft-panel" hidden>
-      <h2>
-        回复草稿
+      <div class="panel-heading">
+        <div><span class="section-kicker">人工复核</span><h2>回复草稿</h2></div>
         <span id="sc-draft-risk-badge" class="badge"></span>
-      </h2>
+      </div>
       <div id="sc-draft-text" class="answer-text"></div>
+      <div id="sc-draft-editor" class="field-group" hidden>
+        <label for="sc-draft-edit-text">人工修订草稿</label>
+        <textarea id="sc-draft-edit-text" rows="6" placeholder="可在确认前修订回复内容"></textarea>
+        <label for="sc-draft-edit-reason">修订原因（可选）</label>
+        <input id="sc-draft-edit-reason" type="text" class="text-input"
+               maxlength="500" placeholder="例如：调整语气并补充人工处理说明"/>
+        <button id="sc-edit-btn" type="button" class="btn-secondary">保存人工修订</button>
+        <p class="field-hint">修订内容仍会脱敏并写入审计；保存后还需要点击“确认草稿”。</p>
+      </div>
       <div id="sc-draft-needs-human" hidden>
         <span class="badge badge-warn">建议转人工</span>
         <ul id="sc-draft-risk-reasons"></ul>
@@ -309,7 +484,10 @@
 
     <!-- 审计记录 -->
     <section class="panel" id="sc-audit-panel">
-      <h2>最近处理记录</h2>
+      <div class="panel-heading">
+        <div><span class="section-kicker">审计链路</span><h2>最近处理记录</h2></div>
+        <span class="panel-note">最近 10 条</span>
+      </div>
       <div class="table-scroll">
         <table id="sc-audit-table">
           <thead>
@@ -325,10 +503,13 @@
   <!-- ═══════════════════════════════════════════════════════════ -->
   <!-- Report Copilot 面板 -->
   <!-- ═══════════════════════════════════════════════════════════ -->
-  <div id="tab-report-copilot" class="tab-content" hidden>
+  <div id="tab-report-copilot" class="tab-content" role="tabpanel" hidden>
 
-    <section class="panel" id="rc-request-panel">
-      <h2>报告范围与来源</h2>
+    <section class="panel panel-emphasis" id="rc-request-panel">
+      <div class="panel-heading">
+        <div><span class="section-kicker">证据化报告</span><h2>定义报告范围与来源</h2></div>
+        <span class="badge badge-pass">来源可追溯</span>
+      </div>
       <div class="report-request-grid">
         <div class="field-group">
           <label for="rc-report-type">报告类型</label>
@@ -410,20 +591,40 @@
         </fieldset>
       </div>
 
+      <div class="field-group">
+        <label for="rc-import-file">或导入业务来源文件（CSV / JSON）</label>
+        <input id="rc-import-file" type="file" class="text-input"
+               accept=".csv,.json,text/csv,application/json"/>
+        <p class="field-hint">文件会先经过大小、格式、字段和敏感内容校验；导入来源与手工来源不会混合提交。</p>
+        <p class="field-hint sample-downloads">
+          下载虚构样例：
+          <a th:href="@{/samples/report/team-weekly-sources.csv}" download>CSV 来源</a>
+          <a th:href="@{/samples/report/team-weekly-sources.json}" download>JSON 来源</a>
+        </p>
+      </div>
+
       <div class="action-buttons">
         <button id="rc-sample-sources-btn" type="button" class="btn-secondary">查看示例来源</button>
         <button id="rc-preview-btn" type="button" class="btn-secondary">预览来源</button>
         <button id="rc-generate-btn" type="button">生成报告草稿</button>
+        <button id="rc-import-preview-btn" type="button" class="btn-secondary">预览导入文件</button>
+        <button id="rc-generate-file-btn" type="button">从文件生成草稿</button>
       </div>
     </section>
 
     <section class="panel" id="rc-sources-panel" hidden>
-      <h2>证据预览 <span id="rc-sources-count" class="badge"></span></h2>
+      <div class="panel-heading">
+        <div><span class="section-kicker">来源预览</span><h2>证据预览</h2></div>
+        <span id="rc-sources-count" class="badge"></span>
+      </div>
       <ul id="rc-sources-list" class="citation-list"></ul>
     </section>
 
     <section class="panel" id="rc-draft-panel" hidden>
-      <h2>报告草稿 <span id="rc-status-badge" class="badge"></span></h2>
+      <div class="panel-heading">
+        <div><span class="section-kicker">可复核草稿</span><h2>报告草稿</h2></div>
+        <span id="rc-status-badge" class="badge"></span>
+      </div>
       <p id="rc-draft-meta" class="report-meta"></p>
       <div id="rc-review-reasons" class="report-review-reasons" hidden>
         <ul id="rc-review-reasons-list" class="warnings-list"></ul>
@@ -460,17 +661,29 @@
       </div>
       <div id="rc-export-actions" class="action-buttons" hidden>
         <button id="rc-export-btn" type="button" class="btn-primary">导出 Markdown</button>
+        <button id="rc-export-html-btn" type="button" class="btn-secondary">导出 HTML</button>
       </div>
     </section>
 
   </div><!-- /tab-report-copilot -->
 
   <!-- Resume Copilot 面板 -->
-  <div id="tab-resume-copilot" class="tab-content" hidden>
+  <div id="tab-resume-copilot" class="tab-content" role="tabpanel" hidden>
     <div class="compliance-notice">辅助评估，不代表录用或淘汰决定。系统不提供总分、排名或通过率。</div>
 
-    <section class="panel">
-      <h2>第一步：确认职位标准</h2>
+    <div class="process-rail" aria-label="简历评估流程">
+      <span class="active"><b>1</b>确认标准</span>
+      <i></i>
+      <span><b>2</b>分析简历</span>
+      <i></i>
+      <span><b>3</b>人工复核</span>
+    </div>
+
+    <section class="panel panel-emphasis">
+      <div class="panel-heading">
+        <div><span class="section-kicker">第 1 步</span><h2>确认职位标准</h2></div>
+        <span class="badge badge-info">先标准后评估</span>
+      </div>
       <div class="field-group">
         <label for="rsc-job-title">职位名称</label>
         <input id="rsc-job-title" class="text-input" value="Java 后端工程师" maxlength="300"/>
@@ -482,11 +695,22 @@
 必选：具备 PostgreSQL 或其他关系型数据库经验。
 加分：有容器化服务实践。</textarea>
       </div>
+      <div class="field-group">
+        <label for="rsc-job-file">或上传 JD 文件（TXT / Markdown / PDF / DOCX）</label>
+        <input id="rsc-job-file" type="file" class="text-input"
+               accept=".txt,.md,.markdown,.pdf,.docx,text/plain,text/markdown,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"/>
+        <p class="field-hint sample-downloads">
+          <a th:href="@{/samples/resume/java-backend-jd.md}" download>下载虚构 JD 样例</a>
+        </p>
+      </div>
       <button id="rsc-extract-btn" type="button">解析评估标准</button>
     </section>
 
     <section id="rsc-criteria-panel" class="panel" hidden>
-      <h2>评估标准 <span id="rsc-criteria-status" class="badge"></span></h2>
+      <div class="panel-heading">
+        <div><span class="section-kicker">标准复核</span><h2>评估标准</h2></div>
+        <span id="rsc-criteria-status" class="badge"></span>
+      </div>
       <div class="table-scroll">
         <table>
           <thead><tr><th>类型</th><th>要求</th><th>标准</th><th>JD 原文</th></tr></thead>
@@ -497,7 +721,10 @@
     </section>
 
     <section id="rsc-resume-panel" class="panel" hidden>
-      <h2>第二步：分析单份简历</h2>
+      <div class="panel-heading">
+        <div><span class="section-kicker">第 2 步</span><h2>分析单份简历</h2></div>
+        <span class="badge badge-pass">隐私字段脱敏</span>
+      </div>
       <div class="field-group">
         <label for="rsc-resume-text">简历文本（TXT / Markdown）</label>
         <textarea id="rsc-resume-text" rows="10">姓名：演示候选人
@@ -513,11 +740,23 @@
 # 项目经历
 使用 Docker 容器化两个测试环境服务，未说明生产运维职责。</textarea>
       </div>
+      <div class="field-group">
+        <label for="rsc-resume-file">或上传简历文件（TXT / Markdown / PDF / DOCX）</label>
+        <input id="rsc-resume-file" type="file" class="text-input"
+               accept=".txt,.md,.markdown,.pdf,.docx,text/plain,text/markdown,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"/>
+        <p class="field-hint">仅保存脱敏后的文本和证据，默认 30 天自动删除，也可在复核后立即删除。</p>
+        <p class="field-hint sample-downloads">
+          <a th:href="@{/samples/resume/java-backend-resume.md}" download>下载虚构简历样例</a>
+        </p>
+      </div>
       <button id="rsc-assess-btn" type="button">生成证据化评估</button>
     </section>
 
     <section id="rsc-assessment-panel" class="panel" hidden>
-      <h2>评估草稿 <span id="rsc-assessment-status" class="badge"></span></h2>
+      <div class="panel-heading">
+        <div><span class="section-kicker">第 3 步</span><h2>证据化评估草稿</h2></div>
+        <span id="rsc-assessment-status" class="badge"></span>
+      </div>
       <div id="rsc-review-reasons" class="report-review-reasons" hidden>
         <ul id="rsc-review-reasons-list" class="warnings-list"></ul>
       </div>
@@ -539,23 +778,47 @@
           <section><h3>限制说明</h3><ul id="rsc-limitations-list"></ul></section>
         </div>
       </div>
+      <section id="rsc-evidence-section" hidden>
+        <h3 class="compact-heading">脱敏简历证据</h3>
+        <ul id="rsc-evidence-list" class="citation-list"></ul>
+      </section>
+      <div id="rsc-review-editor" hidden>
+        <div class="field-group">
+          <label>
+            <input id="rsc-apply-correction" type="checkbox"/>
+            提交人工修订后的结构化评估
+          </label>
+          <textarea id="rsc-corrected-content" rows="12" spellcheck="false"></textarea>
+          <p class="field-hint">需要复核的评估必须提交修订版；内容仍会重新经过证据和招聘合规安全规则。</p>
+        </div>
+        <div class="field-group">
+          <label for="rsc-review-feedback">复核意见（可选）</label>
+          <textarea id="rsc-review-feedback" rows="3" maxlength="4000"
+                    placeholder="记录修订原因、证据缺口或后续核验建议"></textarea>
+        </div>
+      </div>
       <div id="rsc-assessment-actions" class="action-buttons" hidden>
         <button id="rsc-review-btn" type="button" class="btn-primary">标记已复核</button>
         <button id="rsc-cancel-btn" type="button" class="btn-secondary">取消评估</button>
+        <button id="rsc-delete-submission-btn" type="button" class="btn-secondary">删除脱敏简历数据</button>
       </div>
     </section>
   </div><!-- /tab-resume-copilot -->
+    </div><!-- /workspace-content -->
+  </main>
+</div><!-- /app-shell -->
 
   <!-- 错误提示 -->
-  <div id="error-toast" hidden></div>
+  <div id="error-toast" role="status" aria-live="polite" hidden></div>
 
   <!-- Loading -->
-  <div id="loading-overlay" hidden>
-    <div class="spinner"></div>
-    <p id="loading-text">处理中…</p>
+  <div id="loading-overlay" role="status" aria-live="polite" aria-busy="true" hidden>
+    <div class="loading-card">
+      <div class="spinner"></div>
+      <p id="loading-text">处理中…</p>
+      <small>正在通过业务边界与安全策略</small>
+    </div>
   </div>
-
-</div>
 
 <script th:src="@{/js/app.js}"></script>
 <script th:src="@{/js/knowledge-copilot.js}"></script>

@@ -43,7 +43,7 @@ class ReportMarkdownExportServiceTest {
 
         String markdown = service.export(10L);
 
-        assertThat(markdown).contains("## Executive Summary");
+        assertThat(markdown).contains("## 执行摘要");
         assertThat(markdown).contains("\\[untrusted\\]");
         assertThat(markdown).contains("&lt;script&gt;");
         ArgumentCaptor<ReportAuditLog> audit = ArgumentCaptor.forClass(ReportAuditLog.class);
@@ -60,7 +60,7 @@ class ReportMarkdownExportServiceTest {
 
         assertThatThrownBy(() -> service.export(10L))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("CONFIRMED");
+                .hasMessageContaining("只有已确认的报告草稿可以导出");
     }
 
     private ReportDraft draft(ReportDraftStatus status) {

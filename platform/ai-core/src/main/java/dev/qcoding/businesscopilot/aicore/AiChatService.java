@@ -64,10 +64,10 @@ public class AiChatService {
         } catch (BusinessException ex) {
             throw ex;
         } catch (RuntimeException ex) {
-            log.error("Chat model text generation failed", ex);
+            log.error("对话模型文本生成失败", ex);
             // 模型调用异常转为业务可理解错误，不暴露底层 SDK 细节
             throw new BusinessException(ErrorCode.AI_MODEL_ERROR,
-                    "AI model invocation failed", ex);
+                    "AI 对话模型调用失败", ex);
         }
     }
 
@@ -88,9 +88,9 @@ public class AiChatService {
         } catch (BusinessException ex) {
             throw ex;
         } catch (RuntimeException ex) {
-            log.error("Chat model structured generation failed", ex);
+            log.error("对话模型结构化生成失败", ex);
             throw new BusinessException(ErrorCode.AI_OUTPUT_PARSE_ERROR,
-                    "AI model output could not be mapped to the expected schema", ex);
+                    "AI 模型输出无法转换为预期结构", ex);
         }
     }
 
@@ -109,9 +109,9 @@ public class AiChatService {
         } catch (BusinessException ex) {
             throw ex;
         } catch (RuntimeException ex) {
-            log.error("Chat model structured generation failed", ex);
+            log.error("对话模型结构化生成失败", ex);
             throw new BusinessException(ErrorCode.AI_OUTPUT_PARSE_ERROR,
-                    "AI model output could not be mapped to the expected schema", ex);
+                    "AI 模型输出无法转换为预期结构", ex);
         }
     }
 
@@ -127,9 +127,9 @@ public class AiChatService {
         } catch (BusinessException ex) {
             throw ex;
         } catch (RuntimeException ex) {
-            log.error("Chat model text generation failed", ex);
+            log.error("对话模型文本生成失败", ex);
             throw new BusinessException(ErrorCode.AI_MODEL_ERROR,
-                    "AI model invocation failed", ex);
+                    "AI 对话模型调用失败", ex);
         }
     }
 
@@ -162,19 +162,19 @@ public class AiChatService {
     private ChatClient requireChatClient() {
         if (properties.modelDisabled()) {
             throw new AiModelNotEnabledException(
-                    "AI chat model is disabled (business-copilot.ai-core.model-disabled=true).");
+                    "AI 对话模型已被配置项 business-copilot.ai-core.model-disabled=true 禁用。");
         }
         ChatClient.Builder builder;
         try {
             builder = chatClientBuilderProvider.getIfAvailable();
         } catch (BeansException ex) {
             throw new AiModelNotEnabledException(
-                    "No AI chat model is configured. Set spring.ai.model.chat and provide API credentials.");
+                    "未配置 AI 对话模型，请设置 spring.ai.model.chat 并提供模型凭证。");
         }
         if (builder == null) {
             // chat model 为 none 时 ChatClient.Builder bean 不会被创建，给出清晰错误
             throw new AiModelNotEnabledException(
-                    "No AI chat model is configured. Set spring.ai.model.chat and provide API credentials.");
+                    "未配置 AI 对话模型，请设置 spring.ai.model.chat 并提供模型凭证。");
         }
         return builder.build();
     }

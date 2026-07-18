@@ -7,7 +7,6 @@ import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
 
 import java.sql.PreparedStatement;
-import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
@@ -66,7 +65,7 @@ public class JdbcSupportAuditRepository implements SupportAuditRepository {
         Instant now = Instant.now();
 
         jdbcTemplate.update(connection -> {
-            PreparedStatement ps = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
+            PreparedStatement ps = connection.prepareStatement(sql, new String[]{"id"});
             ps.setString(1, log.requestId());
             ps.setString(2, BusinessRequestContextHolder.currentRequestId());
             ps.setString(3, BusinessRequestContextHolder.currentActorId());

@@ -11,7 +11,8 @@ import dev.qcoding.businesscopilot.knowledgecopilot.document.DocumentUploadRespo
 import dev.qcoding.businesscopilot.knowledgecopilot.document.DocumentUploadService;
 import dev.qcoding.businesscopilot.knowledgecopilot.document.KnowledgeDocument;
 import dev.qcoding.businesscopilot.knowledgecopilot.document.KnowledgeDocumentRepository;
-import dev.qcoding.businesscopilot.knowledgecopilot.embedding.EmbeddingIndexResult;
+import dev.qcoding.businesscopilot.knowledgecopilot.indexing.KnowledgeIndexJob;
+import dev.qcoding.businesscopilot.knowledgecopilot.indexing.KnowledgeIndexJobStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -135,12 +136,14 @@ class KnowledgeCopilotControllerTest {
     @Test
     @DisplayName("POST /documents/{id}/reindex rebuilds embeddings")
     void reindexDocumentReturnsIndexResult() {
-        EmbeddingIndexResult result = new EmbeddingIndexResult(1L, 3, "embedding-model", 1536);
+        KnowledgeIndexJob result = new KnowledgeIndexJob(
+                10L, 1L, KnowledgeIndexJobStatus.PENDING, 0,
+                null, null, null, null, null, null, null, null, null);
         when(documentUploadService.reindex(1L)).thenReturn(result);
 
         var response = controller.reindexDocument(1L);
 
-        assertThat(response.getStatusCode().value()).isEqualTo(200);
+        assertThat(response.getStatusCode().value()).isEqualTo(202);
         assertThat(response.getBody().data()).isEqualTo(result);
         verify(documentUploadService).reindex(1L);
     }

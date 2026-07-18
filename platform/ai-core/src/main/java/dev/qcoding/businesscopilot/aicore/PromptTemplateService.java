@@ -44,12 +44,12 @@ public class PromptTemplateService {
     public String loadTemplate(String location) {
         Resource resource = resourceResolver.getResource(PROMPTS_PREFIX + location);
         if (!resource.exists()) {
-            throw new IllegalStateException("Prompt template not found: " + location);
+            throw new IllegalStateException("未找到提示词模板：" + location);
         }
         try (var input = resource.getInputStream()) {
             return StreamUtils.copyToString(input, StandardCharsets.UTF_8);
         } catch (IOException ex) {
-            throw new IllegalStateException("Failed to read prompt template: " + location, ex);
+            throw new IllegalStateException("读取提示词模板失败：" + location, ex);
         }
     }
 
@@ -69,7 +69,7 @@ public class PromptTemplateService {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
                     .digest(value.getBytes(StandardCharsets.UTF_8)));
         } catch (NoSuchAlgorithmException ex) {
-            throw new IllegalStateException("SHA-256 is unavailable", ex);
+            throw new IllegalStateException("当前运行环境不支持 SHA-256", ex);
         }
     }
 }

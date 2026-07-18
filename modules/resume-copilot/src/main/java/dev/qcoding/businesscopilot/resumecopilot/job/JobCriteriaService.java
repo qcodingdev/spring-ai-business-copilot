@@ -12,6 +12,7 @@ import dev.qcoding.businesscopilot.commonsecurity.ObjectAccessPolicy;
 import dev.qcoding.businesscopilot.commonsecurity.ObjectAction;
 import dev.qcoding.businesscopilot.commonweb.api.BusinessException;
 import dev.qcoding.businesscopilot.commonweb.api.ErrorCode;
+import dev.qcoding.businesscopilot.documentprocessing.DocumentTextExtractor;
 import dev.qcoding.businesscopilot.resumecopilot.ResumeCopilotProperties;
 import dev.qcoding.businesscopilot.resumecopilot.ResumeModels;
 import dev.qcoding.businesscopilot.resumecopilot.persistence.ResumeJobEntity;
@@ -23,12 +24,13 @@ import tools.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.IntStream;
 import org.springframework.transaction.annotation.Transactional;
 
 public class JobCriteriaService {
     private static final String PROMPT = "resume-copilot/job-criteria-extraction.st";
-    private static final String POLICY_VERSION = "resume-job-criteria-v1";
+    private static final String POLICY_VERSION = "resume-job-criteria-v2.0";
     private final ResumePrivacySanitizer sanitizer;
     private final AiChatService ai;
     private final PromptTemplateService prompts;
@@ -38,14 +40,17 @@ public class JobCriteriaService {
     private final CurrentActorProvider actorProvider;
     private final ObjectAccessPolicy accessPolicy;
     private final ConfirmationTokenService tokenService;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
+    private final DocumentTextExtractor documentTextExtractor;
 
     public JobCriteriaService(ResumePrivacySanitizer sanitizer, AiChatService ai, PromptTemplateService prompts,
                               JobCriteriaGuardrail guardrail, ResumeRepository repository,
                               ResumeCopilotProperties properties,
                               CurrentActorProvider actorProvider,
                               ObjectAccessPolicy accessPolicy,
-                              ConfirmationTokenService tokenService) {
+                              ConfirmationTokenService tokenService,
+                              ObjectMapper objectMapper,
+                              DocumentTextExtractor documentTextExtractor) {
         this.sanitizer = sanitizer;
         this.ai = ai;
         this.prompts = prompts;
@@ -55,21 +60,40 @@ public class JobCriteriaService {
         this.actorProvider = actorProvider;
         this.accessPolicy = accessPolicy;
         this.tokenService = tokenService;
+        this.objectMapper = objectMapper;
+        this.documentTextExtractor = documentTextExtractor;
     }
 
     public CriteriaResponse extract(String title, String jobDescription) {
+        return extract(title, jobDescription, null);
+    }
+
+    public CriteriaResponse extractFile(String title, String fileName, String contentType,
+                                        byte[] content, UUID logicalJobId) {
+        return extract(title,
+                documentTextExtractor.extract(fileName, contentType, content).text(),
+                logicalJobId);
+    }
+
+    public CriteriaResponse extract(String title, String jobDescription, UUID requestedLogicalJobId) {
         if (title == null || title.isBlank() || title.length() > 300) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Job title is required and must not exceed 300 characters.");
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "职位名称不能为空且不能超过 300 个字符。");
         }
         CurrentActor actor = actorProvider.currentActor();
         if (!actor.authenticated()) {
+            throw new BusinessException(ErrorCode.NOT_FOUND);
+        }
+        UUID logicalJobId = requestedLogicalJobId == null ? UUID.randomUUID() : requestedLogicalJobId;
+        ResumeJobEntity currentVersion = repository.findCurrentJob(logicalJobId);
+        if (currentVersion != null && !accessPolicy.allowed(
+                actor, ObjectAction.CREATE, currentVersion.getOwnerActorId(), null, false)) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         String sanitizedJd = sanitizer.sanitizeJobDescription(jobDescription);
         String modelName = ai.modelName();
         long startMs = System.currentTimeMillis();
         RenderedPrompt prompt = prompts.renderWithMetadata(
-                PROMPT, "v1", Map.of("jobTitle", title.trim(), "jobDescription", sanitizedJd));
+                PROMPT, "v2.0", Map.of("jobTitle", title.trim(), "jobDescription", sanitizedJd));
         AiInvocationMetadata aiMetadata = null;
         try {
             AiInvocationResult<ResumeModels.LlmJobCriteriaOutput> invocation =
@@ -98,15 +122,20 @@ public class JobCriteriaService {
             job.setStatus(ResumeModels.Status.CRITERIA_DRAFTED.name());
             job.setCriteriaTokenDigest(token.digest());
             job.setOwnerActorId(actor.actorId());
+            job.setLogicalJobId(logicalJobId);
+            job.setCriteriaVersion(repository.nextCriteriaVersion(logicalJobId));
+            job.setCurrentVersion(true);
+            job.setEffectiveFrom(now);
             job.setExpiresAt(now.plus(properties.reviewTokenTtl()));
             job.setCreatedAt(now);
             job.setUpdatedAt(now);
-            repository.insertJob(job);
+            repository.insertJobVersion(job);
             repository.audit("CRITERIA_EXTRACTED", job.getId(), null, null,
                     criteria.size(), 0, modelName, job.getStatus(), null,
                     prompt.metadata(), aiMetadata, POLICY_VERSION, null,
                     System.currentTimeMillis() - startMs, actor.actorId(), null);
-            return new CriteriaResponse(job.getId(), job.getTitle(), ResumeModels.Status.CRITERIA_DRAFTED,
+            return new CriteriaResponse(job.getId(), job.getLogicalJobId(), job.getCriteriaVersion(),
+                    job.getTitle(), ResumeModels.Status.CRITERIA_DRAFTED,
                     criteria, token.rawToken(), job.getExpiresAt().toString());
         } catch (BusinessException ex) {
             throw ex;
@@ -159,17 +188,18 @@ public class JobCriteriaService {
 
     private String write(List<ResumeModels.JobCriterion> criteria) {
         try { return objectMapper.writeValueAsString(criteria); }
-        catch (JacksonException ex) { throw new IllegalStateException("Unable to serialize job criteria", ex); }
+        catch (JacksonException ex) { throw new IllegalStateException("职位标准序列化失败", ex); }
     }
 
     private List<ResumeModels.JobCriterion> read(String json) {
         try {
             return objectMapper.readValue(json, objectMapper.getTypeFactory().constructCollectionType(List.class,
                     ResumeModels.JobCriterion.class));
-        } catch (JacksonException ex) { throw new IllegalStateException("Unable to deserialize job criteria", ex); }
+        } catch (JacksonException ex) { throw new IllegalStateException("职位标准反序列化失败", ex); }
     }
 
-    public record CriteriaResponse(Long jobId, String title, ResumeModels.Status status,
+    public record CriteriaResponse(Long jobId, UUID logicalJobId, int criteriaVersion,
+                                   String title, ResumeModels.Status status,
                                    List<ResumeModels.JobCriterion> criteria, String confirmationToken, String expiresAt) { }
     public record StatusResponse(Long jobId, ResumeModels.Status status) { }
 }

@@ -79,7 +79,7 @@ public class ReplyDraftGuardrailService {
         // 2. 禁止承诺检查。允许出现“退款流程”等业务名词，但禁止确定承诺。
         for (String forbidden : FORBIDDEN_COMMITMENTS) {
             if (replyText.contains(forbidden)) {
-                log.warn("Reply draft contains forbidden commitment: '{}'", forbidden);
+                log.warn("回复草稿包含禁止承诺：'{}'", forbidden);
                 throw new BusinessException(ErrorCode.VALIDATION_ERROR,
                         "回复草稿包含禁止承诺的内容: '" + forbidden + "'。请重新生成草稿。");
             }
@@ -89,14 +89,24 @@ public class ReplyDraftGuardrailService {
     /**
      * Determine the effective risk level, considering category-based escalation.
      */
-    public String effectiveRiskLevel(LlmReplyDraftOutput output, String category) {
-        String modelRisk = output.riskLevel() != null ? output.riskLevel().toUpperCase() : "MEDIUM";
+    public dev.qcoding.businesscopilot.supportcopilot.classification.SupportRiskLevel effectiveRiskLevel(
+            LlmReplyDraftOutput output,
+            dev.qcoding.businesscopilot.supportcopilot.classification.TicketCategory category) {
+        dev.qcoding.businesscopilot.supportcopilot.classification.SupportRiskLevel modelRisk;
+        try {
+            modelRisk = output.riskLevel() == null
+                    ? dev.qcoding.businesscopilot.supportcopilot.classification.SupportRiskLevel.MEDIUM
+                    : dev.qcoding.businesscopilot.supportcopilot.classification.SupportRiskLevel.valueOf(
+                            output.riskLevel().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            modelRisk = dev.qcoding.businesscopilot.supportcopilot.classification.SupportRiskLevel.MEDIUM;
+        }
 
         // 高风险类别自动升格到 HIGH
-        if (category != null && highRiskCategories.contains(category.toUpperCase())) {
-            if (!"HIGH".equals(modelRisk)) {
-                log.info("Escalating risk from {} to HIGH for high-risk category: {}", modelRisk, category);
-                return "HIGH";
+        if (category != null && highRiskCategories.contains(category.name())) {
+            if (modelRisk != dev.qcoding.businesscopilot.supportcopilot.classification.SupportRiskLevel.HIGH) {
+                log.info("高风险类别触发风险升级：原级别={}，category={}，新级别=HIGH", modelRisk, category);
+                return dev.qcoding.businesscopilot.supportcopilot.classification.SupportRiskLevel.HIGH;
             }
         }
         return modelRisk;

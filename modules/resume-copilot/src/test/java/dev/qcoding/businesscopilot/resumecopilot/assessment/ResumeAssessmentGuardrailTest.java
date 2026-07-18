@@ -33,9 +33,9 @@ class ResumeAssessmentGuardrailTest {
         var result = guardrail.validate(content, criteria, evidence);
 
         assertThat(result.valid()).isFalse();
-        assertThat(result.reasons()).anyMatch(reason -> reason.contains("decision"));
-        assertThat(result.reasons()).anyMatch(reason -> reason.contains("protected"));
-        assertThat(result.reasons()).anyMatch(reason -> reason.contains("outside"));
+        assertThat(result.reasons()).anyMatch(reason -> reason.contains("自动录用决定"));
+        assertThat(result.reasons()).anyMatch(reason -> reason.contains("受保护属性"));
+        assertThat(result.reasons()).anyMatch(reason -> reason.contains("当前简历之外"));
     }
 
     @Test
@@ -48,7 +48,16 @@ class ResumeAssessmentGuardrailTest {
         var result = guardrail.validate(content, criteria, evidence);
 
         assertThat(result.valid()).isFalse();
-        assertThat(result.reasons()).anyMatch(reason -> reason.contains("more than once"));
-        assertThat(result.reasons()).anyMatch(reason -> reason.contains("incomplete"));
+        assertThat(result.reasons()).anyMatch(reason -> reason.contains("重复出现"));
+        assertThat(result.reasons()).anyMatch(reason -> reason.contains("内容不完整"));
+    }
+
+    @Test
+    void rejectsProxyHiringLanguageAnywhereInAssessment() {
+        var content = new ResumeModels.AssessmentContent("候选人毕业年份较新，适合年轻团队", List.of(
+                new ResumeModels.CriterionAssessment("criterion-1", ResumeModels.MatchStatus.SUPPORTED,
+                        "简历明确提及 Java 服务", List.of("evidence-1"))), List.of(), List.of(), List.of());
+
+        assertThat(guardrail.validate(content, criteria, evidence).valid()).isFalse();
     }
 }

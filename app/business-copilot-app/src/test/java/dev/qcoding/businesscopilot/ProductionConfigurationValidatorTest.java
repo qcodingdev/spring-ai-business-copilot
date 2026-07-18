@@ -11,11 +11,11 @@ class ProductionConfigurationValidatorTest {
     void rejectsDemoCredentials() {
         ProductionConfigurationValidator validator = new ProductionConfigurationValidator(
                 "copilot", "admin-change-me", "operator-change-me", "reviewer-change-me",
-                false, "");
+                true, "business-query-secret");
 
         assertThatThrownBy(validator::afterSingletonsInstantiated)
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("demo platform database password");
+                .hasMessageContaining("演示平台数据库密码");
     }
 
     @Test
@@ -26,7 +26,7 @@ class ProductionConfigurationValidatorTest {
 
         assertThatThrownBy(validator::afterSingletonsInstantiated)
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("business query password");
+                .hasMessageContaining("业务查询数据库密码");
     }
 
     @Test
@@ -36,5 +36,16 @@ class ProductionConfigurationValidatorTest {
                 true, "business-query-secret");
 
         assertThatCode(validator::afterSingletonsInstantiated).doesNotThrowAnyException();
+    }
+
+    @Test
+    void rejectsPlatformConnectionFallbackInProduction() {
+        ProductionConfigurationValidator validator = new ProductionConfigurationValidator(
+                "platform-secret", "admin-secret", "operator-secret", "reviewer-secret",
+                false, "");
+
+        assertThatThrownBy(validator::afterSingletonsInstantiated)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("独立只读业务查询数据源");
     }
 }

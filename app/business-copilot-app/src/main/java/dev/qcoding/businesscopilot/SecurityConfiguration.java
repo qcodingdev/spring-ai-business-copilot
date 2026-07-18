@@ -18,13 +18,15 @@ import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.AnonymousAuthenticationFilter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.Set;
 
-/** Basic single-organization authentication and role boundaries for the v1.1 baseline. */
+/** v2.0 应用的单组织认证与角色边界配置。 */
 @Configuration(proxyBeanMethods = false)
 @EnableWebSecurity
 public class SecurityConfiguration {
@@ -52,37 +54,49 @@ public class SecurityConfiguration {
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         CookieCsrfTokenRepository csrfRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
+        CsrfTokenRequestAttributeHandler csrfRequestHandler = new CsrfTokenRequestAttributeHandler();
 
         http.authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/login", "/error", "/favicon.ico", "/css/**", "/js/**").permitAll()
+                        .requestMatchers("/login", "/error", "/favicon.ico", "/css/**", "/js/**", "/images/**").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         .requestMatchers("/actuator/metrics/**").hasAnyRole("ADMIN", "REVIEWER")
                         .requestMatchers(HttpMethod.GET, "/api/*/audit-logs").hasAnyRole("ADMIN", "REVIEWER")
                         .requestMatchers(HttpMethod.POST,
-                                "/api/data-copilot/sql-candidates/*/execute",
                                 "/api/support-copilot/reply-drafts/*/confirm",
-                                "/api/support-copilot/reply-drafts/*/cancel",
-                                "/api/report-copilot/reports/*/confirm",
-                                "/api/report-copilot/reports/*/cancel",
-                                "/api/resume-copilot/jobs/*/criteria/confirm",
+                                "/api/support-copilot/reply-drafts/*/edit",
                                 "/api/resume-copilot/assessments/*/review",
                                 "/api/resume-copilot/assessments/*/cancel")
                             .hasAnyRole("ADMIN", "OPERATOR", "REVIEWER")
+                        .requestMatchers(HttpMethod.POST,
+                                "/api/data-copilot/sql-candidates/*/execute",
+                                "/api/support-copilot/reply-drafts/*/cancel",
+                                "/api/report-copilot/reports/*/confirm",
+                                "/api/report-copilot/reports/*/cancel",
+                                "/api/resume-copilot/jobs/*/criteria/confirm")
+                            .hasAnyRole("ADMIN", "OPERATOR")
                         .requestMatchers(HttpMethod.POST, "/api/**").hasAnyRole("ADMIN", "OPERATOR")
                         .requestMatchers(HttpMethod.PATCH, "/api/**").hasAnyRole("ADMIN", "OPERATOR")
+                        .requestMatchers(HttpMethod.DELETE,
+                                "/api/knowledge-copilot/documents/*",
+                                "/api/resume-copilot/submissions/*")
+                            .hasAnyRole("ADMIN", "OPERATOR")
                         .requestMatchers(HttpMethod.GET, "/api/**").authenticated()
                         .requestMatchers("/api/**").denyAll()
                         .anyRequest().authenticated())
-                .csrf(csrf -> csrf.csrfTokenRepository(csrfRepository))
+                // 前端从 XSRF-TOKEN Cookie 读取原始 token，并通过请求头回传。
+                // Spring Security 7 默认的 XOR 处理器只接受掩码值，因此这里显式使用原始值处理器。
+                .csrf(csrf -> csrf
+                        .csrfTokenRepository(csrfRepository)
+                        .csrfTokenRequestHandler(csrfRequestHandler))
                 .formLogin(form -> form.loginPage("/login").defaultSuccessUrl("/", true).permitAll())
                 .logout(logout -> logout.logoutSuccessUrl("/login?logout"))
                 .exceptionHandling(exceptions -> exceptions
                         .defaultAuthenticationEntryPointFor(
                                 (request, response, exception) -> writeSecurityError(
-                                        response, HttpStatus.UNAUTHORIZED, "SEC_0401", "Authentication required"),
+                                        response, HttpStatus.UNAUTHORIZED, "SEC_0401", "请先登录"),
                                 PathPatternRequestMatcher.pathPattern("/api/**"))
                         .accessDeniedHandler((request, response, exception) -> writeSecurityError(
-                                response, HttpStatus.FORBIDDEN, "SEC_0403", "Access denied")))
+                                response, HttpStatus.FORBIDDEN, "SEC_0403", "当前账号无权执行此操作")))
                 .addFilterAfter(new BusinessRequestContextFilter(
                         request -> request.getUserPrincipal() == null ? null : request.getUserPrincipal().getName(),
                         SecurityConfiguration::businessRoles), AnonymousAuthenticationFilter.class);
@@ -106,6 +120,7 @@ public class SecurityConfiguration {
                                            String message) throws IOException {
         response.setStatus(status.value());
         response.setContentType("application/json");
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         String requestId = BusinessRequestContextHolder.currentRequestId();
         response.getWriter().write("{\"data\":null,\"success\":false,\"errorCode\":\""
                 + errorCode + "\",\"message\":\"" + message + "\",\"requestId\":"

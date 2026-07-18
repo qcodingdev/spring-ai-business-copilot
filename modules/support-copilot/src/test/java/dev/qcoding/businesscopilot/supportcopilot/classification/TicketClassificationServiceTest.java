@@ -78,7 +78,7 @@ class TicketClassificationServiceTest {
 
         TicketClassificationResponse response = service.classify(request);
 
-        assertEquals("PRODUCT_USAGE", response.category());
+        assertEquals(TicketCategory.PRODUCT_USAGE, response.category());
         assertFalse(response.needsHuman());
     }
 

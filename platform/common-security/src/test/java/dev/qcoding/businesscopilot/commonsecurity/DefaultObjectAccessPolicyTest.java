@@ -21,7 +21,8 @@ class DefaultObjectAccessPolicyTest {
         CurrentActor actor = new CurrentActor("operator-1", Set.of(BusinessRole.OPERATOR));
         assertThat(policy.allowed(actor, ObjectAction.CONFIRM, "operator-1", null, false)).isTrue();
         assertThat(policy.allowed(actor, ObjectAction.CONFIRM, "operator-2", null, false)).isFalse();
-        assertThat(policy.allowed(actor, ObjectAction.REVIEW, "operator-1", null, true)).isFalse();
+        assertThat(policy.allowed(actor, ObjectAction.REVIEW, "operator-1", null, true)).isTrue();
+        assertThat(policy.allowed(actor, ObjectAction.REVIEW, "operator-2", null, true)).isFalse();
     }
 
     @Test

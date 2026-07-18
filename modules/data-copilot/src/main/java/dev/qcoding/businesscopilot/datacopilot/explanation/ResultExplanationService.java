@@ -8,7 +8,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Map;
 
 /**
- * Service that generates a concise business explanation for an executed query result.
+ * 为已执行查询结果生成简洁业务解释的服务。
  *
  * <p>查询结果解释服务。根据用户问题、已执行 SQL 和脱敏后的查询结果，
  * 调用 LLM 生成简洁业务解释。</p>
@@ -41,10 +41,10 @@ public class ResultExplanationService {
     }
 
     /**
-     * Generate an AI explanation for the given query result.
+     * 为指定查询结果生成 AI 解释。
      *
-     * @param request the explanation request containing question, SQL, and masked result
-     * @return explanation response (may be degraded if model fails)
+     * @param request 包含问题、SQL 和脱敏结果的解释请求
+     * @return 解释响应；模型失败时可能为降级响应
      */
     public ResultExplanationResponse explain(ResultExplanationRequest request) {
         // 1. 生成脱敏后的结果摘要
@@ -66,42 +66,25 @@ public class ResultExplanationService {
         try {
             String explanation = aiChatService.generateText(prompt);
             if (explanation == null || explanation.isBlank()) {
-                log.warn("Model returned empty explanation, falling back to degraded response");
+                log.warn("模型返回空解释，已使用降级说明");
                 return ResultExplanationResponse.degraded(buildDegradedExplanation(request));
             }
             return ResultExplanationResponse.success(explanation.trim());
         } catch (Exception ex) {
             // 模型调用失败时返回降级解释，记录 warn 日志，不影响表格结果展示
-            log.warn("AI explanation generation failed, returning degraded response: {}", ex.getMessage());
+            log.warn("AI 结果解释生成失败，已返回降级说明：{}", ex.getMessage());
             return ResultExplanationResponse.degraded(buildDegradedExplanation(request));
         }
     }
 
-    /** Build a friendly explanation for empty results. */
+    /** 为空结果构建友好说明。 */
     private String buildEmptyExplanation(String question) {
-        if (looksLikeChinese(question)) {
-            return "未查询到匹配数据。";
-        }
-        return "No matching data was found.";
+        return "未查询到匹配数据。";
     }
 
-    /** Build a degraded explanation when the model fails. */
+    /** 在模型失败时构建降级说明。 */
     private String buildDegradedExplanation(ResultExplanationRequest request) {
         int rowCount = request.result() != null ? request.result().rowCount() : 0;
-        if (looksLikeChinese(request.question())) {
-            return "查询已执行，返回 " + rowCount + " 行结果。AI 解释生成失败，请直接查看数据表格。";
-        }
-        return "Query executed, returning " + rowCount + " rows. AI explanation generation failed; please review the result table directly.";
-    }
-
-    /** Simple heuristic: does the text contain CJK characters? */
-    private boolean looksLikeChinese(String text) {
-        if (text == null || text.isEmpty()) return false;
-        for (char c : text.toCharArray()) {
-            if (Character.UnicodeScript.of(c) == Character.UnicodeScript.HAN) {
-                return true;
-            }
-        }
-        return false;
+        return "查询已执行，返回 " + rowCount + " 行结果。AI 解释生成失败，请直接查看数据表格。";
     }
 }

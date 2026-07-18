@@ -13,6 +13,6 @@ import java.util.List;
  */
 public record SupportKnowledgeQuery(
         String customerMessage,
-        String category,
+        dev.qcoding.businesscopilot.supportcopilot.classification.TicketCategory category,
         String summary) {
 }

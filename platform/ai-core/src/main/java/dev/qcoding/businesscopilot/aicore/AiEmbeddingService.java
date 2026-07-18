@@ -44,7 +44,12 @@ public class AiEmbeddingService {
         }
     }
 
-    /** Configured chat model name, recorded in audit logs. */
+    /**
+     * AI Core 的通用模型标识。
+     *
+     * <p>具体业务若为 chat 与 embedding 分别配置模型，应记录各自业务属性中的模型名，
+     * 不能把这里的 chat 标识误当成 embedding 模型名。</p>
+     */
     public String modelName() {
         return properties.modelName();
     }
@@ -63,9 +68,9 @@ public class AiEmbeddingService {
         } catch (BusinessException ex) {
             throw ex;
         } catch (RuntimeException ex) {
-            log.error("Embedding model invocation failed", ex);
+            log.error("向量模型调用失败", ex);
             throw new BusinessException(ErrorCode.AI_MODEL_ERROR,
-                    "AI embedding model invocation failed", ex);
+                    "AI 向量模型调用失败", ex);
         }
     }
 
@@ -84,18 +89,18 @@ public class AiEmbeddingService {
     private EmbeddingModel requireEmbeddingModel() {
         if (properties.modelDisabled()) {
             throw new AiModelNotEnabledException(
-                    "AI model is disabled (business-copilot.ai-core.model-disabled=true).");
+                    "AI 向量模型已被配置项 business-copilot.ai-core.model-disabled=true 禁用。");
         }
         EmbeddingModel model;
         try {
             model = embeddingModelProvider.getIfAvailable();
         } catch (BeansException ex) {
             throw new AiModelNotEnabledException(
-                    "No AI embedding model is configured. Set spring.ai.model.embedding and provide API credentials.");
+                    "未配置 AI 向量模型，请设置 spring.ai.model.embedding 并提供模型凭证。");
         }
         if (model == null) {
             throw new AiModelNotEnabledException(
-                    "No AI embedding model is configured. Set spring.ai.model.embedding and provide API credentials.");
+                    "未配置 AI 向量模型，请设置 spring.ai.model.embedding 并提供模型凭证。");
         }
         return model;
     }

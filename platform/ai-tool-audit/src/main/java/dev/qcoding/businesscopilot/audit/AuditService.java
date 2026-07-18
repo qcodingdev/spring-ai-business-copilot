@@ -28,7 +28,7 @@ public class AuditService {
             return repository.save(event);
         } catch (RuntimeException ex) {
             // 审计写入失败不应中断主流程，但要记录日志便于排查
-            log.error("Failed to persist audit event for requestId={}", event.requestId(), ex);
+            log.error("审计事件写入失败：requestId={}", event.requestId(), ex);
             return null;
         }
     }

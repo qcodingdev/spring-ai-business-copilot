@@ -39,7 +39,7 @@ public class TicketClassificationService {
     private final SensitiveTextMasker sensitiveTextMasker;
     private final SupportCopilotProperties properties;
 
-    private final Set<String> highRiskCategories;
+    private final Set<TicketCategory> highRiskCategories;
 
     public TicketClassificationService(AiChatService aiChatService,
                                         PromptTemplateService promptTemplateService,
@@ -52,6 +52,7 @@ public class TicketClassificationService {
         this.highRiskCategories = Arrays.stream(properties.highRiskCategories().split(","))
                 .map(String::trim)
                 .map(String::toUpperCase)
+                .map(TicketCategory::valueOf)
                 .collect(Collectors.toSet());
     }
 
@@ -77,7 +78,7 @@ public class TicketClassificationService {
     public ClassificationInvocation classifyWithMetadata(TicketClassificationRequest request) {
         String rawMessage = request.customerMessage();
         if (rawMessage == null || rawMessage.isBlank()) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "customerMessage 不能为空");
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "客户消息不能为空。");
         }
         if (rawMessage.length() > properties.maxTicketLength()) {
             throw new BusinessException(ErrorCode.VALIDATION_ERROR,
@@ -88,10 +89,10 @@ public class TicketClassificationService {
         String maskedMessage = sensitiveTextMasker.mask(rawMessage);
 
         // 构建 prompt
-        RenderedPrompt prompt = promptTemplateService.renderWithMetadata(PROMPT_TEMPLATE, "v1",
+        RenderedPrompt prompt = promptTemplateService.renderWithMetadata(PROMPT_TEMPLATE, "v2.0",
                 Map.of("customerMessage", maskedMessage));
 
-        log.debug("Classifying ticket: message length={}, channel={}",
+        log.debug("开始工单分类：消息长度={}，channel={}",
                 rawMessage.length(), request.channel());
 
         // 调用模型
@@ -102,7 +103,7 @@ public class TicketClassificationService {
         } catch (BusinessException ex) {
             throw ex;
         } catch (Exception ex) {
-            log.error("Ticket classification model call failed", ex);
+            log.error("工单分类模型调用失败", ex);
             throw new BusinessException(ErrorCode.AI_MODEL_ERROR,
                     ErrorCode.AI_MODEL_ERROR.defaultMessage(), ex);
         }
@@ -115,26 +116,30 @@ public class TicketClassificationService {
         }
 
         // 高风险类别强制 needsHuman
-        boolean effectiveNeedsHuman = output.needsHuman()
-                || highRiskCategories.contains(output.category().toUpperCase());
+        TicketCategory category = parseEnum(TicketCategory.class, output.category(), TicketCategory.OTHER);
+        TicketSentiment sentiment = parseEnum(
+                TicketSentiment.class, output.sentiment(), TicketSentiment.NEUTRAL);
+        TicketUrgency urgency = parseEnum(
+                TicketUrgency.class, output.urgency(), TicketUrgency.MEDIUM);
+        boolean effectiveNeedsHuman = output.needsHuman() || highRiskCategories.contains(category);
 
         List<String> effectiveReasons = output.reasons() != null
                 ? new java.util.ArrayList<>(output.reasons())
                 : new java.util.ArrayList<>();
 
         if (effectiveNeedsHuman && !Boolean.TRUE.equals(output.needsHuman())) {
-            effectiveReasons.add("高风险类别自动触发转人工: " + output.category());
+            effectiveReasons.add("高风险类别自动触发转人工: " + category);
         }
 
         TicketClassificationResponse response = new TicketClassificationResponse(
-                output.category(),
-                output.sentiment(),
-                output.urgency(),
+                category,
+                sentiment,
+                urgency,
                 output.summary(),
                 effectiveNeedsHuman,
                 effectiveReasons);
 
-        log.info("Ticket classified: category={}, sentiment={}, urgency={}, needsHuman={}",
+        log.info("工单分类完成：category={}，sentiment={}，urgency={}，needsHuman={}",
                 response.category(), response.sentiment(), response.urgency(), response.needsHuman());
 
         return new ClassificationInvocation(
@@ -144,6 +149,18 @@ public class TicketClassificationService {
     /** Return the masked version of a customer message for storage. */
     public String maskedMessage(String rawMessage) {
         return sensitiveTextMasker.mask(rawMessage);
+    }
+
+    private <E extends Enum<E>> E parseEnum(Class<E> type, String value, E fallback) {
+        if (value == null || value.isBlank()) {
+            return fallback;
+        }
+        try {
+            return Enum.valueOf(type, value.trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            log.warn("模型返回不支持的 {} 值，已使用兜底值", type.getSimpleName());
+            return fallback;
+        }
     }
 
     public record ClassificationInvocation(

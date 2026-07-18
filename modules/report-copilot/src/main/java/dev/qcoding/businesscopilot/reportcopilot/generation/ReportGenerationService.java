@@ -15,7 +15,7 @@ import java.util.List;
 public class ReportGenerationService {
 
     private static final String PROMPT_LOCATION = "report-copilot/report-generation.st";
-    private static final String POLICY_VERSION = "report-evidence-guardrails-v1";
+    private static final String POLICY_VERSION = "report-evidence-guardrails-v2.0";
 
     private final ReportRequestPreparationService preparationService;
     private final AiChatService aiChatService;
@@ -46,10 +46,10 @@ public class ReportGenerationService {
         String modelName = aiChatService.modelName();
         if (preview.sources().isEmpty()) {
             return new ReportDraftResponse(null, preview.reportType(), preview.period(), preview.title(), "REJECTED", null,
-                    List.of("At least one source is required to generate a report."), null, null, modelName);
+                    List.of("生成报告至少需要一条有效来源。"), null, null, modelName);
         }
         RenderedPrompt prompt = promptTemplateService.renderWithMetadata(
-                PROMPT_LOCATION, "v1", promptContextFactory.create(preview));
+                PROMPT_LOCATION, preview.templateVersion(), promptContextFactory.create(preview));
         long startMs = System.currentTimeMillis();
         AiInvocationMetadata invocationMetadata = null;
         try {

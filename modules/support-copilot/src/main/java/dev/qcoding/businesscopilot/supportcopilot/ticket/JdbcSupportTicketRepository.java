@@ -7,7 +7,6 @@ import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
 
 import java.sql.PreparedStatement;
-import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
@@ -29,10 +28,10 @@ public class JdbcSupportTicketRepository implements SupportTicketRepository {
             rs.getString("external_id"),
             rs.getString("customer_message"),
             rs.getString("channel"),
-            rs.getString("category"),
-            rs.getString("sentiment"),
-            rs.getString("urgency"),
-            rs.getString("status"),
+            dev.qcoding.businesscopilot.supportcopilot.classification.TicketCategory.valueOf(rs.getString("category")),
+            dev.qcoding.businesscopilot.supportcopilot.classification.TicketSentiment.valueOf(rs.getString("sentiment")),
+            dev.qcoding.businesscopilot.supportcopilot.classification.TicketUrgency.valueOf(rs.getString("urgency")),
+            SupportTicketStatus.valueOf(rs.getString("status")),
             rs.getString("owner_actor_id"),
             rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toInstant() : null,
             rs.getTimestamp("updated_at") != null ? rs.getTimestamp("updated_at").toInstant() : null);
@@ -52,14 +51,14 @@ public class JdbcSupportTicketRepository implements SupportTicketRepository {
         Instant now = Instant.now();
 
         jdbcTemplate.update(connection -> {
-            PreparedStatement ps = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
+            PreparedStatement ps = connection.prepareStatement(sql, new String[]{"id"});
             ps.setString(1, ticket.externalId());
             ps.setString(2, maskedMessage);
             ps.setString(3, ticket.channel());
-            ps.setString(4, ticket.category());
-            ps.setString(5, ticket.sentiment());
-            ps.setString(6, ticket.urgency());
-            ps.setString(7, ticket.status());
+            ps.setString(4, ticket.category().name());
+            ps.setString(5, ticket.sentiment().name());
+            ps.setString(6, ticket.urgency().name());
+            ps.setString(7, ticket.status().name());
             ps.setString(8, ticket.ownerActorId());
             ps.setTimestamp(9, Timestamp.from(now));
             ps.setTimestamp(10, Timestamp.from(now));
@@ -87,10 +86,10 @@ public class JdbcSupportTicketRepository implements SupportTicketRepository {
     }
 
     @Override
-    public boolean transitionStatus(Long id, String expectedStatus, String targetStatus) {
+    public boolean transitionStatus(Long id, SupportTicketStatus expectedStatus, SupportTicketStatus targetStatus) {
         int rows = jdbcTemplate.update(
                 "UPDATE support_tickets SET status = ?, updated_at = ? WHERE id = ? AND status = ?",
-                targetStatus, Timestamp.from(Instant.now()), id, expectedStatus);
+                targetStatus.name(), Timestamp.from(Instant.now()), id, expectedStatus.name());
         return rows == 1;
     }
 

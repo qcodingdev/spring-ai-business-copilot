@@ -12,7 +12,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 import javax.sql.DataSource;
 
-/** Creates an optional dedicated read-only connection used only by Data Copilot queries. */
+/** 创建仅供 Data Copilot 查询使用的独立只读连接。 */
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(BusinessQueryDataSourceProperties.class)
 @ConditionalOnProperty(prefix = "business-copilot.data-copilot.datasource", name = "enabled", havingValue = "true")
@@ -28,10 +28,10 @@ public class BusinessQueryDataSourceConfiguration {
             BusinessQueryDataSourceProperties properties,
             @Qualifier("businessQueryDatabaseDialect") BusinessDatabaseDialect dialect) {
         if (properties.getUrl() == null || properties.getUrl().isBlank()) {
-            throw new IllegalStateException("Business query datasource is enabled but URL is empty");
+            throw new IllegalStateException("已启用外部业务查询数据源，但未配置 JDBC URL");
         }
         if (properties.getUsername() == null || properties.getUsername().isBlank()) {
-            throw new IllegalStateException("Business query datasource username is required");
+            throw new IllegalStateException("已启用外部业务查询数据源，但未配置用户名");
         }
         String driverClassName = properties.getDriverClassName();
         if (driverClassName == null || driverClassName.isBlank()) {

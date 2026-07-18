@@ -1,6 +1,6 @@
 package dev.qcoding.businesscopilot.commonsecurity;
 
-/** High-risk actions that require object-level authorization. */
+/** 需要业务对象级授权的高风险操作。 */
 public enum ObjectAction {
     CREATE,
     EXECUTE,

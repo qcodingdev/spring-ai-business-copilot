@@ -6,11 +6,14 @@ import dev.qcoding.businesscopilot.commonsecurity.CurrentActor;
 import dev.qcoding.businesscopilot.commonsecurity.CurrentActorProvider;
 import dev.qcoding.businesscopilot.commonsecurity.DefaultObjectAccessPolicy;
 import dev.qcoding.businesscopilot.commonweb.api.BusinessException;
+import dev.qcoding.businesscopilot.guardrails.SensitiveTextMasker;
+import dev.qcoding.businesscopilot.supportcopilot.classification.SupportRiskLevel;
 import dev.qcoding.businesscopilot.supportcopilot.audit.SupportAuditLog;
 import dev.qcoding.businesscopilot.supportcopilot.audit.SupportAuditRepository;
 import dev.qcoding.businesscopilot.supportcopilot.audit.SupportAuditService;
 import dev.qcoding.businesscopilot.supportcopilot.ticket.SupportTicket;
 import dev.qcoding.businesscopilot.supportcopilot.ticket.SupportTicketRepository;
+import dev.qcoding.businesscopilot.supportcopilot.ticket.SupportTicketStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -44,7 +47,8 @@ class ReplyDraftConfirmationServiceTest {
                 new SupportAuditService(auditRepository),
                 actors,
                 new DefaultObjectAccessPolicy(),
-                tokenService);
+                tokenService,
+                new SensitiveTextMasker());
     }
 
     @Test
@@ -54,11 +58,11 @@ class ReplyDraftConfirmationServiceTest {
 
         var result = service.confirm(10L, token.rawToken());
 
-        assertThat(result.status()).isEqualTo("CONFIRMED");
+        assertThat(result.status()).isEqualTo(SupportDraftStatus.CONFIRMED);
         assertThat(result.ticketId()).isEqualTo(100L);
-        assertThat(draftRepository.draft.status()).isEqualTo("CONFIRMED");
+        assertThat(draftRepository.draft.status()).isEqualTo(SupportDraftStatus.CONFIRMED);
         assertThat(draftRepository.draft.tokenDigest()).isNull();
-        assertThat(ticketRepository.lastStatus).isEqualTo("CONFIRMED");
+        assertThat(ticketRepository.lastStatus).isEqualTo(SupportTicketStatus.CONFIRMED);
         assertThat(auditRepository.saved.getFirst().eventType()).isEqualTo("CONFIRMED");
         assertThatThrownBy(() -> service.confirm(10L, token.rawToken()))
                 .isInstanceOf(BusinessException.class);
@@ -71,9 +75,9 @@ class ReplyDraftConfirmationServiceTest {
 
         var result = service.cancel(10L, token.rawToken());
 
-        assertThat(result.status()).isEqualTo("CANCELED");
+        assertThat(result.status()).isEqualTo(SupportDraftStatus.CANCELED);
         assertThat(draftRepository.draft.actionActorId()).isEqualTo("operator-1");
-        assertThat(ticketRepository.lastStatus).isEqualTo("CANCELED");
+        assertThat(ticketRepository.lastStatus).isEqualTo(SupportTicketStatus.CANCELED);
     }
 
     @Test
@@ -83,7 +87,7 @@ class ReplyDraftConfirmationServiceTest {
 
         assertThatThrownBy(() -> service.confirm(10L, token.rawToken()))
                 .isInstanceOf(BusinessException.class);
-        assertThat(draftRepository.draft.status()).isEqualTo("DRAFTED");
+        assertThat(draftRepository.draft.status()).isEqualTo(SupportDraftStatus.DRAFTED);
     }
 
     @Test
@@ -102,15 +106,31 @@ class ReplyDraftConfirmationServiceTest {
         draftRepository.draft = draft(token, true, "reviewer-1", Instant.now().plusSeconds(60));
         actors.actor = new CurrentActor("reviewer-1", Set.of(BusinessRole.REVIEWER));
 
-        assertThat(service.confirm(10L, token.rawToken()).status()).isEqualTo("CONFIRMED");
+        assertThat(service.confirm(10L, token.rawToken()).status())
+                .isEqualTo(SupportDraftStatus.CONFIRMED);
         assertThat(draftRepository.draft.actionActorId()).isEqualTo("reviewer-1");
+    }
+
+    @Test
+    void ownerCanEditDraftAndSensitiveTextIsMaskedBeforeConfirmation() {
+        ConfirmationTokenService.IssuedToken token = tokenService.issue();
+        draftRepository.draft = draft(token, false, null, Instant.now().plusSeconds(60));
+
+        var edit = service.edit(10L, "请联系 alex@example.com，我们将说明流程。", "人工修订");
+        var confirmation = service.confirm(10L, token.rawToken());
+
+        assertThat(edit.editedText()).contains("a***@example.com");
+        assertThat(draftRepository.draft.editedDraftText()).contains("a***@example.com");
+        assertThat(draftRepository.draft.decisionOutcome()).isEqualTo(SupportDecisionOutcome.EDITED_ACCEPTED);
+        assertThat(confirmation.status()).isEqualTo(SupportDraftStatus.CONFIRMED);
     }
 
     private SupportReplyDraft draft(ConfirmationTokenService.IssuedToken token, boolean reviewQueue,
                                     String reviewerActorId, Instant expiresAt) {
         return new SupportReplyDraft(
-                10L, 100L, "回复草稿", "chunk-1", "MEDIUM", "needs review",
-                null, token.digest(), reviewQueue ? "NEEDS_REVIEW" : "DRAFTED",
+                10L, 100L, "回复草稿", "chunk-1", SupportRiskLevel.MEDIUM, "needs review",
+                null, token.digest(), reviewQueue
+                        ? SupportDraftStatus.NEEDS_REVIEW : SupportDraftStatus.DRAFTED,
                 "operator-1", reviewQueue, reviewerActorId, null,
                 expiresAt, Instant.now(), Instant.now());
     }
@@ -139,7 +159,9 @@ class ReplyDraftConfirmationServiceTest {
         }
 
         @Override
-        public boolean transitionStatus(Long id, String expectedStatus, String targetStatus,
+        public boolean transitionStatus(Long id, SupportDraftStatus expectedStatus,
+                                        SupportDraftStatus targetStatus,
+                                        SupportDecisionOutcome outcome,
                                         String actionActorId, Instant now) {
             if (draft == null || !draft.id().equals(id) || !draft.status().equals(expectedStatus)
                     || draft.expiresAt() == null || !draft.expiresAt().isAfter(now)) {
@@ -147,9 +169,27 @@ class ReplyDraftConfirmationServiceTest {
             }
             draft = new SupportReplyDraft(
                     draft.id(), draft.ticketId(), draft.draftText(), draft.citedChunkIds(),
-                    draft.riskLevel(), draft.riskReasons(), null, null, targetStatus,
+                    draft.knowledgeVersionIds(), draft.riskLevel(), draft.riskReasons(), null, null, targetStatus,
                     draft.ownerActorId(), draft.reviewQueue(), draft.reviewerActorId(),
-                    actionActorId, draft.expiresAt(), draft.createdAt(), now);
+                    actionActorId, draft.originalDraftText(), draft.editedDraftText(),
+                    draft.editReason(), draft.editedByActorId(), draft.editedAt(), outcome,
+                    draft.expiresAt(), draft.createdAt(), now);
+            return true;
+        }
+
+        @Override
+        public boolean edit(Long id, SupportDraftStatus expectedStatus, String editedText,
+                            String editReason, String editedByActorId, Instant now) {
+            if (draft == null || !draft.id().equals(id) || draft.status() != expectedStatus) {
+                return false;
+            }
+            draft = new SupportReplyDraft(
+                    draft.id(), draft.ticketId(), editedText, draft.citedChunkIds(),
+                    draft.knowledgeVersionIds(), draft.riskLevel(), draft.riskReasons(),
+                    null, draft.tokenDigest(), draft.status(), draft.ownerActorId(),
+                    draft.reviewQueue(), draft.reviewerActorId(), draft.actionActorId(),
+                    draft.originalDraftText(), editedText, editReason, editedByActorId,
+                    now, draft.decisionOutcome(), draft.expiresAt(), draft.createdAt(), now);
             return true;
         }
 
@@ -160,7 +200,7 @@ class ReplyDraftConfirmationServiceTest {
     }
 
     private static final class InMemoryTicketRepository implements SupportTicketRepository {
-        private String lastStatus;
+        private SupportTicketStatus lastStatus;
 
         @Override
         public SupportTicket save(SupportTicket ticket) {
@@ -178,7 +218,8 @@ class ReplyDraftConfirmationServiceTest {
         }
 
         @Override
-        public boolean transitionStatus(Long id, String expectedStatus, String targetStatus) {
+        public boolean transitionStatus(Long id, SupportTicketStatus expectedStatus,
+                                        SupportTicketStatus targetStatus) {
             lastStatus = targetStatus;
             return true;
         }

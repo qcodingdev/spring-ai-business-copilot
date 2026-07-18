@@ -57,7 +57,7 @@ class QueryExecutionServiceTest {
                 dev.qcoding.businesscopilot.datacopilot.confirmation.SqlCandidateStatus.CONSUMED,
                 "operator-1", "req-001", "gpt-5-mini",
                 "data-copilot/sql-generation.st", "v1", null,
-                null, "sql-guardrails-v1.1",
+                null, "sql-guardrails-v2.0",
                 now, now.plusSeconds(600), now, "operator-1");
     }
 
@@ -89,7 +89,7 @@ class QueryExecutionServiceTest {
         assertThat(event.status()).isEqualTo(AuditStatus.EXECUTED);
         assertThat(event.rowCount()).isEqualTo(2);
         assertThat(event.requestId()).isEqualTo("req-001");
-        assertThat(event.userQuestion()).isEqualTo("Confirmed read-only business query");
+        assertThat(event.userQuestion()).isEqualTo("已确认的只读业务查询");
         assertThat(event.modelName()).isEqualTo("gpt-5-mini");
         assertThat(event.confirmed()).isTrue();
         assertThat(event.finalSql()).isEqualTo(sql);

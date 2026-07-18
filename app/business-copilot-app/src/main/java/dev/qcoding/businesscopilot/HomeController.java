@@ -15,7 +15,7 @@ import java.security.Principal;
 @Controller
 public class HomeController {
 
-    /** GET / — Data Copilot 工作台 */
+    /** GET /：业务助手工作台。 */
     @GetMapping("/")
     public String index(Principal principal, Model model) {
         if (principal != null) {
@@ -24,13 +24,13 @@ public class HomeController {
         return "index";
     }
 
-    /** GET /login — role-based workbench sign-in page. */
+    /** GET /login：按角色登录工作台。 */
     @GetMapping("/login")
     public String login() {
         return "login";
     }
 
-    /** GET /favicon.ico — avoid noisy 500s for the browser's automatic favicon request. */
+    /** GET /favicon.ico：避免浏览器自动请求图标时产生无意义的 500 日志。 */
     @GetMapping("/favicon.ico")
     public ResponseEntity<Void> favicon() {
         return ResponseEntity.noContent().build();

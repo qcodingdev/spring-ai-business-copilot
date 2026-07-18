@@ -32,4 +32,17 @@ class JobCriteriaGuardrailTest {
         assertThat(result.valid()).isFalse();
         assertThat(result.reasons()).hasSizeGreaterThanOrEqualTo(2);
     }
+
+    @Test
+    void rejectsProxyCriteriaButDoesNotMatchAgeInsideManaged() {
+        var proxy = new ResumeModels.JobCriterion("criterion-1", ResumeModels.CriterionCategory.OTHER,
+                ResumeModels.RequirementType.REQUIRED, "Recent graduate from 2025", List.of(),
+                "Recent graduate from 2025");
+        var legitimate = new ResumeModels.JobCriterion("criterion-2", ResumeModels.CriterionCategory.EXPERIENCE,
+                ResumeModels.RequirementType.REQUIRED, "Managed Java services", List.of("Java"),
+                "Managed Java services");
+
+        assertThat(guardrail.validate(List.of(proxy), "Recent graduate from 2025").valid()).isFalse();
+        assertThat(guardrail.validate(List.of(legitimate), "Managed Java services").valid()).isTrue();
+    }
 }

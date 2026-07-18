@@ -13,7 +13,7 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 
-/** Establishes a validated request ID and actor for the duration of an HTTP request. */
+/** 在 HTTP 请求生命周期内建立经过校验的请求编号与操作者上下文。 */
 public class BusinessRequestContextFilter extends OncePerRequestFilter {
 
     public static final String REQUEST_ID_HEADER = "X-Request-Id";

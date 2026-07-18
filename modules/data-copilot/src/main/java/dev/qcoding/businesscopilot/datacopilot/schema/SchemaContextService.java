@@ -42,7 +42,7 @@ public class SchemaContextService {
                 tables.add(new TableSchema(tableName, columns, description));
             } catch (RuntimeException ex) {
                 // 单表读取失败不应阻断整个 schema 构建过程
-                log.warn("Failed to read schema for table {}: {}", tableName, ex.getMessage());
+                log.warn("读取表结构失败：table={}，原因={}", tableName, ex.getMessage());
             }
         }
         String summary = renderTextSummary(tables);

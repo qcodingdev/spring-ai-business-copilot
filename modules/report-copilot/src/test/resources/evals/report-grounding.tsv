@@ -1,0 +1,5 @@
+# case	expected
+valid_metric	true
+unknown_summary_source	false
+invented_metric_value	false
+suggestion_claims_source	false

@@ -9,10 +9,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
- * Retrieves relevant knowledge chunks via vector similarity search.
+ * 通过混合检索召回相关知识分片。
  *
  * <p>知识检索服务。将用户问题向量化，在 pgvector 中执行余弦相似度检索，
  * 只返回 enabled=true 的文档中相似度超过 minSimilarity 阈值的 chunk。
@@ -41,7 +45,7 @@ public class KnowledgeRetrievalService {
     }
 
     /**
-     * Retrieve top-K relevant chunks for the given question.
+     * 为指定问题召回前 K 个相关分片。
      *
      * <p>流程：
      * <ol>
@@ -52,52 +56,88 @@ public class KnowledgeRetrievalService {
      * </ol>
      * 如果没有 chunk 满足 minSimilarity 阈值，返回空列表。</p>
      *
-     * @param question the user's natural language question
-     * @return similarity-sorted list of retrieved chunks with scores; empty if none meet the threshold
+     * @param question 用户自然语言问题
+     * @return 按相关度排序的分片列表；没有结果达到阈值时返回空列表
      */
     public List<RetrievedKnowledgeChunk> retrieve(String question) {
         int topK = properties.topK();
         double minSimilarity = properties.minSimilarity();
 
-        log.debug("Retrieving topK={} chunks with minSimilarity={}", topK, minSimilarity);
+        log.debug("开始知识检索：topK={}，minSimilarity={}", topK, minSimilarity);
 
-        // 1. 问题向量化
-        float[] questionVector = aiEmbeddingService.embed(question);
-        String embeddingModel = aiEmbeddingService.modelName();
-        log.debug("Question embedded with model={}, dim={}", embeddingModel, questionVector.length);
+        Map<Long, RankedResult> fused = new HashMap<>();
+        List<KnowledgeChunkRepository.TextSearchResult> textResults =
+                chunkRepository.findByTextSearch(question, topK * 2);
+        for (int index = 0; index < textResults.size(); index++) {
+            var item = textResults.get(index);
+            fused.computeIfAbsent(item.chunkId(), ignored -> new RankedResult())
+                    .addText(index + 1, item.rank());
+        }
 
-        // 2. pgvector 相似度检索 (只检索 enabled 文档)
-        List<KnowledgeEmbeddingRepository.SimilaritySearchResult> results =
-                embeddingRepository.findSimilarChunks(questionVector, topK, minSimilarity);
+        String embeddingModel = properties.embeddingModelName();
+        try {
+            float[] questionVector = aiEmbeddingService.embed(question);
+            List<KnowledgeEmbeddingRepository.SimilaritySearchResult> vectorResults =
+                    embeddingRepository.findSimilarChunks(
+                            questionVector, embeddingModel, topK * 2, minSimilarity);
+            for (int index = 0; index < vectorResults.size(); index++) {
+                var item = vectorResults.get(index);
+                fused.computeIfAbsent(item.chunkId(), ignored -> new RankedResult())
+                        .addVector(index + 1, item.similarity());
+            }
+        } catch (dev.qcoding.businesscopilot.aicore.AiModelNotEnabledException ex) {
+            log.info("向量模型未启用，仅使用 PostgreSQL 文本检索");
+        }
 
-        if (results.isEmpty()) {
-            log.info("No chunks met similarity threshold {} for question: {}",
-                    minSimilarity, truncate(question));
+        if (fused.isEmpty()) {
+            log.info("没有知识分片达到混合检索阈值");
             return List.of();
         }
 
-        // 3. 加载 chunk 完整内容
+        List<Map.Entry<Long, RankedResult>> ranked = fused.entrySet().stream()
+                .sorted(Map.Entry.<Long, RankedResult>comparingByValue(
+                        Comparator.comparingDouble(RankedResult::fusedScore)).reversed())
+                .limit(topK)
+                .toList();
+
         List<RetrievedKnowledgeChunk> retrieved = new ArrayList<>();
-        for (KnowledgeEmbeddingRepository.SimilaritySearchResult result : results) {
-            chunkRepository.findById(result.chunkId()).ifPresentOrElse(
+        for (Map.Entry<Long, RankedResult> result : ranked) {
+            chunkRepository.findById(result.getKey()).ifPresentOrElse(
                     chunk -> retrieved.add(new RetrievedKnowledgeChunk(
-                            chunk, result.similarity(), embeddingModel)),
-                    () -> log.warn("Chunk {} found in similarity search but missing in knowledge_chunks table",
-                            result.chunkId()));
+                            chunk, result.getValue().bestScore(), embeddingModel)),
+                    () -> log.warn("相似度检索命中分片 {}，但 knowledge_chunks 表中不存在该分片",
+                            result.getKey()));
         }
 
-        log.info("Retrieved {} chunks (topK={}, minSimilarity={}) for question: {}",
-                retrieved.size(), topK, minSimilarity, truncate(question));
+        log.info("混合检索完成：命中分片数={}，topK={}", retrieved.size(), topK);
 
         return retrieved;
     }
 
     public String embeddingModelName() {
-        return aiEmbeddingService.modelName();
+        return properties.embeddingModelName();
     }
 
-    private static String truncate(String text) {
-        if (text == null) return "null";
-        return text.length() > 100 ? text.substring(0, 100) + "..." : text;
+    private static final class RankedResult {
+        private double fusedScore;
+        private double bestScore;
+
+        void addText(int rank, double score) {
+            fusedScore += 1.0d / (60 + rank);
+            bestScore = Math.max(bestScore, score);
+        }
+
+        void addVector(int rank, double score) {
+            fusedScore += 1.0d / (60 + rank);
+            bestScore = Math.max(bestScore, score);
+        }
+
+        double fusedScore() {
+            return fusedScore;
+        }
+
+        double bestScore() {
+            return bestScore;
+        }
     }
 }

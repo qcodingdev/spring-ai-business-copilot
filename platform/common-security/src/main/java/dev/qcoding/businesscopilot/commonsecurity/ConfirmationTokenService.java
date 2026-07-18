@@ -7,7 +7,7 @@ import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.HexFormat;
 
-/** Issues one-time high-entropy tokens while persisting only irreversible digests. */
+/** 签发一次性高熵凭证，持久化时只保存不可逆摘要。 */
 public class ConfirmationTokenService {
 
     private static final int TOKEN_BYTES = 32;
@@ -41,7 +41,7 @@ public class ConfirmationTokenService {
             return MessageDigest.getInstance("SHA-256")
                     .digest(rawToken.getBytes(StandardCharsets.UTF_8));
         } catch (NoSuchAlgorithmException ex) {
-            throw new IllegalStateException("SHA-256 is unavailable", ex);
+            throw new IllegalStateException("当前运行环境不支持 SHA-256", ex);
         }
     }
 

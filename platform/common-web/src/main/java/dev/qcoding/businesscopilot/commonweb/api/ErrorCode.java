@@ -1,56 +1,52 @@
 package dev.qcoding.businesscopilot.commonweb.api;
 
-/**
- * Stable error codes shared by every business module.
- *
- * <p>统一错误码枚举。Data Copilot 第一版只覆盖必要错误码，不预先构造大而全的体系。</p>
- */
+/** 各业务模块共享的稳定错误码；只覆盖当前真实使用的分类。 */
 public enum ErrorCode {
 
-    /** Generic business error without a more specific classification. */
-    BUSINESS_ERROR("BIZ_0001", "Business error"),
+    /** 未归入更具体分类的通用业务错误。 */
+    BUSINESS_ERROR("BIZ_0001", "业务处理失败"),
 
-    /** Input failed Jakarta Validation constraints. */
-    VALIDATION_ERROR("BIZ_0002", "Request validation failed"),
+    /** 输入未通过 Jakarta Validation 约束。 */
+    VALIDATION_ERROR("BIZ_0002", "请求参数校验失败"),
 
-    /** Requested resource was not found. */
-    NOT_FOUND("BIZ_0003", "Resource not found"),
+    /** 请求的资源不存在。 */
+    NOT_FOUND("BIZ_0003", "请求的资源不存在"),
 
-    /** A visible object exists but its state no longer allows the requested transition. */
-    STATE_CONFLICT("BIZ_0004", "Resource state conflict"),
+    /** 资源存在，但当前状态不允许请求的状态转换。 */
+    STATE_CONFLICT("BIZ_0004", "资源状态冲突"),
 
-    /** Upstream AI model invocation failed or returned an unusable response. */
-    AI_MODEL_ERROR("BIZ_0100", "AI model invocation failed"),
+    /** 上游 AI 模型调用失败或返回不可用结果。 */
+    AI_MODEL_ERROR("BIZ_0100", "AI 模型调用失败"),
 
-    /** Model output could not be parsed as the expected structured result. */
-    AI_OUTPUT_PARSE_ERROR("BIZ_0101", "AI output parse failed"),
+    /** 模型输出无法解析成预期结构。 */
+    AI_OUTPUT_PARSE_ERROR("BIZ_0101", "AI 输出解析失败"),
 
-    /** Generated SQL violated a guardrail rule. */
-    SQL_GUARDRAIL_VIOLATION("BIZ_0200", "SQL guardrail violation"),
+    /** 生成的 SQL 违反安全规则。 */
+    SQL_GUARDRAIL_VIOLATION("BIZ_0200", "SQL 安全校验未通过"),
 
-    /** SQL candidate was expired, revoked, or otherwise not executable. */
-    SQL_CANDIDATE_NOT_EXECUTABLE("BIZ_0201", "SQL candidate is not executable"),
+    /** SQL 候选已过期、撤销或不可执行。 */
+    SQL_CANDIDATE_NOT_EXECUTABLE("BIZ_0201", "SQL 候选当前不可执行"),
 
-    /** Read-only query execution failed. */
-    QUERY_EXECUTION_ERROR("BIZ_0300", "Query execution failed"),
+    /** 只读查询执行失败。 */
+    QUERY_EXECUTION_ERROR("BIZ_0300", "查询执行失败"),
 
-    /** Uploaded document is empty. */
-    DOCUMENT_EMPTY("BIZ_0400", "Uploaded document is empty"),
+    /** 上传文档为空。 */
+    DOCUMENT_EMPTY("BIZ_0400", "上传文档为空"),
 
-    /** Uploaded document exceeds the configured size limit. */
-    DOCUMENT_TOO_LARGE("BIZ_0401", "Uploaded document exceeds size limit"),
+    /** 上传文档超过配置限制。 */
+    DOCUMENT_TOO_LARGE("BIZ_0401", "上传文档超过大小限制"),
 
-    /** Uploaded document format is not supported. */
-    DOCUMENT_FORMAT_UNSUPPORTED("BIZ_0402", "Unsupported document format"),
+    /** 上传文档格式不受支持。 */
+    DOCUMENT_FORMAT_UNSUPPORTED("BIZ_0402", "不支持该文档格式"),
 
-    /** Uploaded document content duplicates an existing document. */
-    DOCUMENT_DUPLICATE("BIZ_0403", "Document with same content already exists"),
+    /** 上传内容与已有文档重复。 */
+    DOCUMENT_DUPLICATE("BIZ_0403", "相同内容的文档已存在"),
 
-    /** Embedding dimension returned by model does not match the configured database column dimension. */
-    EMBEDDING_DIMENSION_MISMATCH("BIZ_0404", "Embedding dimension mismatch"),
+    /** 模型返回的向量维度与应用配置不一致。 */
+    EMBEDDING_DIMENSION_MISMATCH("BIZ_0404", "向量维度不匹配"),
 
-    /** Internal server error that must not leak internals to the client. */
-    INTERNAL_ERROR("SYS_5000", "Internal server error");
+    /** 不得向客户端泄露内部细节的服务器错误。 */
+    INTERNAL_ERROR("SYS_5000", "服务器内部错误");
 
     private final String code;
     private final String defaultMessage;

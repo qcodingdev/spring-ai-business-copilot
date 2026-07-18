@@ -4,7 +4,7 @@ import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 
-/** Auto-configuration for shared actor, object access, and token primitives. */
+/** 共享操作者、对象访问与凭证基础能力的自动配置。 */
 @AutoConfiguration
 public class CommonSecurityAutoConfiguration {
 

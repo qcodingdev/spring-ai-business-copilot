@@ -9,7 +9,7 @@ import org.springframework.stereotype.Service;
 import java.sql.Timestamp;
 import java.time.Instant;
 
-/** Anonymizes sensitive audit details, then deletes expired audit metadata. */
+/** 先匿名化敏感审计明细，再删除超过保留期的审计元数据。 */
 @Service
 public class AuditRetentionService {
 
@@ -50,7 +50,7 @@ public class AuditRetentionService {
                     + deleteExpired("resume_audit_logs", deleteBefore);
             return new CleanupResult(anonymized, deleted);
         } catch (RuntimeException ex) {
-            log.warn("Audit retention cleanup failed; business state is unchanged", ex);
+            log.warn("审计保留数据清理失败，业务状态未受影响", ex);
             return new CleanupResult(0, 0);
         }
     }

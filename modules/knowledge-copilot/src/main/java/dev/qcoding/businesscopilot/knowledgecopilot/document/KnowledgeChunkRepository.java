@@ -22,4 +22,10 @@ public interface KnowledgeChunkRepository {
 
     /** Find a single chunk by its primary key. */
     Optional<KnowledgeChunk> findById(Long id);
+
+    /** PostgreSQL full-text retrieval from current, indexed, enabled document versions. */
+    List<TextSearchResult> findByTextSearch(String query, int limit);
+
+    record TextSearchResult(Long chunkId, double rank) {
+    }
 }

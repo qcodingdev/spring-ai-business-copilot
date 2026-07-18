@@ -78,7 +78,7 @@ public class ChunkingService {
             }
         }
 
-        log.debug("Chunked documentId={} into {} chunks (chunkSize={}, overlap={})",
+        log.debug("文档切分完成：documentId={}，分片数={}，chunkSize={}，overlap={}",
                 documentId, chunks.size(), chunkSize, properties.chunkOverlap());
         return chunks;
     }

@@ -17,7 +17,7 @@ import dev.qcoding.businesscopilot.reportcopilot.generation.ReportItem;
 
 import java.util.List;
 
-/** Renders a confirmed structured draft to Markdown without trusting model-provided Markdown syntax. */
+/** 将已确认的结构化草稿渲染为 Markdown，不信任模型提供的 Markdown 语法。 */
 public class ReportMarkdownExportService {
 
     private final ReportDraftRepository draftRepository;
@@ -39,7 +39,7 @@ public class ReportMarkdownExportService {
 
     public String export(Long draftId) {
         if (!properties.markdownExportEnabled()) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Markdown export is disabled.");
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Markdown 导出功能未启用。");
         }
         ReportDraft draft = draftRepository.findById(draftId).orElseThrow(() ->
                 new BusinessException(ErrorCode.NOT_FOUND));
@@ -49,7 +49,7 @@ public class ReportMarkdownExportService {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         if (draft.status() != ReportDraftStatus.CONFIRMED) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Only CONFIRMED report drafts can be exported.");
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "只有已确认的报告草稿可以导出。");
         }
         String markdown = render(draft);
         auditService.recordRequired(new ReportAuditLog(
@@ -63,20 +63,20 @@ public class ReportMarkdownExportService {
     private String render(ReportDraft draft) {
         var content = draft.content();
         StringBuilder markdown = new StringBuilder();
-        markdown.append("# ").append(escape(draft.id() == null ? "Report" : "Report " + draft.id())).append("\n\n");
-        markdown.append("## Executive Summary\n\n").append(escape(content.executiveSummary())).append("\n");
+        markdown.append("# ").append(escape(draft.id() == null ? "业务报告" : "业务报告 " + draft.id())).append("\n\n");
+        markdown.append("## 执行摘要\n\n").append(escape(content.executiveSummary())).append("\n");
         appendSources(markdown, content.executiveSummarySourceIds());
         appendMetrics(markdown, content.metricHighlights());
-        appendItems(markdown, "Completed Items", content.completedItems());
-        appendItems(markdown, "Risks and Blockers", content.risks());
-        appendActions(markdown, "Source Actions", content.actionItems());
-        appendActions(markdown, "AI Suggestions", content.suggestions());
+        appendItems(markdown, "已完成事项", content.completedItems());
+        appendItems(markdown, "风险与阻塞", content.risks());
+        appendActions(markdown, "来源行动项", content.actionItems());
+        appendActions(markdown, "AI 建议", content.suggestions());
         return markdown.toString();
     }
 
     private void appendMetrics(StringBuilder markdown, List<dev.qcoding.businesscopilot.reportcopilot.generation.MetricHighlight> metrics) {
         if (metrics.isEmpty()) return;
-        markdown.append("\n## Metric Highlights\n\n");
+        markdown.append("\n## 指标亮点\n\n");
         for (var metric : metrics) {
             markdown.append("- **").append(escape(metric.metricName())).append("**: ")
                     .append(escape(metric.metricValue())).append(" ").append(escape(metric.unit()))
@@ -105,7 +105,7 @@ public class ReportMarkdownExportService {
 
     private void appendSources(StringBuilder markdown, List<String> sourceIds) {
         if (!sourceIds.isEmpty()) {
-            markdown.append("  - Sources: ").append(sourceIds.stream().map(this::escape).reduce((a, b) -> a + ", " + b).orElse(""))
+            markdown.append("  - 来源：").append(sourceIds.stream().map(this::escape).reduce((a, b) -> a + "、" + b).orElse(""))
                     .append("\n");
         }
     }

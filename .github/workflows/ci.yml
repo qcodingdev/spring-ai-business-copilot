@@ -9,13 +9,13 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Java 21
         uses: actions/setup-java@v4
@@ -28,20 +28,110 @@ jobs:
         run: ./mvnw --version
 
       - name: Set up Node.js for frontend syntax checks
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '22'
 
       - name: Check frontend JavaScript syntax
         run: ./scripts/check-frontend-syntax.sh
 
-      - name: Run unit and PostgreSQL integration tests
-        run: ./mvnw --batch-mode --no-transfer-progress verify
+      - name: Run unit, fixed evaluation, and PostgreSQL integration tests
+        run: ./mvnw --batch-mode --no-transfer-progress verify -Psbom
 
       - name: Upload test reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: surefire-reports
           path: '**/target/surefire-reports/**'
           if-no-files-found: ignore
+
+      - name: Upload CycloneDX SBOM
+        uses: actions/upload-artifact@v7
+        with:
+          name: cyclonedx-sbom
+          path: |
+            target/bom.json
+            target/bom.xml
+          if-no-files-found: error
+
+  mysql-compatibility:
+    name: MySQL query target (${{ matrix.mysql }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        mysql:
+          - mysql:5.7
+          - mysql:8.4
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Verify external MySQL read-only query target
+        run: >-
+          ./mvnw --batch-mode --no-transfer-progress
+          -pl app/business-copilot-app -am
+          -Dtest=MySqlBusinessQueryIntegrationTest
+          -Dsurefire.failIfNoSpecifiedTests=false
+          -Dbusiness-copilot.test.mysql-image=${{ matrix.mysql }}
+          test
+
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Reject high-severity dependency changes
+        uses: actions/dependency-review-action@v5
+        with:
+          fail-on-severity: high
+
+  container-security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Scan repository dependencies, secrets, and configuration
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          format: table
+          exit-code: '1'
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+
+      - name: Build release container
+        run: docker build --tag spring-ai-business-copilot:ci .
+
+      - name: Verify container runs as a non-root user
+        run: test "$(docker image inspect --format '{{.Config.User}}' spring-ai-business-copilot:ci)" = "10001:10001"
+
+      - name: Scan release container
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        with:
+          scan-type: image
+          image-ref: spring-ai-business-copilot:ci
+          vuln-type: os,library
+          format: table
+          exit-code: '1'
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true

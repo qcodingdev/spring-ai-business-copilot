@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.jdbc.core.JdbcTemplate;
+import tools.jackson.databind.ObjectMapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -23,6 +24,7 @@ class ReportCopilotAutoConfigurationTest {
             .withBean(SensitiveTextMasker.class, SensitiveTextMasker::new)
             .withBean(AiChatService.class, () -> org.mockito.Mockito.mock(AiChatService.class))
             .withBean(PromptTemplateService.class, PromptTemplateService::new)
+            .withBean(ObjectMapper.class, ObjectMapper::new)
             .withBean(JdbcTemplate.class, () -> org.mockito.Mockito.mock(JdbcTemplate.class));
 
     @Test

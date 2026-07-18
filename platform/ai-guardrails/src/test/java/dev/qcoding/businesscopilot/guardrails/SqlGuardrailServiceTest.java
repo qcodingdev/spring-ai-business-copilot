@@ -427,6 +427,23 @@ class SqlGuardrailServiceTest {
     }
 
     @Test
+    @DisplayName("relative business period resolved to date literals passes")
+    void aggregateWithFixedDateBoundariesPasses() {
+        SqlValidationResult result = service.validate("""
+                SELECT c.name, SUM(o.total_amount) AS total_sales
+                FROM public.orders o
+                JOIN public.customers c ON o.customer_id = c.id
+                WHERE o.created_at >= DATE '2026-06-01'
+                  AND o.created_at < DATE '2026-07-01'
+                GROUP BY c.id, c.name
+                ORDER BY total_sales DESC
+                LIMIT 5
+                """, properties);
+
+        assertThat(result.passed()).isTrue();
+    }
+
+    @Test
     @DisplayName("grouped aggregate still requires bounded LIMIT")
     void groupedAggregateRequiresLimit() {
         SqlValidationResult result = service.validate(

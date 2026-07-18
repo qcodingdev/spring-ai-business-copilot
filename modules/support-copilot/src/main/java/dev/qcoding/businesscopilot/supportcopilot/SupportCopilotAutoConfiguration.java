@@ -33,8 +33,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 /**
  * Auto-configuration for the Support Copilot module.
  *
- * <p>Support Copilot 自动装配。注册工单分类、知识检索、草稿生成、确认和审计服务。
- * Controller 的独立宿主装配将在 v1.2 继续收口。</p>
+ * <p>Support Copilot 自动装配。注册工单分类、知识检索、草稿生成、人审状态流转、
+ * 控制器和审计服务，不依赖宿主应用扫描项目根包。</p>
  */
 @AutoConfiguration
 @ConditionalOnProperty(prefix = "business-copilot.support-copilot", name = "enabled", havingValue = "true")
@@ -115,10 +115,11 @@ public class SupportCopilotAutoConfiguration {
             SupportAuditService auditService,
             CurrentActorProvider actorProvider,
             ObjectAccessPolicy accessPolicy,
-            ConfirmationTokenService tokenService) {
+            ConfirmationTokenService tokenService,
+            SensitiveTextMasker sensitiveTextMasker) {
         return new ReplyDraftConfirmationService(
                 draftRepository, ticketRepository, auditService,
-                actorProvider, accessPolicy, tokenService);
+                actorProvider, accessPolicy, tokenService, sensitiveTextMasker);
     }
 
     // ── Knowledge retriever ──────────────────────────────────────────────

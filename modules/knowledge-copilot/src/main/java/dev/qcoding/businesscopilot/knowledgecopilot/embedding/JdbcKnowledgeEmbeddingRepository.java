@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * JDBC-backed implementation of {@link KnowledgeEmbeddingRepository}.
+ * {@link KnowledgeEmbeddingRepository} 的 JDBC 实现。
  *
  * <p>基于 Spring JDBC 的向量嵌入持久化。表 knowledge_chunk_embeddings
  * 由 Flyway V4 迁移创建。pgvector 列使用 {@code ::vector} 类型转换字符串
@@ -47,27 +47,29 @@ public class JdbcKnowledgeEmbeddingRepository implements KnowledgeEmbeddingRepos
             )
             """;
 
-    /**
-     * Cosine similarity search using pgvector's {@code <=>} operator.
-     * 1 - (embedding <=> query) converts cosine distance to cosine similarity.
-     * The JOIN with knowledge_chunks and knowledge_documents ensures we only return
-     * chunks from enabled documents.
-     *
-     * <p>Uses a CTE to reference the query vector once, then computes similarity in the
-     * outer SELECT so we can also filter on it in WHERE without the planner
-     * recomputing the distance. The WHERE clause filters to enabled documents only.</p>
-     */
+    /** 使用 pgvector 余弦距离检索，并在模型或维度不一致时跳过旧向量。 */
     private static final String SIMILARITY_SEARCH_SQL = """
-            WITH similarity AS (
+            WITH query_input AS (
+                SELECT ?::vector AS embedding, ?::text AS embedding_model
+            ),
+            similarity AS (
                 SELECT e.chunk_id,
-                       1 - (e.embedding <=> ?::vector) AS similarity
+                       CASE
+                           WHEN e.embedding_model = q.embedding_model
+                            AND vector_dims(e.embedding) = vector_dims(q.embedding)
+                           THEN 1 - (e.embedding <=> q.embedding)
+                           ELSE NULL
+                       END AS similarity
                 FROM knowledge_chunk_embeddings e
+                CROSS JOIN query_input q
             )
             SELECT s.chunk_id, s.similarity
             FROM similarity s
             JOIN knowledge_chunks c    ON c.id = s.chunk_id
             JOIN knowledge_documents d ON d.id = c.document_id
             WHERE d.enabled = TRUE
+              AND d.current_version = TRUE
+              AND d.index_status = 'INDEXED'
               AND s.similarity >= ?
             ORDER BY s.similarity DESC
             LIMIT ?
@@ -130,13 +132,13 @@ public class JdbcKnowledgeEmbeddingRepository implements KnowledgeEmbeddingRepos
 
     @Override
     public List<KnowledgeEmbeddingRepository.SimilaritySearchResult> findSimilarChunks(
-            float[] embedding, int topK, double minSimilarity) {
+            float[] embedding, String embeddingModel, int topK, double minSimilarity) {
         return jdbcTemplate.query(SIMILARITY_SEARCH_SQL, SIMILARITY_ROW_MAPPER,
-                formatVector(embedding), minSimilarity, topK);
+                formatVector(embedding), embeddingModel, minSimilarity, topK);
     }
 
     /**
-     * Read a pgvector column from the result set and parse it into a float array.
+     * 从结果集中读取 pgvector 列并解析为浮点数组。
      *
      * <p>The PG JDBC driver returns the vector type as its {@code toString()} representation
      * (e.g. {@code [0.1, 0.2, 0.3]}). We parse this string back into {@code float[]}
@@ -148,14 +150,13 @@ public class JdbcKnowledgeEmbeddingRepository implements KnowledgeEmbeddingRepos
             return new float[0];
         }
         /*
-         * At runtime the PostgreSQL JDBC driver (42.7.x) delivers the vector as
-         * org.postgresql.util.PGobject with getValue() -> "[v1,v2,...]".
-         * Calling toString() on it delegates to getValue(), so .toString() is safe.
+         * PostgreSQL JDBC 驱动在运行时将向量作为 PGobject 返回，
+         * 其 toString() 会委托给 getValue()，因此可以安全解析。
          */
         return parseVectorString(obj.toString());
     }
 
-    /** Format a float array as a pgvector-compatible string literal: {@code [0.1,0.2,0.3]}. */
+    /** 将浮点数组格式化为 pgvector 兼容的字符串字面量。 */
     static String formatVector(float[] embedding) {
         if (embedding == null || embedding.length == 0) {
             return "[]";
@@ -172,8 +173,7 @@ public class JdbcKnowledgeEmbeddingRepository implements KnowledgeEmbeddingRepos
     }
 
     /**
-     * Parse a pgvector string representation back to a float array.
-     * Input format from {@code toString()} on a pgvector column: {@code [0.1, 0.2, 0.3]}.
+     * 将 pgvector 字符串表示解析回浮点数组。
      */
     static float[] parseVectorString(String vectorStr) {
         if (vectorStr == null || vectorStr.length() < 2) {

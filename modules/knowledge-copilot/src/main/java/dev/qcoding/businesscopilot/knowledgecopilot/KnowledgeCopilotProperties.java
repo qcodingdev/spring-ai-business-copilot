@@ -3,21 +3,21 @@ package dev.qcoding.businesscopilot.knowledgecopilot;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * Configuration for the Knowledge Copilot module.
+ * Knowledge Copilot 模块配置。
  *
  * <p>Knowledge Copilot 模块级配置。控制模块开关、上传文档大小上限、检索召回参数和
  * embedding 模型信息。分片参数（chunkSize / chunkOverlap）由
  * {@link dev.qcoding.businesscopilot.knowledgecopilot.chunking.ChunkingProperties} 单独管理。</p>
  *
- * <p>embedding 维度必须与所选 embedding 模型实际输出维度一致，并和 V4 迁移中
- * knowledge_chunk_embeddings.embedding 列维度一致，否则向量写入或检索会因维度不匹配而失败。</p>
+ * <p>向量维度必须与所选向量模型实际输出维度一致。V17 起数据库列支持可变维度，
+ * 但同一次检索使用的文档向量仍必须保持同一模型和维度。</p>
  *
- * @param enabled            whether the Knowledge Copilot feature is active
- * @param maxDocumentSize    maximum accepted document size in bytes
- * @param topK               number of chunks retrieved per question
- * @param minSimilarity      minimum cosine similarity for a chunk to enter context
- * @param embeddingModelName embedding model name recorded for traceability
- * @param embeddingDimension embedding vector dimension; must match the embedding model and the V4 vector column
+ * @param enabled            是否启用 Knowledge Copilot
+ * @param maxDocumentSize    可接受的文档最大字节数
+ * @param topK               每个问题召回的分片数
+ * @param minSimilarity      分片进入上下文所需的最低余弦相似度
+ * @param embeddingModelName 用于追踪的向量模型名称
+ * @param embeddingDimension 向量维度，必须与模型实际输出一致
  */
 @ConfigurationProperties(prefix = "business-copilot.knowledge")
 public record KnowledgeCopilotProperties(
@@ -28,7 +28,7 @@ public record KnowledgeCopilotProperties(
         String embeddingModelName,
         int embeddingDimension) {
 
-    /** Defaults aligned with the V2 MVP boundary. */
+    /** 与 2.0 边界一致的保守默认值。 */
     public KnowledgeCopilotProperties {
         if (maxDocumentSize <= 0) {
             // 默认 2MB，超过该大小的单个文档将被拒绝
@@ -47,8 +47,7 @@ public record KnowledgeCopilotProperties(
             embeddingModelName = "text-embedding-3-small";
         }
         if (embeddingDimension <= 0) {
-            // 默认维度 1536，对应 text-embedding-3-small。
-            // 该值必须与 V4 迁移的 embedding 列维度以及实际 embedding 模型输出维度一致。
+            // 默认维度 1536，对应 text-embedding-3-small；必须与模型实际输出维度一致。
             embeddingDimension = 1536;
         }
     }

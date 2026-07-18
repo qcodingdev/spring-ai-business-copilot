@@ -2,7 +2,7 @@ package dev.qcoding.businesscopilot.commonweb.request;
 
 import java.util.Set;
 
-/** Per-request trace, authenticated actor, and framework-independent business role names. */
+/** 单次请求的链路信息、已认证操作者与独立于框架的业务角色名称。 */
 public record BusinessRequestContext(String requestId, String actorId, Set<String> roles) {
 
     public BusinessRequestContext {

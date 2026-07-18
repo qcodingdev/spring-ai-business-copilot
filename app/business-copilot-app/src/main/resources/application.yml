@@ -127,18 +127,23 @@ business-copilot:
     model-name: ${SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL:deepseek-v4-flash}
     provider-name: ${BUSINESS_COPILOT_AI_PROVIDER:openai-compatible}
   # ── Knowledge Copilot 配置 ─────────────────────────────────────
-  # embedding-dimension 必须与 V4 迁移中 knowledge_chunk_embeddings.embedding 列维度
-  # 以及实际 embedding 模型输出维度一致，否则向量写入或检索会失败。
+  # embedding-dimension 必须与模型实际输出维度一致。V17 已将数据库列改为可变维度，
+  # 切换模型时不再修改历史迁移；已有文档需要在界面点击“重建索引”。
   knowledge:
     enabled: true
     max-document-size: 2097152
     top-k: 5
     min-similarity: 0.70
     embedding-model-name: ${SPRING_AI_OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
-    embedding-dimension: 1536
+    embedding-dimension: ${SPRING_AI_OPENAI_EMBEDDING_DIMENSION:1536}
+    index-worker-delay: 3000
     chunking:
       chunk-size: 800
       chunk-overlap: 100
+  document-processing:
+    max-file-bytes: 2097152
+    max-extracted-characters: 100000
+    max-pdf-pages: 100
   # ── Support Copilot 配置 ─────────────────────────────────────
   # 智能客服助手。工单输入入库前脱敏，回复草稿生成后需人工确认。
   # high-risk-categories 中的分类默认标记 needsHuman=true。
@@ -162,6 +167,11 @@ business-copilot:
     draft-ttl: 30m
     allowed-report-types: TEAM_WEEKLY,BUSINESS_WEEKLY,PROJECT_STATUS
     markdown-export-enabled: true
+    html-export-enabled: true
+    max-import-bytes: 1048576
+    source-freshness-ttl: 7d
+    default-template-id: evidence-weekly
+    default-template-version: "2.0"
   # ── Resume Copilot 配置 ──────────────────────────────────────
   # 仅做单 JD、单简历的证据化辅助评估，不输出分数、排名或招聘决定。
   resume-copilot:
@@ -172,3 +182,6 @@ business-copilot:
     max-evidence-count: 80
     review-token-ttl: 30m
     protected-attribute-guard-enabled: true
+    submission-retention: 30d
+    retention-cleanup-delay: 1h
+    max-reviewer-feedback-length: 4000

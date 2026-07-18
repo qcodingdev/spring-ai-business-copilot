@@ -3,27 +3,230 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>登录 · AI Business Copilot</title>
+  <meta name="description" content="QCoding AI Copilot：基于 Spring AI 的五大企业业务智能助手。"/>
+  <title>QCoding AI Copilot · 企业 AI 应用工作台</title>
   <link rel="stylesheet" th:href="@{/css/app.css}"/>
+  <link rel="icon" type="image/png" th:href="@{/images/qcoding-logo.png}"/>
 </head>
 <body class="login-page">
-<main class="login-card">
-  <h1>AI Business Copilot</h1>
-  <p class="subtitle">登录业务智能助手工作台</p>
-  <p class="login-error" th:if="${param.error}">用户名或密码错误</p>
-  <p class="login-success" th:if="${param.logout}">已安全退出</p>
-  <form th:action="@{/login}" method="post">
-    <div class="field-group">
-      <label for="username">用户名</label>
-      <input id="username" name="username" type="text" autocomplete="username" required autofocus/>
+<div class="login-backdrop" aria-hidden="true">
+  <span class="login-orb login-orb-primary"></span>
+  <span class="login-orb login-orb-accent"></span>
+</div>
+
+<header class="public-header">
+  <a class="public-brand" href="#top" aria-label="QCoding AI Copilot 首页">
+    <img class="brand-logo" th:src="@{/images/qcoding-logo.png}" alt="QCoding Logo"/>
+    <span class="brand-copy">
+      <strong>QCoding AI Copilot</strong>
+      <small>AI 应用开发 · Java 技术实践</small>
+    </span>
+  </a>
+  <nav class="public-nav" aria-label="产品导航">
+    <a href="#capabilities">五大模块</a>
+    <a href="#trust">可信执行</a>
+    <a href="#technology">技术栈</a>
+  </nav>
+  <a class="public-header-action" href="#login-form" data-login-trigger>登录工作台</a>
+</header>
+
+<main id="top" class="public-main">
+  <section class="public-hero" aria-labelledby="product-title">
+    <div class="public-hero-copy">
+      <p class="eyebrow">开源 Spring AI 业务助手套件</p>
+      <h1 id="product-title">把 AI 变成<br/><span>可运行的业务能力</span></h1>
+      <p class="public-hero-lead">
+        面向个人开发者、中小团队和企业内部系统，提供可运行、可改造、可交付的 Java AI 业务样板。
+        未登录即可了解全部能力，实际业务操作统一进入安全工作台。
+      </p>
+      <div class="public-hero-actions">
+        <a class="public-primary-action" href="#capabilities">探索五大模块</a>
+        <a class="public-secondary-action" href="#login-form" data-login-trigger>登录并开始使用</a>
+      </div>
+      <div class="public-metrics" aria-label="产品概览">
+        <span><strong>5</strong><small>业务闭环</small></span>
+        <span><strong>3</strong><small>可信执行边界</small></span>
+        <span><strong>100%</strong><small>关键动作可审计</small></span>
+      </div>
     </div>
-    <div class="field-group">
-      <label for="password">密码</label>
-      <input id="password" name="password" type="password" autocomplete="current-password" required/>
+
+    <aside id="login-form" class="public-login-card" aria-labelledby="login-form-title">
+      <div class="public-login-heading">
+        <span class="login-panel-mark">QC</span>
+        <div>
+          <p class="eyebrow">安全工作台</p>
+          <h2 id="login-form-title">登录 QCoding 工作台</h2>
+          <p id="login-module-hint">验证身份后进入完整业务工作台。</p>
+        </div>
+      </div>
+
+      <p class="login-error" th:if="${param.error}">用户名或密码错误，请重新输入。</p>
+      <p class="login-success" th:if="${param.logout}">已安全退出，期待再次使用。</p>
+
+      <form th:action="@{/login}" method="post">
+        <div class="field-group">
+          <label for="username">用户名</label>
+          <input id="username" name="username" type="text" autocomplete="username"
+                 placeholder="请输入用户名" required autofocus/>
+        </div>
+        <div class="field-group">
+          <label for="password">密码</label>
+          <input id="password" name="password" type="password" autocomplete="current-password"
+                 placeholder="请输入密码" required/>
+        </div>
+        <button type="submit">安全登录</button>
+      </form>
+
+      <div class="public-login-assurance">
+        <span><b>✓</b>角色访问边界</span>
+        <span><b>✓</b>高风险动作确认</span>
+        <span><b>✓</b>全链路审计</span>
+      </div>
+      <p class="login-hint">演示账号由部署环境中的 <code>BUSINESS_COPILOT_*</code> 配置提供。</p>
+    </aside>
+  </section>
+
+  <section id="capabilities" class="public-section capability-section" aria-labelledby="capability-title">
+    <div class="public-section-heading">
+      <div>
+        <p class="eyebrow">五个可运行的业务流程</p>
+        <h2 id="capability-title">一个工作台，覆盖五类真实业务</h2>
+      </div>
+      <p>点击模块即可查看未登录预览。预览只展示产品流程，不访问业务数据，也不会触发模型调用。</p>
     </div>
-    <button type="submit">登录</button>
-  </form>
-  <p class="login-hint">演示账号由 <code>BUSINESS_COPILOT_*_USERNAME/PASSWORD</code> 环境变量配置。</p>
+
+    <div class="capability-explorer">
+      <div class="capability-tabs" role="tablist" aria-label="五大业务模块">
+        <button class="capability-tab active" type="button" role="tab" aria-selected="true" data-preview-module="data">
+          <span class="capability-tab-icon">D</span>
+          <span><strong>数据查询</strong><small>Data Copilot</small></span>
+        </button>
+        <button class="capability-tab" type="button" role="tab" aria-selected="false" data-preview-module="knowledge">
+          <span class="capability-tab-icon">K</span>
+          <span><strong>知识问答</strong><small>Knowledge Copilot</small></span>
+        </button>
+        <button class="capability-tab" type="button" role="tab" aria-selected="false" data-preview-module="support">
+          <span class="capability-tab-icon">S</span>
+          <span><strong>客服处理</strong><small>Support Copilot</small></span>
+        </button>
+        <button class="capability-tab" type="button" role="tab" aria-selected="false" data-preview-module="report">
+          <span class="capability-tab-icon">R</span>
+          <span><strong>报告生成</strong><small>Report Copilot</small></span>
+        </button>
+        <button class="capability-tab" type="button" role="tab" aria-selected="false" data-preview-module="resume">
+          <span class="capability-tab-icon">CV</span>
+          <span><strong>简历评估</strong><small>Resume Copilot</small></span>
+        </button>
+      </div>
+
+      <div class="capability-stage">
+        <div class="capability-stage-copy">
+          <div class="capability-stage-status"><span class="status-dot"></span>产品能力预览</div>
+          <p id="preview-kicker" class="section-kicker">自然语言转 SQL</p>
+          <h3 id="preview-title">从业务问题到安全查询结果</h3>
+          <p id="preview-description">自然语言生成只读 SQL，先展示候选语句与校验结论，确认后再执行。</p>
+          <ul id="preview-points" class="preview-points">
+            <li>Schema、表与字段白名单</li>
+            <li>写操作、未知函数和无界结果默认拒绝</li>
+            <li>SQL 候选、执行结果与操作者完整审计</li>
+          </ul>
+          <a class="capability-login-action" href="#login-form" data-login-trigger data-module-target="data">
+            登录后使用 <span id="preview-action-label">Data Copilot</span>
+          </a>
+        </div>
+
+        <div class="capability-console" aria-label="能力流程动画">
+          <div class="console-toolbar">
+            <span class="console-lights" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span id="preview-console-title">Data Copilot / 安全执行</span>
+            <span class="console-live">实时预览</span>
+          </div>
+          <div class="console-request">
+            <span>业务输入</span>
+            <p id="preview-input">“上个月销售额最高的前 5 个客户是谁？”</p>
+          </div>
+          <div class="console-pipeline" aria-hidden="true">
+            <span class="pipeline-step complete"><b>01</b><i></i><small id="preview-step-one">理解业务意图</small></span>
+            <span class="pipeline-step complete"><b>02</b><i></i><small id="preview-step-two">生成查询候选</small></span>
+            <span class="pipeline-step active"><b>03</b><i></i><small id="preview-step-three">安全校验</small></span>
+          </div>
+          <div class="console-result">
+            <div><span class="status-dot"></span><strong id="preview-result-title">Guardrails 校验通过</strong></div>
+            <p id="preview-result-copy">只读查询 · 5 行上限 · 敏感字段脱敏 · 等待人工确认</p>
+          </div>
+          <div class="console-scan" aria-hidden="true"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="module-card-grid">
+      <article class="module-card">
+        <span class="module-card-icon">D</span>
+        <div><p>Data Copilot</p><h3>安全数据查询</h3></div>
+        <p>把自然语言问题转成受约束的只读查询，并输出可解释业务结果。</p>
+        <span class="module-boundary">SQL 白名单 · 二次确认</span>
+        <button type="button" class="module-preview-link" data-preview-jump="data">查看能力预览 →</button>
+      </article>
+      <article class="module-card">
+        <span class="module-card-icon">K</span>
+        <div><p>Knowledge Copilot</p><h3>有依据的知识问答</h3></div>
+        <p>从企业文档中检索证据，生成带引用、可回溯且能识别证据不足的回答。</p>
+        <span class="module-boundary">来源引用 · 证据校验</span>
+        <button type="button" class="module-preview-link" data-preview-jump="knowledge">查看能力预览 →</button>
+      </article>
+      <article class="module-card">
+        <span class="module-card-icon">S</span>
+        <div><p>Support Copilot</p><h3>客服工单辅助处理</h3></div>
+        <p>完成工单分类、依据检索与回复草稿生成，由人工确认后进入业务动作。</p>
+        <span class="module-boundary">回复草稿 · 人工审核</span>
+        <button type="button" class="module-preview-link" data-preview-jump="support">查看能力预览 →</button>
+      </article>
+      <article class="module-card">
+        <span class="module-card-icon">R</span>
+        <div><p>Report Copilot</p><h3>可复核的报告生成</h3></div>
+        <p>汇总结构化指标和文本证据，生成可复核、可确认、可导出的业务报告。</p>
+        <span class="module-boundary">来源新鲜度 · 草稿确认</span>
+        <button type="button" class="module-preview-link" data-preview-jump="report">查看能力预览 →</button>
+      </article>
+      <article class="module-card">
+        <span class="module-card-icon">CV</span>
+        <div><p>Resume Copilot</p><h3>证据化简历评估</h3></div>
+        <p>依据确认后的岗位标准评估单份简历，保留证据缺口并默认脱敏处理。</p>
+        <span class="module-boundary">隐私脱敏 · 招聘合规</span>
+        <button type="button" class="module-preview-link" data-preview-jump="resume">查看能力预览 →</button>
+      </article>
+    </div>
+  </section>
+
+  <section id="trust" class="public-section trust-section" aria-labelledby="trust-title">
+    <div class="public-section-heading">
+      <div>
+        <p class="eyebrow">以可信为设计前提</p>
+        <h2 id="trust-title">AI 生成建议，业务规则决定能否执行</h2>
+      </div>
+      <p>模型输出不会直接进入真实业务动作。每个模块都遵循边界校验、人工确认和审计追踪。</p>
+    </div>
+    <div class="trust-card-grid">
+      <article><span>01</span><h3>业务边界</h3><p>模块级 Guardrails 校验输入、模型输出和业务对象，默认拒绝不确定动作。</p></article>
+      <article><span>02</span><h3>人工确认</h3><p>高风险动作使用一次性确认凭证，绑定操作者、对象、状态和有效期。</p></article>
+      <article><span>03</span><h3>全链路审计</h3><p>记录准确操作者、模型、Prompt、策略、延迟和业务结果，支持问题诊断。</p></article>
+    </div>
+  </section>
+
+  <section id="technology" class="technology-strip" aria-label="开源技术栈">
+    <div><p class="eyebrow">为 Java 团队打造</p><h2>熟悉的技术栈，可控的落地路径</h2></div>
+    <div class="technology-list">
+      <span>Java</span><span>Spring Boot</span><span>Spring AI</span><span>PostgreSQL</span>
+      <span>pgvector</span><span>Flyway</span><span>Guardrails</span><span>Observability</span>
+    </div>
+  </section>
 </main>
+
+<footer class="public-footer">
+  <span>QCoding AI Copilot</span>
+  <span>专注 AI 应用开发与 Java 技术实践</span>
+</footer>
+
+<script th:src="@{/js/login-showcase.js}"></script>
 </body>
 </html>

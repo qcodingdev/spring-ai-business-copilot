@@ -10,6 +10,6 @@ import jakarta.validation.constraints.NotBlank;
  * @param question the user's natural language question
  */
 public record KnowledgeAnswerRequest(
-        @NotBlank(message = "Question must not be blank")
+        @NotBlank(message = "问题不能为空")
         String question) {
 }

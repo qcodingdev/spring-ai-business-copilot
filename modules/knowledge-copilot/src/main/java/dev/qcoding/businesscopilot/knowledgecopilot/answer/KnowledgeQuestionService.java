@@ -2,6 +2,7 @@ package dev.qcoding.businesscopilot.knowledgecopilot.answer;
 
 import dev.qcoding.businesscopilot.knowledgecopilot.retrieval.KnowledgeRetrievalService;
 import dev.qcoding.businesscopilot.knowledgecopilot.retrieval.RetrievedKnowledgeChunk;
+import dev.qcoding.businesscopilot.guardrails.SensitiveTextMasker;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,11 +27,14 @@ public class KnowledgeQuestionService {
 
     private final KnowledgeRetrievalService retrievalService;
     private final KnowledgeAnswerService answerService;
+    private final SensitiveTextMasker sensitiveTextMasker;
 
     public KnowledgeQuestionService(KnowledgeRetrievalService retrievalService,
-                                     KnowledgeAnswerService answerService) {
+                                     KnowledgeAnswerService answerService,
+                                     SensitiveTextMasker sensitiveTextMasker) {
         this.retrievalService = retrievalService;
         this.answerService = answerService;
+        this.sensitiveTextMasker = sensitiveTextMasker;
     }
 
     /**
@@ -52,8 +56,8 @@ public class KnowledgeQuestionService {
     }
 
     public QuestionInvocation askWithAudit(@Valid KnowledgeAnswerRequest request) {
-        String question = request.question().trim();
-        log.info("Knowledge Q&A: question='{}'", truncate(question));
+        String question = sensitiveTextMasker.mask(request.question().trim());
+        log.info("知识问答开始：脱敏后问题长度={}", question.length());
 
         long startTime = System.currentTimeMillis();
 
@@ -66,7 +70,7 @@ public class KnowledgeQuestionService {
         KnowledgeAnswerResponse response = answerInvocation.response();
 
         long latencyMs = System.currentTimeMillis() - startTime;
-        log.info("Knowledge Q&A completed: status={}, citations={}, latencyMs={}",
+        log.info("知识问答完成：status={}，citations={}，latencyMs={}",
                 response.status(),
                 response.citations() != null ? response.citations().size() : 0,
                 latencyMs);
@@ -81,12 +85,8 @@ public class KnowledgeQuestionService {
                 latencyMs,
                 answerInvocation.promptMetadata(),
                 answerInvocation.aiMetadata(),
-                answerInvocation.violationCodes());
-    }
-
-    private static String truncate(String text) {
-        if (text == null) return "null";
-        return text.length() > 100 ? text.substring(0, 100) + "..." : text;
+                answerInvocation.violationCodes(),
+                question);
     }
 
     public record QuestionInvocation(
@@ -96,6 +96,19 @@ public class KnowledgeQuestionService {
             Long latencyMs,
             dev.qcoding.businesscopilot.aicore.PromptTemplateMetadata promptMetadata,
             dev.qcoding.businesscopilot.aicore.AiInvocationMetadata aiMetadata,
-            String violationCodes) {
+            String violationCodes,
+            String sanitizedQuestion) {
+
+        public QuestionInvocation(
+                KnowledgeAnswerResponse response,
+                String retrievedChunkIds,
+                String embeddingModel,
+                Long latencyMs,
+                dev.qcoding.businesscopilot.aicore.PromptTemplateMetadata promptMetadata,
+                dev.qcoding.businesscopilot.aicore.AiInvocationMetadata aiMetadata,
+                String violationCodes) {
+            this(response, retrievedChunkIds, embeddingModel, latencyMs,
+                    promptMetadata, aiMetadata, violationCodes, null);
+        }
     }
 }

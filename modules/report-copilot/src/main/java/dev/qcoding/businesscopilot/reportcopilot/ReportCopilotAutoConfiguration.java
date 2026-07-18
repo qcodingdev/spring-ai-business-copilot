@@ -4,6 +4,7 @@ import dev.qcoding.businesscopilot.guardrails.SensitiveTextMasker;
 import dev.qcoding.businesscopilot.reportcopilot.source.ReportSourceNormalizer;
 import dev.qcoding.businesscopilot.reportcopilot.source.ReportSourceMapper;
 import dev.qcoding.businesscopilot.reportcopilot.source.ReportSourcePreviewService;
+import dev.qcoding.businesscopilot.reportcopilot.source.ReportSourceImportService;
 import dev.qcoding.businesscopilot.reportcopilot.source.ReportDataProvider;
 import dev.qcoding.businesscopilot.reportcopilot.source.SampleReportDataProvider;
 import dev.qcoding.businesscopilot.reportcopilot.request.ReportRequestPreparationService;
@@ -18,6 +19,7 @@ import dev.qcoding.businesscopilot.reportcopilot.draft.ReportDraftPersistenceSer
 import dev.qcoding.businesscopilot.reportcopilot.draft.ReportDraftConfirmationService;
 import dev.qcoding.businesscopilot.reportcopilot.audit.ReportAuditService;
 import dev.qcoding.businesscopilot.reportcopilot.export.ReportMarkdownExportService;
+import dev.qcoding.businesscopilot.reportcopilot.export.ReportHtmlExportService;
 import dev.qcoding.businesscopilot.aicore.AiChatService;
 import dev.qcoding.businesscopilot.aicore.PromptTemplateService;
 import dev.qcoding.businesscopilot.commonsecurity.ConfirmationTokenService;
@@ -30,13 +32,13 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.jdbc.core.JdbcTemplate;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Auto-configuration for the Report Copilot module.
  *
- * <p>Registers source normalization, structured report generation, draft state transitions,
- * audit, confirmation, and Markdown export. Independent-host controller registration remains
- * part of the v1.2 hardening work.</p>
+ * <p>Registers source import and normalization, structured report generation, draft state
+ * transitions, audit, confirmation, Markdown/HTML export, and the independent-host controller.</p>
  */
 @AutoConfiguration
 @ConditionalOnProperty(prefix = "business-copilot.report-copilot", name = "enabled", havingValue = "true")
@@ -79,8 +81,17 @@ public class ReportCopilotAutoConfiguration {
     @ConditionalOnMissingBean
     public ReportRequestPreparationService reportRequestPreparationService(ReportRequestValidator validator,
                                                                             ReportSourceMapper sourceMapper,
-                                                                            ReportSourceNormalizer normalizer) {
-        return new ReportRequestPreparationService(validator, sourceMapper, normalizer);
+                                                                            ReportSourceNormalizer normalizer,
+                                                                            ReportCopilotProperties properties) {
+        return new ReportRequestPreparationService(validator, sourceMapper, normalizer, properties);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public ReportSourceImportService reportSourceImportService(ObjectMapper objectMapper,
+                                                               ReportSourceNormalizer normalizer,
+                                                               ReportCopilotProperties properties) {
+        return new ReportSourceImportService(objectMapper, normalizer, properties);
     }
 
     @Bean
@@ -105,8 +116,9 @@ public class ReportCopilotAutoConfiguration {
     @ConditionalOnMissingBean
     public ReportDraftRepository reportDraftRepository(JdbcTemplate jdbcTemplate,
                                                         CurrentActorProvider actorProvider,
-                                                        ConfirmationTokenService tokenService) {
-        return new JdbcReportDraftRepository(jdbcTemplate, actorProvider, tokenService);
+                                                        ConfirmationTokenService tokenService,
+                                                        ObjectMapper objectMapper) {
+        return new JdbcReportDraftRepository(jdbcTemplate, actorProvider, tokenService, objectMapper);
     }
 
     @Bean
@@ -147,6 +159,17 @@ public class ReportCopilotAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
+    public ReportHtmlExportService reportHtmlExportService(ReportDraftRepository draftRepository,
+                                                           ReportCopilotProperties properties,
+                                                           ReportAuditService auditService,
+                                                           CurrentActorProvider actorProvider,
+                                                           ObjectAccessPolicy accessPolicy) {
+        return new ReportHtmlExportService(
+                draftRepository, properties, auditService, actorProvider, accessPolicy);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
     public ReportGenerationService reportGenerationService(ReportRequestPreparationService preparationService,
                                                            AiChatService aiChatService,
                                                            PromptTemplateService promptTemplateService,
@@ -163,10 +186,13 @@ public class ReportCopilotAutoConfiguration {
     public ReportCopilotController reportCopilotController(
             ReportSourcePreviewService sourcePreviewService,
             ReportRequestPreparationService requestPreparationService,
+            ReportSourceImportService sourceImportService,
             ReportGenerationService generationService,
             ReportDraftConfirmationService confirmationService,
-            ReportMarkdownExportService markdownExportService) {
+            ReportMarkdownExportService markdownExportService,
+            ReportHtmlExportService htmlExportService) {
         return new ReportCopilotController(sourcePreviewService, requestPreparationService,
-                generationService, confirmationService, markdownExportService);
+                sourceImportService, generationService, confirmationService,
+                markdownExportService, htmlExportService);
     }
 }

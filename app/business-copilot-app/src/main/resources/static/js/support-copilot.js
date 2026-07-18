@@ -34,6 +34,10 @@
 
     draftPanel: $('#sc-draft-panel'),
     draftText: $('#sc-draft-text'),
+    draftEditor: $('#sc-draft-editor'),
+    draftEditText: $('#sc-draft-edit-text'),
+    draftEditReason: $('#sc-draft-edit-reason'),
+    editBtn: $('#sc-edit-btn'),
     draftRiskBadge: $('#sc-draft-risk-badge'),
     draftNeedsHuman: $('#sc-draft-needs-human'),
     draftRiskReasons: $('#sc-draft-risk-reasons'),
@@ -89,6 +93,7 @@
     const tickets = sampleTickets[category];
     if (tickets) {
       els.ticketInput.value = pickRandom(tickets);
+      els.ticketInput.focus();
     }
   });
 
@@ -104,6 +109,11 @@
     const token = els.confirmationToken.value;
     if (!draftId || !token) return;
     cancelDraft(draftId, token);
+  });
+  els.editBtn.addEventListener('click', () => {
+    const draftId = els.draftId.value;
+    if (!draftId) return;
+    editDraft(draftId);
   });
 
   // ── API calls ─────────────────────────────────────────────────
@@ -205,30 +215,69 @@
     }
   }
 
+  async function editDraft(draftId) {
+    const editedText = els.draftEditText.value.trim();
+    if (!editedText) {
+      showError('人工修订后的草稿不能为空');
+      return;
+    }
+    showLoading('正在保存人工修订…');
+    try {
+      const resp = await fetch(API_BASE + '/reply-drafts/' + draftId + '/edit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          editedText,
+          reason: els.draftEditReason.value.trim() || null
+        })
+      });
+      const body = await resp.json().catch(() => ({}));
+      if (!resp.ok || !body.success) {
+        throw new Error(body.message || '保存人工修订失败');
+      }
+      els.draftText.textContent = body.data.editedText;
+      els.draftEditText.value = body.data.editedText;
+      showToast('人工修订已保存，请继续确认或取消草稿');
+    } catch (err) {
+      showError('保存人工修订失败：' + err.message);
+    } finally {
+      hideLoading();
+      loadAuditLogs();
+    }
+  }
+
   async function loadAuditLogs() {
     try {
       const resp = await fetch(API_BASE + '/audit-logs?page=0&size=10');
-      if (!resp.ok) return;
+      if (resp.status === 403) {
+        els.auditTbody.innerHTML = '<tr><td colspan="5">审计记录仅管理员和审计员可查看</td></tr>';
+        return;
+      }
+      if (!resp.ok) {
+        els.auditTbody.innerHTML = '<tr><td colspan="5">审计记录暂时无法加载</td></tr>';
+        return;
+      }
       const body = await resp.json();
       if (!body.success || !body.data) return;
 
-      const items = body.data.items || body.data;
+      const items = body.data.content || [];
       els.auditTbody.innerHTML = (Array.isArray(items) ? items : []).map(log => {
         const time = log.createdAt ? new Date(log.createdAt).toLocaleString('zh-CN') : '-';
-        const eventType = log.eventType || '-';
-        const category = log.category || '-';
-        const urgency = log.urgency || '-';
-        const risk = log.riskLevel || '-';
+        const rawEventType = log.eventType;
+        const eventType = supportLabel(rawEventType);
+        const category = supportLabel(log.category);
+        const urgency = supportLabel(log.urgency);
+        const risk = supportLabel(log.riskLevel);
         return `<tr>
           <td>${escapeHtml(time)}</td>
-          <td><span class="badge badge-${eventBadgeClass(eventType)}">${escapeHtml(eventType)}</span></td>
+          <td><span class="badge badge-${eventBadgeClass(rawEventType)}">${escapeHtml(eventType)}</span></td>
           <td>${escapeHtml(category)}</td>
           <td>${escapeHtml(urgency)}</td>
           <td>${escapeHtml(risk)}</td>
         </tr>`;
       }).join('');
     } catch (err) {
-      console.error('Failed to load audit logs', err);
+      console.error('客服审计记录加载失败', err);
     }
   }
 
@@ -249,11 +298,11 @@
   function renderResult(data) {
     // Classification
     els.classificationPanel.hidden = false;
-    els.category.textContent = data.category || '-';
+    els.category.textContent = supportLabel(data.category);
     els.category.className = 'badge badge-' + categoryBadgeClass(data.category);
-    els.sentiment.textContent = data.sentiment || '-';
+    els.sentiment.textContent = supportLabel(data.sentiment);
     els.sentiment.className = 'badge badge-' + sentimentBadgeClass(data.sentiment);
-    els.urgency.textContent = data.urgency || '-';
+    els.urgency.textContent = supportLabel(data.urgency);
     els.urgency.className = 'badge badge-' + urgencyBadgeClass(data.urgency);
     els.needsHuman.textContent = data.needsHuman ? '需要转人工' : '可自动处理';
     els.needsHuman.className = 'badge ' + (data.needsHuman ? 'badge-warn' : 'badge-pass');
@@ -263,7 +312,8 @@
       els.reasonsDiv.hidden = false;
       els.reasonsList.innerHTML = data.classification.reasons.map(r => `<li>${escapeHtml(r)}</li>`).join('');
     } else if (data.reasons && data.reasons.length > 0) {
-      // reasons may be at top level
+      els.reasonsDiv.hidden = false;
+      els.reasonsList.innerHTML = data.reasons.map(r => `<li>${escapeHtml(r)}</li>`).join('');
     }
 
     // Evidence
@@ -304,7 +354,7 @@
     }
 
     // Risk badge
-    els.draftRiskBadge.textContent = draft.riskLevel || 'MEDIUM';
+    els.draftRiskBadge.textContent = supportLabel(draft.riskLevel || 'MEDIUM');
     els.draftRiskBadge.className = 'badge badge-' + riskBadgeClass(draft.riskLevel);
 
     // Needs human
@@ -322,7 +372,7 @@
       els.draftCitationsDiv.hidden = false;
       els.draftCitationsList.innerHTML = draft.citations.map(c => `
         <li>
-          <span class="badge">Chunk: ${escapeHtml(c.chunkId || '-')}</span>
+          <span class="badge">分片：${escapeHtml(c.chunkId || '-')}</span>
           ${escapeHtml(c.reason || '')}
         </li>
       `).join('');
@@ -333,10 +383,14 @@
     // Actions (only show if we have a token)
     if (draft.confirmationToken && draft.draftId) {
       els.draftActions.hidden = false;
+      els.draftEditor.hidden = false;
       els.draftId.value = draft.draftId;
       els.confirmationToken.value = draft.confirmationToken;
+      els.draftEditText.value = draft.replyText || '';
+      els.draftEditReason.value = '';
     } else {
       els.draftActions.hidden = true;
+      els.draftEditor.hidden = true;
     }
   }
 
@@ -347,6 +401,7 @@
     els.evidenceEmpty.hidden = true;
     els.evidenceList.innerHTML = '';
     els.draftActions.hidden = true;
+    els.draftEditor.hidden = true;
     els.reasonsDiv.hidden = true;
     els.reasonsList.innerHTML = '';
     els.draftNeedsHuman.hidden = true;
@@ -389,6 +444,34 @@
       case 'MEDIUM': return 'warn';
       default: return 'pass';
     }
+  }
+
+  function supportLabel(value) {
+    const labels = {
+      REFUND: '退款',
+      ACCOUNT_ACTIVATION: '账号开通',
+      INCIDENT: '故障事件',
+      ACCOUNT_SECURITY: '账号安全',
+      BILLING: '账单',
+      PRODUCT_USAGE: '产品使用',
+      OTHER: '其他',
+      NEUTRAL: '中性',
+      CONFUSED: '困惑',
+      FRUSTRATED: '受挫',
+      ANGRY: '愤怒',
+      LOW: '低',
+      MEDIUM: '中',
+      HIGH: '高',
+      CRITICAL: '紧急',
+      CLASSIFIED: '已分类',
+      DRAFTED: '已生成草稿',
+      DRAFT_EDITED: '已人工修订',
+      CONFIRMED: '已确认',
+      CANCELED: '已取消',
+      NEEDS_HUMAN: '需人工处理',
+      FAILED: '失败'
+    };
+    return labels[value] || value || '-';
   }
 
   // ── UI utilities ──────────────────────────────────────────────
@@ -445,22 +528,9 @@
 
   // ── Init ──────────────────────────────────────────────────────
 
-  // Tab switching
-  document.querySelectorAll('.tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.tab-content').forEach(tc => tc.hidden = true);
-      tab.classList.add('active');
-      const target = $('#tab-' + tab.dataset.tab);
-      if (target) target.hidden = false;
-
-      if (tab.dataset.tab === 'support-copilot') {
-        loadAuditLogs();
-      }
-    });
-  });
+  window.loadSupportAuditLogs = loadAuditLogs;
 
   loadAuditLogs();
 
-  console.log('Support Copilot ready');
+  console.log('客服助手工作台已就绪');
 })();

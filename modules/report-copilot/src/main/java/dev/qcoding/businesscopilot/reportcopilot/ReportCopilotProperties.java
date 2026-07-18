@@ -2,6 +2,7 @@ package dev.qcoding.businesscopilot.reportcopilot;
 
 import dev.qcoding.businesscopilot.reportcopilot.request.ReportType;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.bind.ConstructorBinding;
 
 import java.time.Duration;
 import java.util.Set;
@@ -20,8 +21,30 @@ public record ReportCopilotProperties(
         int maxMeetingNoteSources,
         Duration draftTtl,
         Set<ReportType> allowedReportTypes,
-        boolean markdownExportEnabled) {
+        boolean markdownExportEnabled,
+        boolean htmlExportEnabled,
+        int maxImportBytes,
+        Duration sourceFreshnessTtl,
+        String defaultTemplateId,
+        String defaultTemplateVersion) {
 
+    public ReportCopilotProperties(boolean enabled,
+                                   int maxPeriodDays,
+                                   int maxSourceCount,
+                                   int maxSourceLength,
+                                   int maxMetricSources,
+                                   int maxTaskSources,
+                                   int maxMeetingNoteSources,
+                                   Duration draftTtl,
+                                   Set<ReportType> allowedReportTypes,
+                                   boolean markdownExportEnabled) {
+        this(enabled, maxPeriodDays, maxSourceCount, maxSourceLength, maxMetricSources,
+                maxTaskSources, maxMeetingNoteSources, draftTtl, allowedReportTypes,
+                markdownExportEnabled, true, 1_048_576, Duration.ofDays(7),
+                "evidence-weekly", "2.0");
+    }
+
+    @ConstructorBinding
     public ReportCopilotProperties {
         if (maxPeriodDays <= 0) {
             maxPeriodDays = 31;
@@ -49,6 +72,18 @@ public record ReportCopilotProperties(
                     ReportType.PROJECT_STATUS);
         } else {
             allowedReportTypes = Set.copyOf(allowedReportTypes);
+        }
+        if (maxImportBytes <= 0) {
+            maxImportBytes = 1_048_576;
+        }
+        if (sourceFreshnessTtl == null || sourceFreshnessTtl.isNegative() || sourceFreshnessTtl.isZero()) {
+            sourceFreshnessTtl = Duration.ofDays(7);
+        }
+        if (defaultTemplateId == null || defaultTemplateId.isBlank()) {
+            defaultTemplateId = "evidence-weekly";
+        }
+        if (defaultTemplateVersion == null || defaultTemplateVersion.isBlank()) {
+            defaultTemplateVersion = "2.0";
         }
     }
 }
