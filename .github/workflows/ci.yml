@@ -28,7 +28,7 @@ jobs:
         run: ./mvnw --version
 
       - name: Set up Node.js for frontend syntax checks
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
 
