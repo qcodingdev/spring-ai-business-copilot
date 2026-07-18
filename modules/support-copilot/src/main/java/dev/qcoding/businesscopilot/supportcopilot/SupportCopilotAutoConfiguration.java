@@ -4,6 +4,7 @@ import dev.qcoding.businesscopilot.guardrails.SensitiveTextMasker;
 import dev.qcoding.businesscopilot.commonsecurity.ConfirmationTokenService;
 import dev.qcoding.businesscopilot.commonsecurity.CurrentActorProvider;
 import dev.qcoding.businesscopilot.commonsecurity.ObjectAccessPolicy;
+import dev.qcoding.businesscopilot.knowledgecopilot.KnowledgeCopilotAutoConfiguration;
 import dev.qcoding.businesscopilot.knowledgecopilot.document.KnowledgeDocumentRepository;
 import dev.qcoding.businesscopilot.knowledgecopilot.retrieval.KnowledgeRetrievalService;
 import dev.qcoding.businesscopilot.supportcopilot.audit.JdbcSupportAuditRepository;
@@ -25,6 +26,7 @@ import dev.qcoding.businesscopilot.supportcopilot.web.SupportCopilotController;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.AutoConfigureAfter;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -37,6 +39,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * 控制器和审计服务，不依赖宿主应用扫描项目根包。</p>
  */
 @AutoConfiguration
+@AutoConfigureAfter(KnowledgeCopilotAutoConfiguration.class)
 @ConditionalOnProperty(prefix = "business-copilot.support-copilot", name = "enabled", havingValue = "true")
 public class SupportCopilotAutoConfiguration {
 

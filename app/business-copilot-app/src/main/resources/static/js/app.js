@@ -25,6 +25,22 @@ const $ = (id) => document.getElementById(id);
 const show = (el) => el && (el.hidden = false);
 const hide = (el) => el && (el.hidden = true);
 
+/**
+ * 在异步结果完成渲染后，将视口定位到结果区的第一个面板。
+ * 尊重系统“减少动态效果”偏好，避免强制平滑动画。
+ */
+function scrollResultIntoView(element) {
+  if (!element) return;
+  window.requestAnimationFrame(() => {
+    const reduceMotion = window.matchMedia
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    element.scrollIntoView({
+      behavior: reduceMotion ? 'auto' : 'smooth',
+      block: 'start'
+    });
+  });
+}
+
 function setLoading(text) {
   if (text) {
     $('loading-text').textContent = text;
@@ -131,7 +147,7 @@ function renderCandidate(data) {
   show(confirmPanel);
   executeBtn.disabled = !data.executable;
 
-  $('candidate-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  scrollResultIntoView($('candidate-panel'));
 }
 
 function toggleList(rowId, contentId, items) {
@@ -237,7 +253,7 @@ function renderResult(data) {
     show($('explanation-panel'));
   }
 
-  $('result-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  scrollResultIntoView($('result-panel'));
 }
 
 // ---- 审计记录预览 ----

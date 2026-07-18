@@ -21,7 +21,7 @@
     if (file && file.size > 2 * 1024 * 1024) return showError('JD 文件不能超过 2 MB');
     const done = (data) => {
       job = data;
-      renderCriteria(data);
+      renderCriteria(data, true);
     };
     if (file) {
       const form = new FormData();
@@ -47,6 +47,7 @@
       $('rsc-criteria-status').className = 'badge badge-pass';
       $('rsc-confirm-criteria-btn').hidden = true;
       $('rsc-resume-panel').hidden = false;
+      scrollResultIntoView($('rsc-resume-panel'));
     });
   }
 
@@ -58,7 +59,7 @@
     if (file && file.size > 2 * 1024 * 1024) return showError('简历文件不能超过 2 MB');
     const done = (data) => {
       assessment = data;
-      renderAssessment(data);
+      renderAssessment(data, true);
     };
     if (file) {
       const form = new FormData();
@@ -87,7 +88,7 @@
       action === 'review' ? '正在记录人工复核…' : '正在取消评估…', (data) => {
         assessment.status = data.status;
         assessment.reviewToken = null;
-        renderAssessment(assessment);
+        renderAssessment(assessment, false);
       });
   }
 
@@ -103,7 +104,7 @@
       assessment.reviewToken = null;
       assessment.content = null;
       assessment.evidence = [];
-      renderAssessment(assessment);
+      renderAssessment(assessment, false);
     } catch (error) {
       showError(error.message || '删除失败，请重试');
     } finally {
@@ -143,7 +144,7 @@
     }
   }
 
-  function renderCriteria(data) {
+  function renderCriteria(data, scrollToResult) {
     const tbody = $('rsc-criteria-tbody');
     tbody.replaceChildren();
     (data.criteria || []).forEach((criterion) => {
@@ -159,9 +160,10 @@
     $('rsc-criteria-panel').hidden = false;
     $('rsc-resume-panel').hidden = true;
     $('rsc-assessment-panel').hidden = true;
+    if (scrollToResult) scrollResultIntoView($('rsc-criteria-panel'));
   }
 
-  function renderAssessment(data) {
+  function renderAssessment(data, scrollToResult) {
     const status = data.status || 'UNKNOWN';
     $('rsc-assessment-panel').hidden = false;
     $('rsc-assessment-status').textContent = resumeStatusLabel(status);
@@ -181,6 +183,7 @@
     $('rsc-apply-correction').checked = requiresCorrection;
     $('rsc-apply-correction').disabled = requiresCorrection;
     $('rsc-corrected-content').value = JSON.stringify(data.content || correctionTemplate(), null, 2);
+    if (scrollToResult) scrollResultIntoView($('rsc-assessment-panel'));
   }
 
   function renderContent(content) {

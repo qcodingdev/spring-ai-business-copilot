@@ -456,4 +456,4 @@ Knowledge Copilot 不是泛泛聊天机器人，而是面向企业内部知识�
 - Resume 始终保持单候选人、逐条证据复核，不增加评分、排名和自动决策。
 - 平台库保留 PostgreSQL + pgvector；MySQL 只作为 Data 的业务查询目标，不替换 Knowledge 向量存储。
 
-2.0 的验收门槛和剩余外部门禁见 `docs/upgrade-roadmap.md`；当前审核证据见 `docs/current-project-audit-2026-07-16.md`。历史对象矩阵和迁移决策仍保留在 `docs/v1.2-trusted-execution-plan.md`。
+2.0 的验收门槛和剩余外部门禁见 `docs/upgrade-roadmap.md`；当前审核证据见 `docs/current-project-audit-2026-07-16.md`，已经采纳的对象与安全边界见 `docs/decisions/`。

@@ -15,6 +15,7 @@ import dev.qcoding.businesscopilot.supportcopilot.classification.TicketClassific
 import dev.qcoding.businesscopilot.supportcopilot.draft.ReplyDraftRequest;
 import dev.qcoding.businesscopilot.supportcopilot.draft.ReplyDraftResponse;
 import dev.qcoding.businesscopilot.supportcopilot.draft.ReplyDraftService;
+import dev.qcoding.businesscopilot.supportcopilot.knowledge.SupportKnowledgeEvidence;
 import dev.qcoding.businesscopilot.supportcopilot.knowledge.SupportKnowledgeQuery;
 import dev.qcoding.businesscopilot.supportcopilot.knowledge.SupportKnowledgeResult;
 import dev.qcoding.businesscopilot.supportcopilot.knowledge.SupportKnowledgeRetriever;
@@ -27,6 +28,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -56,6 +58,33 @@ class TicketAnalysisServiceTest {
         assertEquals(0, draftService.calls);
         assertEquals(SupportTicketStatus.NEEDS_HUMAN, ticketRepository.lastStatus);
         assertEquals("NEEDS_HUMAN", auditRepository.saved.getLast().eventType());
+    }
+
+    @Test
+    void shouldGenerateConfirmableDraftForLowRiskTicketWithKnowledgeEvidence() {
+        var classificationService = new FixedClassificationService();
+        var draftService = new CountingDraftService();
+        var ticketRepository = new InMemoryTicketRepository();
+        var auditRepository = new InMemoryAuditRepository();
+        var service = new TicketAnalysisService(
+                classificationService,
+                query -> SupportKnowledgeResult.of(List.of(new SupportKnowledgeEvidence(
+                        "产品 FAQ", "商品管理", "单次最多导入一万个 SKU", "chunk-1", 0.88))),
+                draftService,
+                ticketRepository,
+                new SupportAuditService(auditRepository),
+                new SensitiveTextMasker(),
+                new SupportCopilotProperties(true, 2000, 10,
+                        "REFUND,ACCOUNT_SECURITY,INCIDENT", true, 5),
+                actorProvider());
+
+        var result = service.analyze(new TicketClassificationRequest("批量导入上限是多少？", "web"));
+
+        assertEquals(1L, result.draft().draftId());
+        assertEquals(1, draftService.calls);
+        assertFalse(result.draft().needsHuman());
+        assertEquals(SupportTicketStatus.DRAFTED, ticketRepository.lastStatus);
+        assertEquals("DRAFTED", auditRepository.saved.getLast().eventType());
     }
 
     private static class FixedClassificationService extends TicketClassificationService {

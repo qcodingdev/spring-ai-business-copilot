@@ -9,7 +9,6 @@ import dev.qcoding.businesscopilot.documentprocessing.ExtractedDocument;
 import dev.qcoding.businesscopilot.guardrails.SensitiveTextMasker;
 import dev.qcoding.businesscopilot.knowledgecopilot.KnowledgeCopilotProperties;
 import dev.qcoding.businesscopilot.knowledgecopilot.chunking.ChunkingService;
-import dev.qcoding.businesscopilot.knowledgecopilot.embedding.KnowledgeEmbeddingRepository;
 import dev.qcoding.businesscopilot.knowledgecopilot.indexing.KnowledgeIndexJob;
 import dev.qcoding.businesscopilot.knowledgecopilot.indexing.KnowledgeIndexJobStatus;
 import dev.qcoding.businesscopilot.knowledgecopilot.indexing.KnowledgeIndexJobRepository;
@@ -36,7 +35,6 @@ class DocumentUploadServiceTest {
     private KnowledgeDocumentRepository documentRepository;
     private KnowledgeChunkRepository chunkRepository;
     private ChunkingService chunkingService;
-    private KnowledgeEmbeddingRepository embeddingRepository;
     private DocumentTextExtractor extractor;
     private KnowledgeIndexingService indexingService;
     private KnowledgeIndexJobRepository indexJobRepository;
@@ -47,7 +45,6 @@ class DocumentUploadServiceTest {
         documentRepository = mock(KnowledgeDocumentRepository.class);
         chunkRepository = mock(KnowledgeChunkRepository.class);
         chunkingService = mock(ChunkingService.class);
-        embeddingRepository = mock(KnowledgeEmbeddingRepository.class);
         extractor = mock(DocumentTextExtractor.class);
         indexingService = mock(KnowledgeIndexingService.class);
         indexJobRepository = mock(KnowledgeIndexJobRepository.class);
@@ -57,7 +54,7 @@ class DocumentUploadServiceTest {
                 new MarkdownDocumentParser(), new TextDocumentParser(),
                 chunkingService, new SensitiveTextMasker(),
                 new KnowledgeCopilotProperties(true, 0, 5, 0.70d, "embedding-model", 1536),
-                embeddingRepository, extractor, indexingService, indexJobRepository, actors);
+                extractor, indexingService, indexJobRepository, actors);
     }
 
     @Test
@@ -105,11 +102,23 @@ class DocumentUploadServiceTest {
                 1L, "Guide", "upload", "guide.md", null, "hash", false, null, null,
                 UUID.randomUUID(), 1, true, "PENDING", null, "text/markdown", "operator");
         when(documentRepository.findById(1L)).thenReturn(Optional.of(document));
-        when(embeddingRepository.existsByDocumentId(1L)).thenReturn(false);
 
         assertThatThrownBy(() -> service.updateEnabled(1L, true))
                 .hasMessageContaining("已完成索引");
         verify(documentRepository, never()).updateEnabled(1L, true);
+    }
+
+    @Test
+    void enablingTextOnlyIndexedDocumentIsAllowed() {
+        KnowledgeDocument document = new KnowledgeDocument(
+                1L, "Guide", "upload", "guide.md", null, "hash", false, null, null,
+                UUID.randomUUID(), 1, true, "INDEXED", "TEXT_SEARCH_ONLY",
+                "text/markdown", "operator");
+        when(documentRepository.findById(1L)).thenReturn(Optional.of(document));
+        when(documentRepository.updateEnabled(1L, true)).thenReturn(true);
+
+        assertThat(service.updateEnabled(1L, true)).isTrue();
+        verify(documentRepository).updateEnabled(1L, true);
     }
 
     @Test

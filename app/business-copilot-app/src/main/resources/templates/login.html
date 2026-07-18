@@ -27,11 +27,13 @@
     <a href="#trust">可信执行</a>
     <a href="#technology">技术栈</a>
   </nav>
-  <a class="public-header-action" href="#login-form" data-login-trigger>登录工作台</a>
+  <a class="public-header-action" href="#login-form" data-login-trigger aria-expanded="false">登录体验</a>
 </header>
 
 <main id="top" class="public-main">
-  <section class="public-hero" aria-labelledby="product-title">
+  <section class="public-hero"
+           th:classappend="${param.error != null} ? ' login-card-open'"
+           aria-labelledby="product-title">
     <div class="public-hero-copy">
       <p class="eyebrow">开源 Spring AI 业务助手套件</p>
       <h1 id="product-title">把 AI 变成<br/><span>可运行的业务能力</span></h1>
@@ -41,7 +43,7 @@
       </p>
       <div class="public-hero-actions">
         <a class="public-primary-action" href="#capabilities">探索五大模块</a>
-        <a class="public-secondary-action" href="#login-form" data-login-trigger>登录并开始使用</a>
+        <a class="public-secondary-action" href="#login-form" data-login-trigger aria-expanded="false">登录体验</a>
       </div>
       <div class="public-metrics" aria-label="产品概览">
         <span><strong>5</strong><small>业务闭环</small></span>
@@ -50,7 +52,8 @@
       </div>
     </div>
 
-    <aside id="login-form" class="public-login-card" aria-labelledby="login-form-title">
+    <aside id="login-form" class="public-login-card" aria-labelledby="login-form-title"
+           th:hidden="${param.error == null}">
       <div class="public-login-heading">
         <span class="login-panel-mark">QC</span>
         <div>
@@ -67,7 +70,7 @@
         <div class="field-group">
           <label for="username">用户名</label>
           <input id="username" name="username" type="text" autocomplete="username"
-                 placeholder="请输入用户名" required autofocus/>
+                 placeholder="请输入用户名" required/>
         </div>
         <div class="field-group">
           <label for="password">密码</label>
@@ -130,7 +133,8 @@
             <li>写操作、未知函数和无界结果默认拒绝</li>
             <li>SQL 候选、执行结果与操作者完整审计</li>
           </ul>
-          <a class="capability-login-action" href="#login-form" data-login-trigger data-module-target="data">
+          <a class="capability-login-action" href="#login-form" data-login-trigger
+             data-module-target="data" aria-expanded="false">
             登录后使用 <span id="preview-action-label">Data Copilot</span>
           </a>
         </div>

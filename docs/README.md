@@ -9,9 +9,6 @@
 | 产品范围与路线 | [project-plan.md](project-plan.md)、[module-plan.md](module-plan.md) |
 | 模块升级路线 | [upgrade-roadmap.md](upgrade-roadmap.md) |
 | 当前完整审核 | [current-project-audit-2026-07-16.md](current-project-audit-2026-07-16.md) |
-| v1.2 详细实施计划 | [v1.2-trusted-execution-plan.md](v1.2-trusted-execution-plan.md) |
-| v1.2 实施 Prompt | [claude-code/v1.2-trust-and-data-upgrade-prompts.md](claude-code/v1.2-trust-and-data-upgrade-prompts.md) |
-| 总体架构评审 | [architecture-review-and-framework-plan.md](architecture-review-and-framework-plan.md) |
 | 架构决策 | [decisions/README.md](decisions/README.md) |
 | 应用入口 | [modules/business-copilot-app.md](modules/business-copilot-app.md) |
 | AI 平台 | [modules/ai-core.md](modules/ai-core.md) |
@@ -19,11 +16,11 @@
 | 审计平台 | [modules/ai-tool-audit.md](modules/ai-tool-audit.md) |
 | Web 契约 | [modules/common-web.md](modules/common-web.md) |
 | 安全上下文（v1.2） | [modules/common-security.md](modules/common-security.md) |
-| Data Copilot | [modules/data-copilot.md](modules/data-copilot.md) |
-| Knowledge Copilot | [modules/knowledge-copilot.md](modules/knowledge-copilot.md) |
-| Support Copilot | [modules/support-copilot.md](modules/support-copilot.md) |
-| Report Copilot | [modules/report-copilot.md](modules/report-copilot.md) |
-| Resume Copilot | [modules/resume-copilot.md](modules/resume-copilot.md) |
+| Data Copilot | [data-copilot.md](data-copilot.md) |
+| Knowledge Copilot | [knowledge-copilot.md](knowledge-copilot.md) |
+| Support Copilot | [support-copilot.md](support-copilot.md) |
+| Report Copilot | [report-copilot.md](report-copilot.md) |
+| Resume Copilot | [resume-copilot.md](resume-copilot.md) |
 
 ## 总体架构
 

@@ -101,6 +101,7 @@
     await submitRequest('/reports/generate', '正在生成报告草稿…', (data) => {
       draft = data;
       renderDraft(data);
+      scrollResultIntoView(els.draftPanel);
     });
   }
 
@@ -128,6 +129,7 @@
     await submitForm(`/reports/generate-from-file?${query}`, form, '正在从文件生成报告草稿…', (data) => {
       draft = data;
       renderDraft(data);
+      scrollResultIntoView(els.draftPanel);
     });
   }
 

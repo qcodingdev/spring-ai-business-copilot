@@ -6,9 +6,14 @@ import dev.qcoding.businesscopilot.audit.AuditStatus;
 import dev.qcoding.businesscopilot.audit.JdbcQueryAuditRepository;
 import dev.qcoding.businesscopilot.commonweb.request.BusinessRequestContext;
 import dev.qcoding.businesscopilot.commonweb.request.BusinessRequestContextHolder;
+import dev.qcoding.businesscopilot.knowledgecopilot.document.JdbcKnowledgeChunkRepository;
+import dev.qcoding.businesscopilot.knowledgecopilot.document.KnowledgeChunkRepository;
 import dev.qcoding.businesscopilot.knowledgecopilot.embedding.JdbcKnowledgeEmbeddingRepository;
 import dev.qcoding.businesscopilot.knowledgecopilot.embedding.KnowledgeChunkEmbedding;
 import dev.qcoding.businesscopilot.knowledgecopilot.embedding.KnowledgeEmbeddingRepository;
+import dev.qcoding.businesscopilot.knowledgecopilot.indexing.JdbcKnowledgeIndexJobRepository;
+import dev.qcoding.businesscopilot.knowledgecopilot.indexing.KnowledgeIndexJobStatus;
+import dev.qcoding.businesscopilot.knowledgecopilot.retrieval.KnowledgeQueryTerms;
 import dev.qcoding.businesscopilot.datacopilot.schema.DataCopilotSchemaProperties;
 import dev.qcoding.businesscopilot.datacopilot.schema.JdbcSchemaMetadataRepository;
 import org.flywaydb.core.Flyway;
@@ -23,6 +28,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
 import java.util.List;
+import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -261,6 +267,57 @@ class PostgresPgvectorIntegrationTest {
         assertThat(results).extracting(KnowledgeEmbeddingRepository.SimilaritySearchResult::chunkId)
                 .containsExactly(firstChunkId);
         assertThat(repository.findByChunkId(firstChunkId)).isPresent();
+    }
+
+    @Test
+    void chineseKeywordSearchFindsEnabledTextOnlyKnowledgeChunk() {
+        Long documentId = jdbcTemplate.queryForObject("""
+                INSERT INTO knowledge_documents (
+                    title, source_type, source_name, category, content_hash, enabled,
+                    logical_document_id, version_no, current_version, index_status,
+                    index_error_category, content_type, owner_actor_id
+                ) VALUES (?, 'upload', ?, 'integration-test', ?, TRUE,
+                          gen_random_uuid(), 1, TRUE, 'INDEXED',
+                          'TEXT_SEARCH_ONLY', 'text/plain', 'integration-test')
+                RETURNING id
+                """, Long.class, "员工手册", "employee-handbook.txt", "d".repeat(64));
+        Long chunkId = insertChunk(
+                documentId, 0, "年假政策：员工入职满一年可以享受五天带薪年假。");
+
+        JdbcKnowledgeChunkRepository repository = new JdbcKnowledgeChunkRepository(jdbcTemplate);
+        List<KnowledgeChunkRepository.TextSearchResult> results = repository.findByKeywordSearch(
+                KnowledgeQueryTerms.extract("请问公司年假政策是什么？"), 5);
+
+        assertThat(results)
+                .extracting(KnowledgeChunkRepository.TextSearchResult::chunkId)
+                .contains(chunkId);
+        assertThat(results.getFirst().rank()).isGreaterThan(0);
+    }
+
+    @Test
+    void oldModelDisabledIndexJobIsRecoveredAfterUpgrade() {
+        Long documentId = jdbcTemplate.queryForObject("""
+                INSERT INTO knowledge_documents (
+                    title, source_type, source_name, category, content_hash, enabled,
+                    logical_document_id, version_no, current_version, index_status,
+                    index_error_category, content_type, owner_actor_id
+                ) VALUES (?, 'upload', ?, 'integration-test', ?, FALSE,
+                          gen_random_uuid(), 1, TRUE, 'FAILED',
+                          'MODEL_DISABLED', 'text/plain', 'integration-test')
+                RETURNING id
+                """, Long.class, "待恢复文档", "recover.txt", "e".repeat(64));
+        Long jobId = jdbcTemplate.queryForObject("""
+                INSERT INTO knowledge_index_jobs (
+                    document_id, status, attempts, error_category, next_attempt_at
+                ) VALUES (?, 'FAILED', 1, 'MODEL_DISABLED', now())
+                RETURNING id
+                """, Long.class, documentId);
+
+        var claimed = new JdbcKnowledgeIndexJobRepository(jdbcTemplate).claimNext(Instant.now());
+
+        assertThat(claimed).isPresent();
+        assertThat(claimed.orElseThrow().id()).isEqualTo(jobId);
+        assertThat(claimed.orElseThrow().status()).isEqualTo(KnowledgeIndexJobStatus.PROCESSING);
     }
 
     @Test

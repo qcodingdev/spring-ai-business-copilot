@@ -78,10 +78,10 @@
 
 | 门禁 | 结果 |
 |---|---|
-| Maven | 全量 `verify` 成功，317 tests / 0 failures / 0 errors / 0 skipped |
+| Maven | 全量 `verify -Psbom` 成功，332 tests / 0 failures / 0 errors / 0 skipped |
 | PostgreSQL/pgvector | Testcontainers 成功 |
 | Flyway | 空库 V1→V18、历史 V7→V18、现有库 V16→V18 成功 |
-| MySQL | 8.4 独立只读目标成功 |
+| MySQL | 5.7/8.4 独立只读目标成功 |
 | 向量兼容 | 混合模型/维度检索不会跨维比较 |
 | Docker | app/postgres healthy，已有用户数据保留 |
 | CycloneDX SBOM | 本地 JSON/XML 生成成功 |

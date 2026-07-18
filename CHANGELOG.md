@@ -35,6 +35,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Upgraded every Maven module to the `2.0.0-SNAPSHOT` development line.
 - Upgraded all module Prompt and policy identities to v2.0 so audits can distinguish the new behavior.
 - Made the unified workbench expose document uploads, report file import and HTML export, resume reviewer correction/feedback, and sanitized-data deletion.
+- Made the public login form expand only after an explicit login action, linked the authenticated brand back to the default workbench home, and moved the viewport to newly generated results.
+- Refreshed the bilingual root README and workbench demo animation for the redesigned public landing page and authenticated five-module workspace.
+- Made Resume criteria and assessment prompts produce Simplified Chinese user-facing content by default, with a server-side language guardrail until explicit internationalization is introduced.
+- Replaced duplicated Support JSON and module-local English Resume samples with the canonical workbench examples, and removed superseded v1 planning and implementation-prompt documents.
 - Persisted Data SQL candidates and bound Data/Support/Report/Resume confirmation state to owner, object status, expiry, and conditional database transitions.
 - Replaced Resume Mapper scanning with an explicit Spring JDBC repository.
 - Expanded AI and business audit records with creator/action actors, provider/model, Prompt identity, policy, latency, token usage, finish reason, and provider request IDs.
@@ -49,7 +53,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Corrected pgvector retrieval parameter ordering so similarity thresholds and result limits are applied as intended.
 - Made Data Copilot SQL confirmation tokens atomic and single-use.
 - Made Support Copilot confirm/cancel tokens expiry-aware, atomic, and single-use.
-- Preserved Knowledge Copilot uploads when embeddings are unavailable, kept unindexed documents disabled, and added a reindex recovery flow.
+- Preserved Knowledge Copilot uploads when embeddings are unavailable, completed them as text-search indexes, added bounded Chinese keyword retrieval, and recovered earlier `MODEL_DISABLED` jobs.
+- Ensured Support Copilot is configured after Knowledge Copilot, distinguishes missing evidence from high-risk human review, and includes low-risk knowledge-backed examples.
 - Kept the platform datasource and JDBC template as the default candidates when the optional Data Copilot query datasource is enabled.
 - Made the Maven launcher prefer the optional project-local JDK while accepting a CI-provided Java 21 `JAVA_HOME`.
 

@@ -74,6 +74,14 @@ public class KnowledgeRetrievalService {
                     .addText(index + 1, item.rank());
         }
 
+        List<KnowledgeChunkRepository.TextSearchResult> keywordResults =
+                chunkRepository.findByKeywordSearch(KnowledgeQueryTerms.extract(question), topK * 2);
+        for (int index = 0; index < keywordResults.size(); index++) {
+            var item = keywordResults.get(index);
+            fused.computeIfAbsent(item.chunkId(), ignored -> new RankedResult())
+                    .addKeyword(index + 1, item.rank());
+        }
+
         String embeddingModel = properties.embeddingModelName();
         try {
             float[] questionVector = aiEmbeddingService.embed(question);
@@ -128,6 +136,11 @@ public class KnowledgeRetrievalService {
         }
 
         void addVector(int rank, double score) {
+            fusedScore += 1.0d / (60 + rank);
+            bestScore = Math.max(bestScore, score);
+        }
+
+        void addKeyword(int rank, double score) {
             fusedScore += 1.0d / (60 + rank);
             bestScore = Math.max(bestScore, score);
         }

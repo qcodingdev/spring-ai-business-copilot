@@ -274,7 +274,7 @@ spring-ai-business-copilot/
 
 本地全量 `mvn verify`、PostgreSQL/pgvector 与 MySQL 8.4 Testcontainers、Flyway V1→V18/V7→V18/现有库 V16→V18、真实 Docker、中文五模块模型 smoke 和浏览器 Data 主流程均已通过。当前没有已知 P0/P1 功能阻断；2.0 是否提交和推送由用户决定，合并主干前仍必须完成远端 SBOM、依赖审查、Trivy、required checks 和 PR review。
 
-历史迁移矩阵见 `docs/architecture-review-and-framework-plan.md`；当前完整审核和 P0/P1 结论以 `docs/current-project-audit-2026-07-16.md` 为准。
+当前完整审核和 P0/P1 结论以 `docs/current-project-audit-2026-07-16.md` 为准。
 
 ### 阶段 5：Report Copilot
 
@@ -298,7 +298,7 @@ spring-ai-business-copilot/
 - 周报和经营简报是团队高频工作，可用虚构指标和记录形成完整演示闭环。
 - 不直接参与人事决策，风险低于 Resume Copilot。
 
-**V4 已完成规划并实现第六切片（2026-07-11）。** 已落地模块骨架、Flyway 表结构、示例来源预览、报告请求校验和客户端来源归一化、Spring AI 结构化报告生成、草稿持久化/确认/取消、确认后的 Markdown 导出、共享工作台，以及不可信输出的 NEEDS_REVIEW 持久化与导出审计；详细范围见 `docs/report-copilot.md`，实现 Prompt 见 `docs/claude-code/v4-report-copilot-prompts.md`。
+**V4 已完成规划并实现第六切片（2026-07-11）。** 已落地模块骨架、Flyway 表结构、示例来源预览、报告请求校验和客户端来源归一化、Spring AI 结构化报告生成、草稿持久化/确认/取消、确认后的 Markdown 导出、共享工作台，以及不可信输出的 NEEDS_REVIEW 持久化与导出审计；详细范围见 `docs/report-copilot.md`。
 
 当前边界：报告生成、不可变来源快照、来源新鲜度、CSV/JSON 导入、草稿确认/取消和 Markdown/HTML 导出闭环已成立。下一阶段不继续增加报表类型；真实第三方任务/会议 adapter 只有在第二个业务场景验证后再考虑沉淀。
 
@@ -324,7 +324,7 @@ spring-ai-business-copilot/
 - 不自动录用、淘汰或改变招聘流程。
 - 不根据受保护属性、学校品牌、公司品牌或职业空窗做决策。
 
-**V5 已完成实现（2026-07-11）。** 已落地 JD 标准解析与确认、简历脱敏、确定性 evidenceId、证据化匹配、招聘合规 guardrails、人工复核/取消、审计、示例数据和共享工作台。详细范围见 `docs/resume-copilot.md`，实现 Prompt 见 `docs/claude-code/v5-resume-copilot-prompts.md`。
+**V5 已完成实现（2026-07-11）。** 已落地 JD 标准解析与确认、简历脱敏、确定性 evidenceId、证据化匹配、招聘合规 guardrails、人工复核/取消、审计、示例数据和共享工作台。详细范围见 `docs/resume-copilot.md`。
 
 ### 阶段 7：2.0 现有模块升级与产品化收口
 
@@ -357,7 +357,7 @@ spring-ai-business-copilot/
 
 技术决策：平台数据库继续使用 PostgreSQL 16 + pgvector，不整体切换到 MySQL；MySQL 作为 Data Copilot 的可选业务查询目标提供方言适配。
 
-2.0 的当前执行门槛见 `docs/upgrade-roadmap.md`，完整审核证据见 `docs/current-project-audit-2026-07-16.md`。历史 v1.2 数据模型和决策仍可在 `docs/v1.2-trusted-execution-plan.md` 与 ADR 中追溯。本文件继续作为项目级范围和阶段顺序的权威入口。
+2.0 的当前执行门槛见 `docs/upgrade-roadmap.md`，完整审核证据见 `docs/current-project-audit-2026-07-16.md`。已经采纳的数据模型和安全边界可在 ADR 中追溯。本文件继续作为项目级范围和阶段顺序的权威入口。
 
 ## 7. 第一版详细目标：Data Copilot
 

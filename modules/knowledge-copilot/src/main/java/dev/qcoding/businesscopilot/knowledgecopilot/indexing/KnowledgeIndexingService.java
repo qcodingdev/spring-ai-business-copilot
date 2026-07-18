@@ -54,15 +54,23 @@ public class KnowledgeIndexingService {
         }
         KnowledgeIndexJob job = claimed.get();
         documentRepository.updateIndexStatus(job.documentId(), "PROCESSING", null, false);
+        var chunks = chunkRepository.findByDocumentId(job.documentId());
         try {
             EmbeddingIndexResult result = embeddingService.reindex(
-                    job.documentId(), chunkRepository.findByDocumentId(job.documentId()));
+                    job.documentId(), chunks);
             Instant finished = Instant.now();
             jobRepository.complete(job.id(), result.modelName(), result.dimension(), result.chunkCount(), finished);
             documentRepository.updateIndexStatus(job.documentId(), "INDEXED", null, result.chunkCount() > 0);
             return jobRepository.findById(job.id());
         } catch (AiModelNotEnabledException ex) {
-            failImmediately(job, "MODEL_DISABLED");
+            // 文本分片本身已经持久化。未配置向量模型时完成文本索引并启用文档，
+            // 让 PostgreSQL 全文/关键词检索仍可服务知识问答和客服联动。
+            Instant finished = Instant.now();
+            jobRepository.complete(job.id(), "text-search-only", 0, chunks.size(), finished);
+            documentRepository.updateIndexStatus(
+                    job.documentId(), "INDEXED", "TEXT_SEARCH_ONLY", !chunks.isEmpty());
+            log.info("Embedding 模型未启用，知识文档已降级为文本检索：jobId={}，documentId={}，chunks={}",
+                    job.id(), job.documentId(), chunks.size());
         } catch (BusinessException ex) {
             if (ex.errorCode() == ErrorCode.EMBEDDING_DIMENSION_MISMATCH) {
                 failImmediately(job, "EMBEDDING_DIMENSION_MISMATCH");

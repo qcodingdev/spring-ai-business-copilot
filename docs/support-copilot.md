@@ -356,18 +356,7 @@ Prompt 约束：
 
 ## 示例工单
 
-建议放在：
-
-```text
-app/business-copilot-app/src/main/resources/sample-support/
-```
-
-示例文件：
-
-- `refund-tickets.json`：虚构退款咨询
-- `activation-tickets.json`：虚构开通问题
-- `incident-tickets.json`：虚构故障反馈
-- `account-security-tickets.json`：虚构账号安全问题
+工作台在 `static/js/support-copilot.js` 中提供产品使用、账号注册、退款流程和生产故障四组虚构示例。前两组用于演示知识命中后的低风险建议，后两组用于演示高风险人工复核。示例只填充前端表单，不作为后端业务数据或独立资源文件维护。
 
 ---
 

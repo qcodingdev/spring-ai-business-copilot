@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.PathVariable;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -37,6 +38,37 @@ class SecurityConfigurationTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Test
+    void loginPageHidesFormUntilUserRequestsTheExperience() throws Exception {
+        String body = mockMvc.perform(get("/login"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(body).contains("登录体验");
+        assertThat(loginFormTag(body)).contains("hidden");
+    }
+
+    @Test
+    void loginFailureExpandsTheFormForImmediateCorrection() throws Exception {
+        String body = mockMvc.perform(get("/login?error"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(loginFormTag(body)).doesNotContain("hidden");
+        assertThat(body).contains("用户名或密码错误");
+    }
+
+    @Test
+    void authenticatedBrandLinksBackToDefaultDataHome() throws Exception {
+        String body = mockMvc.perform(get("/")
+                        .with(user("operator").roles("OPERATOR")))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(body).contains("class=\"brand brand-home-link\"");
+        assertThat(body).contains("href=\"/#data-copilot\"");
+    }
 
     @Test
     void apiRequiresAuthenticationAndReturnsRequestId() throws Exception {
@@ -205,6 +237,14 @@ class SecurityConfigurationTest {
                         .with(csrf()))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.errorCode").value("SEC_0403"));
+    }
+
+    private String loginFormTag(String body) {
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+                .compile("<aside[^>]*id=\"login-form\"[^>]*>")
+                .matcher(body);
+        assertThat(matcher.find()).isTrue();
+        return matcher.group();
     }
 
     @RestController

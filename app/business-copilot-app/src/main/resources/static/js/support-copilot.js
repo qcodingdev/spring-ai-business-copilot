@@ -30,6 +30,7 @@
 
     evidencePanel: $('#sc-evidence-panel'),
     evidenceEmpty: $('#sc-evidence-empty'),
+    evidenceEmptyText: $('#sc-evidence-empty-text'),
     evidenceList: $('#sc-evidence-list'),
 
     draftPanel: $('#sc-draft-panel'),
@@ -54,33 +55,11 @@
 
   // ── Sample ticket data ────────────────────────────────────────
   const sampleTickets = {
-    refund: [
-      "我昨天购买了年费会员，扣了 368 元，但发现不是我要的功能，我要全额退款！订单号是 ORD-2026-0701-001，请马上处理。",
-      "上个月买的商品质量有问题，用了两周就坏了，我需要退货退款，请问怎么走流程？",
-      "想了解一下如果我在试用期内取消订阅，会不会产生任何费用？退款政策怎么规定？",
-      "你们的退款条款完全是霸王条款！我申请了三次退款都不给我退，我要去消费者协会投诉！"
-    ],
-    activation: [
-      "我刚刚付款成功了，订单号 ACT-2026-0708-001，但已经等了 2 小时功能还没开通，这是什么情况？",
-      "我们公司刚购买了团队版，管理员说需要帮我开通子账号，请问怎么操作？",
-      "我收到激活邮件说点击链接激活，但是我点进去一直提示链接已过期，能不能重新发一封？",
-      "我是付费用户，但今天登录突然提示账号未激活，所有数据都看不到了。这是你们系统 bug 吗？"
-    ],
-    incident: [
-      "从今天上午 10 点开始，我们的 API 调用一直返回 500 错误，已经影响了业务正常运营。请马上排查！",
-      "刚刚系统突然改版了，好多按钮找不到了，原来的导出功能在哪里？这是不是 bug？",
-      "数据库主库挂了！！我们的核心业务完全停了，客户正在投诉。这是 P0 级生产事故！"
-    ],
-    security: [
-      "我的账号今天收到了 3 次异地登录提醒，分别在深圳、上海、北京，是不是账号被盗了？",
-      "我同事离职了，但他名下有几个重要项目的权限还没转移，他的账号应该怎么处理？",
-      "我不小心把 API Key 提交到了公开的 GitHub 仓库，请立即 revoke 这个 key 并重新生成。"
-    ]
+    product: 'CloudMart 的商品批量导入应该怎么操作？单次最多可以导入多少个 SKU？',
+    activation: '我想注册 CloudMart 账号，注册完成后应该怎样完成邮箱验证？',
+    refund: '商品有质量问题，我申请退款时需要提供哪些材料，标准退款流程怎么走？',
+    incident: '核心数据库故障导致全站业务完全不可用，这属于什么故障等级，应该如何响应？'
   };
-
-  function pickRandom(arr) {
-    return arr[Math.floor(Math.random() * arr.length)];
-  }
 
   // ── Event listeners ───────────────────────────────────────────
 
@@ -90,9 +69,9 @@
     const btn = e.target.closest('.sample-btn');
     if (!btn) return;
     const category = btn.dataset.category;
-    const tickets = sampleTickets[category];
-    if (tickets) {
-      els.ticketInput.value = pickRandom(tickets);
+    const ticket = sampleTickets[category];
+    if (ticket) {
+      els.ticketInput.value = ticket;
       els.ticketInput.focus();
     }
   });
@@ -304,7 +283,10 @@
     els.sentiment.className = 'badge badge-' + sentimentBadgeClass(data.sentiment);
     els.urgency.textContent = supportLabel(data.urgency);
     els.urgency.className = 'badge badge-' + urgencyBadgeClass(data.urgency);
-    els.needsHuman.textContent = data.needsHuman ? '需要转人工' : '可自动处理';
+    const hasEvidence = data.evidence && data.evidence.length > 0;
+    els.needsHuman.textContent = data.needsHuman
+      ? (hasEvidence ? '有建议，需人工复核' : '无依据，需人工处理')
+      : '可生成建议';
     els.needsHuman.className = 'badge ' + (data.needsHuman ? 'badge-warn' : 'badge-pass');
     els.summary.textContent = data.summary || '-';
 
@@ -331,6 +313,8 @@
     } else {
       els.evidencePanel.hidden = false;
       els.evidenceEmpty.hidden = false;
+      els.evidenceEmptyText.textContent = data.knowledgeReason
+        || '已连接知识库，但没有检索到与当前工单相关的依据，建议补充知识或转人工。';
       els.evidenceList.innerHTML = '';
     }
 
@@ -340,6 +324,8 @@
     } else {
       els.draftPanel.hidden = true;
     }
+
+    scrollResultIntoView(els.classificationPanel);
   }
 
   function renderDraft(draft) {

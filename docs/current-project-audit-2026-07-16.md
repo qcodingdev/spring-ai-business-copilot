@@ -98,11 +98,11 @@ Spring Boot、Tomcat、Hikari、Flyway 等第三方框架自身的启动日志�
 
 | 检查项 | 2026-07-18 结果 |
 |---|---|
-| Maven 全量验证 | `./mvnw -q verify` 成功 |
-| 测试汇总 | 317 tests，0 failures，0 errors，0 skipped，66 suites |
+| Maven 全量验证 | `./mvnw --batch-mode --no-transfer-progress verify -Psbom` 成功 |
+| 测试汇总 | 332 tests，0 failures，0 errors，0 skipped，69 suites |
 | PostgreSQL/pgvector | Testcontainers 真实运行成功 |
 | Flyway | 空库 V1→V18、历史 V7→V18、现有用户库 V16→V18 成功 |
-| MySQL | MySQL 8.4 独立只读查询目标成功 |
+| MySQL | MySQL 5.7/8.4 独立只读查询目标成功 |
 | reader 最小权限 | 只能 SELECT 六张示例业务表，不能读审计/其他 Copilot 表，不能 UPDATE |
 | Knowledge 混合维度 | 3 维历史向量与 1536 维当前向量并存时检索成功 |
 | 真实 Docker | app/postgres 均 healthy；运行用户 UID 10001 |

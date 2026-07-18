@@ -53,6 +53,9 @@ public class ResumeAssessmentGuardrail {
         if (PROTECTED.stream().anyMatch(allText::contains) || PROTECTED_ENGLISH.matcher(allText).find()) {
             reasons.add("评估包含受保护属性或代理招聘条件。");
         }
+        if (!usesChineseNarrative(content)) {
+            reasons.add("评估草稿必须使用简体中文，技术专有名词除外。");
+        }
         for (var question : content.interviewQuestions()) {
             if (question == null) {
                 reasons.add("面试问题内容不完整。");
@@ -94,6 +97,22 @@ public class ResumeAssessmentGuardrail {
 
     private String joinStrings(List<String> values) {
         return values.stream().filter(Objects::nonNull).collect(java.util.stream.Collectors.joining(" "));
+    }
+
+    private boolean usesChineseNarrative(ResumeModels.AssessmentContent content) {
+        return containsChinese(content.anonymousSummary())
+                && content.criterionAssessments().stream().filter(Objects::nonNull)
+                .allMatch(item -> containsChinese(item.explanation()))
+                && content.evidenceGaps().stream().filter(Objects::nonNull).allMatch(this::containsChinese)
+                && content.interviewQuestions().stream().filter(Objects::nonNull)
+                .allMatch(item -> containsChinese(item.question()))
+                && content.limitations().stream().filter(Objects::nonNull).allMatch(this::containsChinese);
+    }
+
+    private boolean containsChinese(String value) {
+        if (value == null || value.isBlank()) return false;
+        return value.codePoints().anyMatch(codePoint ->
+                Character.UnicodeScript.of(codePoint) == Character.UnicodeScript.HAN);
     }
 
     public record Validation(boolean valid, List<String> reasons) { }

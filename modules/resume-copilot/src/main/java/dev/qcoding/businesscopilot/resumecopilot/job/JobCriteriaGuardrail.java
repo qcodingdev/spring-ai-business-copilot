@@ -35,6 +35,9 @@ public class JobCriteriaGuardrail {
                 if (!sanitizedJd.contains(criterion.sourceText().trim())) {
                     reasons.add("职位标准无法追溯到原始职位描述。");
                 }
+                if (!containsChinese(criterion.description())) {
+                    reasons.add("职位标准说明必须使用简体中文，技术专有名词除外。");
+                }
                 String text = (criterion.description() + " " + criterion.sourceText()).toLowerCase(Locale.ROOT);
                 if (FORBIDDEN.stream().anyMatch(text::contains) || FORBIDDEN_ENGLISH.matcher(text).find()) {
                     reasons.add("职位标准使用了受保护属性或主观招聘标签。");
@@ -45,5 +48,9 @@ public class JobCriteriaGuardrail {
     }
 
     private boolean isBlank(String value) { return value == null || value.isBlank(); }
+    private boolean containsChinese(String value) {
+        return value != null && value.codePoints().anyMatch(codePoint ->
+                Character.UnicodeScript.of(codePoint) == Character.UnicodeScript.HAN);
+    }
     public record Validation(boolean valid, List<String> reasons) { }
 }

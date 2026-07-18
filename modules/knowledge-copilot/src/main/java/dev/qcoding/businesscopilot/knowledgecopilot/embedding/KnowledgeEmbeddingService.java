@@ -54,6 +54,12 @@ public class KnowledgeEmbeddingService {
      */
     // 外部模型调用不能占用数据库事务；失败时索引任务会保留可重试状态并禁用文档。
     public EmbeddingIndexResult indexChunks(Long documentId, List<KnowledgeChunk> chunks) {
+        // 在删除已有向量之前先确认模型可用；文本检索降级不能破坏可恢复的历史向量。
+        if (!aiEmbeddingService.isModelEnabled()) {
+            throw new AiModelNotEnabledException(
+                    "未配置可用的 Embedding 模型，将由索引任务降级为文本检索。");
+        }
+
         // 1. 删除旧 embedding（重建索引场景）
         int deleted = embeddingRepository.deleteByDocumentId(documentId);
         if (deleted > 0) {

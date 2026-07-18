@@ -35,6 +35,11 @@ management:
       exposure:
         include: health,info,metrics
 
+logging:
+  pattern:
+    # 所有业务日志自动携带 HTTP 请求编号和操作者，后台任务使用明确的兜底标识。
+    level: "%5p [requestId=%X{requestId:-background} actorId=%X{actorId:-system}]"
+
 # ── Data Copilot 配置 ──────────────────────────────────────────
 business-copilot:
   audit:

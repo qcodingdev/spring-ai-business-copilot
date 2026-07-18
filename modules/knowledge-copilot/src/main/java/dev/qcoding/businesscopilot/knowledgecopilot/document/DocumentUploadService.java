@@ -12,7 +12,6 @@ import dev.qcoding.businesscopilot.guardrails.SensitiveTextMasker;
 import dev.qcoding.businesscopilot.knowledgecopilot.KnowledgeCopilotProperties;
 import dev.qcoding.businesscopilot.knowledgecopilot.chunking.ChunkingService;
 import dev.qcoding.businesscopilot.knowledgecopilot.chunking.ParsedSection;
-import dev.qcoding.businesscopilot.knowledgecopilot.embedding.KnowledgeEmbeddingRepository;
 import dev.qcoding.businesscopilot.knowledgecopilot.indexing.KnowledgeIndexJob;
 import dev.qcoding.businesscopilot.knowledgecopilot.indexing.KnowledgeIndexJobRepository;
 import dev.qcoding.businesscopilot.knowledgecopilot.indexing.KnowledgeIndexingService;
@@ -36,7 +35,6 @@ public class DocumentUploadService {
     private final ChunkingService chunkingService;
     private final SensitiveTextMasker sensitiveTextMasker;
     private final KnowledgeCopilotProperties properties;
-    private final KnowledgeEmbeddingRepository embeddingRepository;
     private final DocumentTextExtractor documentTextExtractor;
     private final KnowledgeIndexingService indexingService;
     private final KnowledgeIndexJobRepository indexJobRepository;
@@ -49,7 +47,6 @@ public class DocumentUploadService {
                                  ChunkingService chunkingService,
                                  SensitiveTextMasker sensitiveTextMasker,
                                  KnowledgeCopilotProperties properties,
-                                 KnowledgeEmbeddingRepository embeddingRepository,
                                  DocumentTextExtractor documentTextExtractor,
                                  KnowledgeIndexingService indexingService,
                                  KnowledgeIndexJobRepository indexJobRepository,
@@ -61,7 +58,6 @@ public class DocumentUploadService {
         this.chunkingService = chunkingService;
         this.sensitiveTextMasker = sensitiveTextMasker;
         this.properties = properties;
-        this.embeddingRepository = embeddingRepository;
         this.documentTextExtractor = documentTextExtractor;
         this.indexingService = indexingService;
         this.indexJobRepository = indexJobRepository;
@@ -151,7 +147,7 @@ public class DocumentUploadService {
             return false;
         }
         requireOwner(document);
-        if (enabled && (!document.currentVersion() || !embeddingRepository.existsByDocumentId(documentId))) {
+        if (enabled && (!document.currentVersion() || !"INDEXED".equals(document.indexStatus()))) {
             throw new BusinessException(ErrorCode.VALIDATION_ERROR,
                     "只有已完成索引的当前文档版本可以启用。");
         }

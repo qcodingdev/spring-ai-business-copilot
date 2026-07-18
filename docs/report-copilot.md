@@ -117,7 +117,7 @@ modules/report-copilot/
 | `audit` | 生成、确认、取消和失败审计 |
 | `web` | REST API 和报告工作台入口 |
 
-实现前置条件：`docs/architecture-review-and-framework-plan.md` 的 Phase 0-4 已完成。
+实现前置条件：`docs/current-project-audit-2026-07-16.md` 所列公共底座已经落地。
 
 持久层使用显式 Spring JDBC Repository 管理 report request/source/draft/audit；指标读取通过 `ReportDataProvider`，不能让模型或持久层执行任意 SQL。
 

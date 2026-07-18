@@ -5,17 +5,18 @@
 ![Java 21](https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&logoColor=white)
 ![Spring Boot 4.1](https://img.shields.io/badge/Spring%20Boot-4.1-6DB33F?logo=springboot&logoColor=white)
 ![Spring AI 2.0](https://img.shields.io/badge/Spring%20AI-2.0-6DB33F)
+![Version](https://img.shields.io/badge/version-2.0.0--SNAPSHOT-5B7CFA)
 ![License](https://img.shields.io/badge/License-MIT-blue)
 
 五个面向真实内部业务流程、可以直接运行和改造的 Spring AI 应用：具备确定性 guardrails、操作者绑定确认、证据引用、持久状态闭环、审计 v2 元数据、PostgreSQL 和统一工作台。
 
 本项目不是另一个 AI 框架，而是一套业务应用样板。你可以直接运行，再选择一个模块接入自己的系统。
 
-![Business Copilot 工作台演示](assets/workbench-demo.gif)
+![Business Copilot 2.0 快照版首页与工作台](assets/workbench-demo.gif)
 
-## 2.0 升级
+## 2.0 快照版
 
-2.0 不增加第六个模块，而是把现有五个业务闭环升级为可信、可诊断、可评测、可交付的样板：
+当前分支是 `2.0.0-SNAPSHOT` 预览版，不是正式 2.0 Release。它不增加第六个模块，而是把现有五个业务闭环升级为可信、可诊断、可评测、可交付的样板；正式版仍需通过远端发布门禁：
 
 - Data 查询同时校验 schema/表/列，普通函数默认拒绝，`LIMIT` 必须是受限常量，并支持独立只读 PostgreSQL/MySQL 查询目标。
 - Knowledge 文档具备版本、持久索引任务和失败重试，使用文本/向量混合检索，并校验引用原文片段。
@@ -23,6 +24,15 @@
 - Report 来源保存为带新鲜度信息的不可变快照，支持受限 CSV/JSON 导入及确定性 Markdown/HTML 导出。
 - Resume 的 JD 标准支持版本化，TXT/Markdown/PDF/DOCX 输入统一脱敏，人工修订会再次校验，脱敏简历支持自动与手动删除。
 - 固定评测集、PostgreSQL 迁移、MySQL 5.7/8.4、CycloneDX SBOM、依赖审查和容器扫描共同作为发布门槛。
+
+## 最新工作台
+
+- 未登录首页可预览五个业务模块，登录框默认隐藏，只有点击“登录体验”后才会展开。
+- 登录后使用深色常驻模块侧栏；点击 QCoding Logo 或产品名称会回到默认的 Data Copilot 首页。
+- Knowledge 在 embedding 不可用时仍可通过受限文本检索完成问答，配置向量模型后继续使用带引用的向量检索。
+- Support 示例明确区分“有知识依据、可给建议”的低风险场景，以及退款、生产故障等仍需人工复核的高风险场景。
+- Resume 的岗位标准、证据评估、面试核验问题、整句话评估草稿和限制说明默认输出简体中文。
+- Data、Support、Report、Resume 的异步结果渲染完成后会自动定位到第一个结果面板，并尊重系统的“减少动态效果”设置。
 
 ## 为什么做这个项目
 
@@ -61,7 +71,7 @@ docker compose up --build
 
 如果宿主机端口已被占用，可在 `examples/.env` 中修改 `APP_HOST_PORT` 和 `POSTGRES_HOST_PORT`；Compose 内部服务地址不受影响。
 
-工作台默认启用登录。演示账号为 `admin/admin-change-me`、`operator/operator-change-me`、`reviewer/reviewer-change-me`。其中 Operator 执行标准业务流程，Reviewer 查看审计并可执行确认/复核，Admin 具备全部权限。共享环境部署前必须通过 `BUSINESS_COPILOT_*` 环境变量修改默认密码。
+未登录时可以浏览产品首页，只有点击“登录体验”后才展开登录框；全部业务操作仍必须登录。演示账号为 `admin/admin-change-me`、`operator/operator-change-me`、`reviewer/reviewer-change-me`。其中 Operator 执行标准业务流程，Reviewer 查看审计并可执行确认/复核，Admin 具备全部权限。共享环境部署前必须通过 `BUSINESS_COPILOT_*` 环境变量修改默认密码。
 
 共享环境或类生产环境应设置 `SPRING_PROFILES_ACTIVE=prod`。生产 profile 强制要求显式提供平台数据库凭据、三个角色密码，并启用独立只读业务查询数据源；任一必填值缺失时应用会启动失败，不会回退到演示密码或平台数据库查询连接。
 

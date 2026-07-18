@@ -118,6 +118,23 @@ select:focus-visible,
   padding: 0 5px;
 }
 
+.brand-home-link {
+  border-radius: 10px;
+  color: inherit;
+  text-decoration: none;
+  transition: background 150ms ease, transform 150ms ease;
+}
+
+.brand-home-link:hover {
+  background: rgba(255, 255, 255, 0.055);
+  transform: translateY(-1px);
+}
+
+.brand-home-link:focus-visible {
+  outline: 2px solid rgba(121, 165, 255, 0.9);
+  outline-offset: 4px;
+}
+
 .brand-logo {
   width: 44px;
   height: 44px;
@@ -2719,11 +2736,15 @@ tbody tr:hover {
   width: min(1480px, calc(100% - 56px));
   min-height: 680px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(420px, 0.58fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   gap: clamp(54px, 7vw, 110px);
   margin: 0 auto;
   padding: 84px 0 92px;
+}
+
+.public-hero.login-card-open {
+  grid-template-columns: minmax(0, 1fr) minmax(420px, 0.58fr);
 }
 
 .public-hero-copy {

@@ -73,6 +73,7 @@ public class SupportCopilotController {
                 result.classification().reasons(),
                 result.draft(),
                 buildEvidenceResponse(result.knowledgeResult()),
+                result.knowledgeResult() != null ? result.knowledgeResult().reason() : "知识检索未返回状态",
                 result.draft() != null && result.draft().needsHuman());
 
         return ResponseEntity.ok(ApiResponse.ok(response));
@@ -154,6 +155,7 @@ public class SupportCopilotController {
             List<String> reasons,
             ReplyDraftResponse draft,
             List<EvidenceItem> evidence,
+            String knowledgeReason,
             boolean needsHuman) {
     }
 

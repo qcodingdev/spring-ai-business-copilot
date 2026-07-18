@@ -201,7 +201,12 @@ async function kcLoadDocuments() {
       const indexStatus = String(doc.indexStatus || (doc.enabled ? 'INDEXED' : 'PENDING'));
       const indexLabel = document.createElement('span');
       indexLabel.className = `document-index-status ${indexStatus.toLowerCase()}`;
-      indexLabel.textContent = kcIndexStatusText(indexStatus);
+      const textSearchOnly = indexStatus === 'INDEXED'
+        && doc.indexErrorCategory === 'TEXT_SEARCH_ONLY';
+      indexLabel.textContent = textSearchOnly ? '文本检索可用' : kcIndexStatusText(indexStatus);
+      if (textSearchOnly) {
+        indexLabel.title = '未配置 Embedding 模型，当前使用全文与中文关键词检索';
+      }
       indexTd.appendChild(indexLabel);
       tr.appendChild(indexTd);
 
@@ -328,7 +333,9 @@ async function kcPollIndexJob(jobId, statusEl, attempts = 0) {
     const status = String(payload.data.status || 'PENDING');
 
     if (status === 'COMPLETED') {
-      statusEl.textContent = `索引完成，共生成 ${payload.data.chunkCount || 0} 个分片`;
+      statusEl.textContent = payload.data.embeddingModel === 'text-search-only'
+        ? `文本索引完成，共生成 ${payload.data.chunkCount || 0} 个分片；未配置 Embedding，当前使用全文与中文关键词检索`
+        : `向量索引完成，共生成 ${payload.data.chunkCount || 0} 个分片`;
       statusEl.className = 'inline-status';
       kcLoadDocuments();
       return;
@@ -488,6 +495,8 @@ function kcRenderAnswer(data) {
   } else {
     hide(warningsPanel);
   }
+
+  scrollResultIntoView(statusPanel);
 }
 
 // ═══════════════════════════════════════════════════════════════

@@ -16,7 +16,7 @@ class JobCriteriaGuardrailTest {
     @Test
     void acceptsCriterionTraceableToJobDescription() {
         var criterion = new ResumeModels.JobCriterion("criterion-1", ResumeModels.CriterionCategory.SKILL,
-                ResumeModels.RequirementType.REQUIRED, "Spring Boot experience", List.of("Spring Boot"),
+                ResumeModels.RequirementType.REQUIRED, "具备 Spring Boot 开发经验", List.of("Spring Boot"),
                 "Spring Boot experience");
 
         assertThat(guardrail.validate(List.of(criterion), "Required: Spring Boot experience").valid()).isTrue();
@@ -39,10 +39,22 @@ class JobCriteriaGuardrailTest {
                 ResumeModels.RequirementType.REQUIRED, "Recent graduate from 2025", List.of(),
                 "Recent graduate from 2025");
         var legitimate = new ResumeModels.JobCriterion("criterion-2", ResumeModels.CriterionCategory.EXPERIENCE,
-                ResumeModels.RequirementType.REQUIRED, "Managed Java services", List.of("Java"),
+                ResumeModels.RequirementType.REQUIRED, "具备 Java 服务维护经验", List.of("Java"),
                 "Managed Java services");
 
         assertThat(guardrail.validate(List.of(proxy), "Recent graduate from 2025").valid()).isFalse();
         assertThat(guardrail.validate(List.of(legitimate), "Managed Java services").valid()).isTrue();
+    }
+
+    @Test
+    void rejectsEnglishOnlyDescriptionUntilAnExplicitLanguageOptionExists() {
+        var criterion = new ResumeModels.JobCriterion("criterion-1", ResumeModels.CriterionCategory.SKILL,
+                ResumeModels.RequirementType.REQUIRED, "Spring Boot experience", List.of("Spring Boot"),
+                "Spring Boot experience");
+
+        var result = guardrail.validate(List.of(criterion), "Spring Boot experience");
+
+        assertThat(result.valid()).isFalse();
+        assertThat(result.reasons()).anyMatch(reason -> reason.contains("简体中文"));
     }
 }

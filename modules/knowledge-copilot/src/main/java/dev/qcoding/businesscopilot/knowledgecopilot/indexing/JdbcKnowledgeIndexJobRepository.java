@@ -63,11 +63,23 @@ public class JdbcKnowledgeIndexJobRepository implements KnowledgeIndexJobReposit
     public Optional<KnowledgeIndexJob> claimNext(Instant now) {
         List<KnowledgeIndexJob> jobs = jdbcTemplate.query("""
                 WITH candidate AS (
-                    SELECT id
-                    FROM knowledge_index_jobs
-                    WHERE status IN ('PENDING', 'RETRYABLE')
-                      AND next_attempt_at <= ?
-                    ORDER BY created_at, id
+                    SELECT queued.id
+                    FROM knowledge_index_jobs queued
+                    WHERE (
+                            queued.status IN ('PENDING', 'RETRYABLE')
+                            OR (
+                                queued.status = 'FAILED'
+                                AND queued.error_category = 'MODEL_DISABLED'
+                                AND NOT EXISTS (
+                                    SELECT 1
+                                    FROM knowledge_index_jobs active
+                                    WHERE active.document_id = queued.document_id
+                                      AND active.status IN ('PENDING', 'PROCESSING', 'RETRYABLE')
+                                )
+                            )
+                          )
+                      AND queued.next_attempt_at <= ?
+                    ORDER BY queued.created_at, queued.id
                     FOR UPDATE SKIP LOCKED
                     LIMIT 1
                 )

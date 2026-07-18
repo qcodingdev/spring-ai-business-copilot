@@ -115,7 +115,6 @@ public class KnowledgeCopilotAutoConfiguration {
             ChunkingService chunkingService,
             SensitiveTextMasker sensitiveTextMasker,
             KnowledgeCopilotProperties properties,
-            KnowledgeEmbeddingRepository embeddingRepository,
             DocumentTextExtractor documentTextExtractor,
             KnowledgeIndexingService indexingService,
             KnowledgeIndexJobRepository indexJobRepository,
@@ -123,7 +122,7 @@ public class KnowledgeCopilotAutoConfiguration {
         return new DocumentUploadService(
                 documentRepository, chunkRepository, markdownParser,
                 textParser, chunkingService, sensitiveTextMasker, properties,
-                embeddingRepository, documentTextExtractor, indexingService, indexJobRepository, actorProvider);
+                documentTextExtractor, indexingService, indexJobRepository, actorProvider);
     }
 
     // ── Retrieval & Q&A beans ──────────────────────────────────

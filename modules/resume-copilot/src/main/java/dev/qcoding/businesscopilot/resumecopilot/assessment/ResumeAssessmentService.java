@@ -33,7 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 public class ResumeAssessmentService {
     private static final String PROMPT = "resume-copilot/resume-assessment.st";
-    private static final String POLICY_VERSION = "resume-evidence-guardrails-v2.0";
+    private static final String POLICY_VERSION = "resume-evidence-guardrails-v2.1";
     private final ResumePrivacySanitizer sanitizer;
     private final ResumeEvidenceService evidenceService;
     private final JobCriteriaService criteriaService;
@@ -102,7 +102,7 @@ public class ResumeAssessmentService {
         List<ResumeModels.JobCriterion> criteria = criteriaService.criteria(job);
         String modelName = ai.modelName();
         long startMs = System.currentTimeMillis();
-        RenderedPrompt prompt = prompts.renderWithMetadata(PROMPT, "v2.0", Map.of(
+        RenderedPrompt prompt = prompts.renderWithMetadata(PROMPT, "v2.1", Map.of(
                 "jobTitle", job.getTitle(),
                 "criteria", formatCriteria(criteria), "evidence", formatEvidence(evidence)));
         AiInvocationMetadata aiMetadata = null;

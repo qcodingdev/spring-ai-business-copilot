@@ -12,13 +12,14 @@
 <body class="workbench-page">
 <div class="app-shell">
   <aside class="sidebar">
-    <div class="brand">
+    <a class="brand brand-home-link" th:href="@{/} + '#data-copilot'"
+       aria-label="返回 QCoding AI Copilot 工作台首页">
       <img class="brand-logo" th:src="@{/images/qcoding-logo.png}" alt="QCoding Logo"/>
       <span class="brand-copy">
         <strong>QCoding AI Copilot</strong>
         <small>AI 应用开发 · Java 技术实践</small>
       </span>
-    </div>
+    </a>
 
     <div class="sidebar-status">
       <span class="status-dot" aria-hidden="true"></span>
@@ -398,11 +399,21 @@
         <div><span class="section-kicker">快速开始</span><h2>使用示例工单</h2></div>
       </div>
       <p class="panel-description">选择一种典型场景，快速体验分类、证据检索和草稿确认流程。</p>
+      <p class="field-hint sample-downloads">
+        “产品使用”和“账号注册”用于演示可直接给出建议的低风险场景；
+        请先在知识问答上传
+        <a th:href="@{/samples/knowledge/product-faq.md}" download>产品 FAQ</a>。
+        “退款流程”和“生产故障”即使命中
+        <a th:href="@{/samples/knowledge/refund-policy.md}" download>退款政策</a>
+        或
+        <a th:href="@{/samples/knowledge/incident-response.md}" download>故障响应</a>，
+        仍会按高风险规则要求人工复核。
+      </p>
       <div class="sample-buttons" id="sc-sample-buttons">
-        <button class="sample-btn" data-category="refund">退款咨询</button>
-        <button class="sample-btn" data-category="activation">开通问题</button>
-        <button class="sample-btn" data-category="incident">故障反馈</button>
-        <button class="sample-btn" data-category="security">账号安全</button>
+        <button class="sample-btn" data-category="product">产品使用（可建议）</button>
+        <button class="sample-btn" data-category="activation">账号注册（可建议）</button>
+        <button class="sample-btn" data-category="refund">退款流程（需复核）</button>
+        <button class="sample-btn" data-category="incident">生产故障（转人工）</button>
       </div>
     </section>
 
@@ -445,7 +456,7 @@
         <div><span class="section-kicker">知识证据</span><h2>知识依据</h2></div>
       </div>
       <div id="sc-evidence-empty" class="empty-state" hidden>
-        <p>未找到相关依据，建议转人工处理。</p>
+        <p id="sc-evidence-empty-text">未找到相关依据，建议转人工处理。</p>
       </div>
       <ul id="sc-evidence-list" class="citation-list"></ul>
     </section>

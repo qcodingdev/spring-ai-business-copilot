@@ -30,7 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 public class JobCriteriaService {
     private static final String PROMPT = "resume-copilot/job-criteria-extraction.st";
-    private static final String POLICY_VERSION = "resume-job-criteria-v2.0";
+    private static final String POLICY_VERSION = "resume-job-criteria-v2.1";
     private final ResumePrivacySanitizer sanitizer;
     private final AiChatService ai;
     private final PromptTemplateService prompts;
@@ -93,7 +93,7 @@ public class JobCriteriaService {
         String modelName = ai.modelName();
         long startMs = System.currentTimeMillis();
         RenderedPrompt prompt = prompts.renderWithMetadata(
-                PROMPT, "v2.0", Map.of("jobTitle", title.trim(), "jobDescription", sanitizedJd));
+                PROMPT, "v2.1", Map.of("jobTitle", title.trim(), "jobDescription", sanitizedJd));
         AiInvocationMetadata aiMetadata = null;
         try {
             AiInvocationResult<ResumeModels.LlmJobCriteriaOutput> invocation =

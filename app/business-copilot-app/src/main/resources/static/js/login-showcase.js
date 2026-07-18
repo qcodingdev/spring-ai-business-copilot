@@ -75,6 +75,9 @@ const previewElements = {
 
 const previewTabs = Array.from(document.querySelectorAll('[data-preview-module]'));
 const previewStage = document.querySelector('.capability-stage');
+const loginCard = document.getElementById('login-form');
+const loginHero = document.querySelector('.public-hero');
+const loginTriggers = Array.from(document.querySelectorAll('[data-login-trigger]'));
 let activePreviewModule = 'data';
 
 function rememberModule(moduleId, moduleTitle) {
@@ -146,12 +149,29 @@ document.querySelectorAll('[data-preview-jump]').forEach((button) => {
   });
 });
 
-document.querySelectorAll('[data-login-trigger]').forEach((trigger) => {
-  trigger.addEventListener('click', () => {
+function setLoginExpanded(expanded) {
+  if (!loginCard) return;
+  loginCard.hidden = !expanded;
+  loginHero?.classList.toggle('login-card-open', expanded);
+  loginTriggers.forEach((trigger) => trigger.setAttribute('aria-expanded', String(expanded)));
+}
+
+loginTriggers.forEach((trigger) => {
+  trigger.addEventListener('click', (event) => {
+    event.preventDefault();
     const moduleId = trigger.dataset.moduleTarget || activePreviewModule;
     if (moduleId && modulePreviews[moduleId]) {
       rememberModule(moduleId, modulePreviews[moduleId].title);
     }
-    window.setTimeout(() => document.getElementById('username')?.focus({ preventScroll: true }), 450);
+    setLoginExpanded(true);
+    window.requestAnimationFrame(() => {
+      loginCard?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      window.setTimeout(() => document.getElementById('username')?.focus({ preventScroll: true }), 350);
+    });
   });
 });
+
+if (loginCard && !loginCard.hidden) {
+  setLoginExpanded(true);
+  window.setTimeout(() => document.getElementById('username')?.focus({ preventScroll: true }), 0);
+}

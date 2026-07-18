@@ -5,17 +5,18 @@
 ![Java 21](https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&logoColor=white)
 ![Spring Boot 4.1](https://img.shields.io/badge/Spring%20Boot-4.1-6DB33F?logo=springboot&logoColor=white)
 ![Spring AI 2.0](https://img.shields.io/badge/Spring%20AI-2.0-6DB33F)
+![Version](https://img.shields.io/badge/version-2.0.0--SNAPSHOT-5B7CFA)
 ![License](https://img.shields.io/badge/License-MIT-blue)
 
 Five runnable Spring AI business applications for real internal workflows, with deterministic guardrails, actor-bound confirmation, evidence citations, durable lifecycle state, audit v2 metadata, PostgreSQL, and one workbench.
 
 This repository is an application suite, not another AI framework. Clone it, run it, inspect the boundaries, and adapt one module to your own system.
 
-![Business Copilot workbench demo](assets/workbench-demo.gif)
+![Business Copilot 2.0 snapshot landing page and workbench](assets/workbench-demo.gif)
 
-## 2.0 Upgrade
+## 2.0 Snapshot
 
-The 2.0 line turns the five demos into trusted, diagnosable, and deliverable business samples:
+The current branch is a `2.0.0-SNAPSHOT` preview, not the formal 2.0 release. It turns the five demos into trusted, diagnosable, and deliverable business samples while the final remote release gates remain pending:
 
 - Data queries use schema/table/column allowlists, deny ordinary functions, require bounded literal limits, and support separate read-only PostgreSQL or MySQL query targets.
 - Knowledge documents are versioned, indexed through durable retryable jobs, retrieved through hybrid text/vector search, and checked against exact citation excerpts.
@@ -23,6 +24,15 @@ The 2.0 line turns the five demos into trusted, diagnosable, and deliverable bus
 - Report sources are immutable snapshots with freshness metadata; bounded CSV/JSON imports and deterministic Markdown/HTML exports are supported.
 - Resume criteria are versioned; TXT/Markdown/PDF/DOCX inputs are sanitized, reviewer corrections are revalidated, and sanitized submissions have automatic and manual deletion.
 - Fixed evaluation sets, PostgreSQL migrations, MySQL 5.7/8.4 compatibility, CycloneDX SBOM generation, dependency review, and container scanning run as release gates.
+
+## Latest Workbench
+
+- The public landing page previews all five modules. Its login form stays hidden until the user selects **Log in to try**.
+- The authenticated workbench uses a persistent dark module sidebar. Selecting the QCoding logo or product name returns to the default Data Copilot home.
+- Knowledge uploads remain searchable through bounded text retrieval when embeddings are unavailable, while cited vector retrieval is used when an embedding model is configured.
+- Support examples distinguish low-risk, knowledge-backed suggestions from refund and incident cases that still require human review.
+- Resume criteria, evidence assessments, interview verification questions, full-sentence drafts, and limitation notes are Simplified Chinese by default.
+- Data, Support, Report, and Resume views move to the first result panel after an asynchronous result is rendered, while respecting reduced-motion preferences.
 
 ## Why This Project
 
@@ -61,7 +71,7 @@ Open [http://localhost:8080](http://localhost:8080). PostgreSQL is available on 
 
 If those host ports are already in use, set `APP_HOST_PORT` and `POSTGRES_HOST_PORT` in `examples/.env`; Compose service-to-service addresses remain unchanged.
 
-The workbench requires login by default. Demo credentials are `admin/admin-change-me`, `operator/operator-change-me`, and `reviewer/reviewer-change-me`. Operators run standard workflows, reviewers inspect audits and may perform confirmations/reviews, and admins have full access. Change every default password through the `BUSINESS_COPILOT_*` environment variables before deploying to a shared environment.
+The public product page is available before login; the login card expands only after an explicit login action. All business operations still require authentication. Demo credentials are `admin/admin-change-me`, `operator/operator-change-me`, and `reviewer/reviewer-change-me`. Operators run standard workflows, reviewers inspect audits and may perform confirmations/reviews, and admins have full access. Change every default password through the `BUSINESS_COPILOT_*` environment variables before deploying to a shared environment.
 
 For a shared or production-like deployment, set `SPRING_PROFILES_ACTIVE=prod`. The production profile requires explicit platform database credentials, all three role passwords, and the dedicated read-only business-query datasource. Startup fails instead of falling back to demo secrets or the platform query connection.
 
