@@ -21,8 +21,10 @@ RUN --mount=type=cache,target=/root/.m2/repository \
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
-# curl 仅用于容器健康检查；应用进程使用固定的无特权 UID/GID。
-RUN apk add --no-cache curl \
+# 先安装 Alpine 已发布的安全更新；curl 仅用于容器健康检查。
+# 应用进程使用固定的无特权 UID/GID。
+RUN apk upgrade --no-cache \
+    && apk add --no-cache curl \
     && addgroup -g 10001 -S app \
     && adduser -u 10001 -S -D -H -G app app
 
