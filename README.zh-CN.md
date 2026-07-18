@@ -2,58 +2,68 @@
 
 [English](README.md) | [GitHub](https://github.com/qcodingdev/spring-ai-business-copilot) | [Gitee](https://gitee.com/qcodingdev/spring-ai-business-copilot)
 
-![Java 21](https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&logoColor=white)
-![Spring Boot 4.1](https://img.shields.io/badge/Spring%20Boot-4.1-6DB33F?logo=springboot&logoColor=white)
-![Spring AI 2.0](https://img.shields.io/badge/Spring%20AI-2.0-6DB33F)
-![Version](https://img.shields.io/badge/version-2.0.0-5B7CFA)
-![License](https://img.shields.io/badge/License-MIT-blue)
+[![Release](https://img.shields.io/github/v/release/qcodingdev/spring-ai-business-copilot?display_name=tag&sort=semver)](https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.0.0)
+[![Java 21](https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&logoColor=white)](https://openjdk.org/projects/jdk/21/)
+[![Spring Boot 4.1](https://img.shields.io/badge/Spring%20Boot-4.1-6DB33F?logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
+[![Spring AI 2.0](https://img.shields.io/badge/Spring%20AI-2.0-6DB33F)](https://spring.io/projects/spring-ai)
+[![License](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 
-五个面向真实内部业务流程、可以直接运行和改造的 Spring AI 应用：具备确定性 guardrails、操作者绑定确认、证据引用、持久状态闭环、审计 v2 元数据、PostgreSQL 和统一工作台。
+**一个 Java 应用，五个可以直接运行的 Spring AI 业务闭环：Text-to-SQL、带引用知识问答、智能客服、证据化报告和简历评估。**
 
-本项目不是另一个 AI 框架，而是一套业务应用样板。你可以直接运行，再选择一个模块接入自己的系统。
+多数 AI 项目停在聊天框。本项目继续完成后半段：结构化模型输出、确定性 Guardrails、证据、人工确认、状态流转和审计链路。你可以直接运行一套完整流程，再选择其中一个模块接入自己的系统。
 
-![Business Copilot 2.0 正式版首页与工作台](assets/workbench-demo.gif)
+![五个真实 Spring AI Business Copilot 业务流程](assets/workbench-demo.gif)
 
-## 2.0 正式版
+```bash
+git clone https://github.com/qcodingdev/spring-ai-business-copilot.git
+cd spring-ai-business-copilot/examples
+cp .env.example .env && docker compose up --build
+```
 
-当前默认主干是 `2.0.0` 正式版。它不增加第六个模块，而是把现有五个业务闭环升级为可信、可诊断、可评测、可交付的样板：
+打开 [http://localhost:8080](http://localhost:8080)，点击“登录体验”，使用 `admin / admin-change-me`。不配置 AI Key 也可以启动基础设施和查看页面；在 `examples/.env` 中补充 Chat 与 Embedding 配置后即可运行 AI 流程。
 
-- Data 查询同时校验 schema/表/列，普通函数默认拒绝，`LIMIT` 必须是受限常量，并支持独立只读 PostgreSQL/MySQL 查询目标。
-- Knowledge 文档具备版本、持久索引任务和失败重试，使用文本/向量混合检索，并校验引用原文片段。
-- Support 工单和回复草稿使用显式状态机、版本化知识依据、草稿编辑、反馈和处理结果。
-- Report 来源保存为带新鲜度信息的不可变快照，支持受限 CSV/JSON 导入及确定性 Markdown/HTML 导出。
-- Resume 的 JD 标准支持版本化，TXT/Markdown/PDF/DOCX 输入统一脱敏，人工修订会再次校验，脱敏简历支持自动与手动删除。
-- 固定评测集、PostgreSQL 迁移、MySQL 5.7/8.4、CycloneDX SBOM、依赖审查和容器扫描共同作为发布门槛。
+> 如果这个项目帮你节省了时间，或者提供了可复用的架构参考，欢迎点一个 Star，让更多开发者看到它。
 
-## 最新工作台
+## 不只展示 Prompt，直接看结果
 
-- 未登录首页可预览五个业务模块，登录框默认隐藏，只有点击“登录体验”后才会展开。
-- 登录后使用深色常驻模块侧栏；点击 QCoding Logo 或产品名称会回到默认的 Data Copilot 首页。
-- Knowledge 在 embedding 不可用时仍可通过受限文本检索完成问答，配置向量模型后继续使用带引用的向量检索。
-- Support 示例明确区分“有知识依据、可给建议”的低风险场景，以及退款、生产故障等仍需人工复核的高风险场景。
-- Resume 的岗位标准、证据评估、面试核验问题、整句话评估草稿和限制说明默认输出简体中文。
-- Data、Support、Report、Resume 的异步结果渲染完成后会自动定位到第一个结果面板，并尊重系统的“减少动态效果”设置。
+| 只读 Text-to-SQL、执行确认与审计 | 带精确原文引用的知识问答 |
+|---|---|
+| ![Data Copilot 查询结果](assets/data-copilot-result.png) | ![Knowledge Copilot 引用答案](assets/knowledge-copilot-result.png) |
+| 有知识依据的客服建议 | 基于来源证据的报告草稿 |
+| ![Support Copilot 依据与草稿](assets/support-copilot-result.png) | ![Report Copilot 证据化草稿](assets/report-copilot-result.png) |
 
-## 为什么做这个项目
+![Resume Copilot 中文证据化评估](assets/resume-copilot-result.png)
 
-业务 AI 不能停在聊天框：
+以上截图均来自当前 Docker Compose 应用，数据全部为虚构样例。
 
-- 模型输出必须结构化，并在进入业务状态前经过确定性校验；
-- 已实现模块策略的敏感字段会在入模或入库前脱敏；
-- 事实必须绑定当前请求的证据 ID；
-- 风险动作只接受服务端 token，并要求人工确认；
-- 审计不记录完整模型输出和确认 token，但当前 Data/Knowledge 审计仍可能保存问题文本，因此演示输入必须保持虚构和脱敏；
-- 每个模块范围清晰，可以独立解释业务价值。
+## 选择一个完整业务闭环
 
-## 五个业务模块
-
-| 模块 | 业务流程 | 安全默认值 |
+| 模块 | 可以直接体验什么 | 可信边界 |
 |---|---|---|
-| [Data Copilot](modules/data-copilot/README.md) | 自然语言查询数据库（Text to SQL） | 只读 SQL、schema/表/列白名单、执行前确认 |
-| [Knowledge Copilot](modules/knowledge-copilot/README.md) | 版本化文档摄取与带引用问答 | 精确引用、无依据拒答 |
-| [Support Copilot](modules/support-copilot/README.md) | 工单分类与可编辑回复草稿 | 显式状态机、高风险转人工，不自动发送或退款 |
-| [Report Copilot](modules/report-copilot/README.md) | 手工或 CSV/JSON 来源的周报与经营简报 | 来源快照不可变、指标严格比对、确认后导出 |
-| [Resume Copilot](modules/resume-copilot/README.md) | 单个版本化 JD、单份脱敏简历评估 | 脱敏数据限期保存，不评分排名或做招聘决定 |
+| [Data Copilot](modules/data-copilot/README.md) | 提问、检查 SQL、确认只读查询 | 独立只读数据源，校验 schema/表/列/函数/Limit |
+| [Knowledge Copilot](modules/knowledge-copilot/README.md) | 上传 TXT/Markdown/PDF/DOCX 后进行带引用问答 | 版本化索引、混合检索、精确引用校验 |
+| [Support Copilot](modules/support-copilot/README.md) | 工单分类、知识检索、可编辑回复草稿 | 低风险场景可建议，退款和故障仍需人工复核 |
+| [Report Copilot](modules/report-copilot/README.md) | 把手工或 CSV/JSON 来源生成可导出报告 | 来源快照不可变、指标严格比对 |
+| [Resume Copilot](modules/resume-copilot/README.md) | 确认 JD 标准，评估单份脱敏简历 | 不评分排名或决策，证据缺口和限制始终可见 |
+
+## 为什么它不只是聊天 Demo
+
+- **模型输出没有最终决定权：** 结构化响应必须先经过模块级确定性校验，才能改变业务状态。
+- **答案和证据一起流转：** 知识引用、报告来源 ID、简历证据 ID 都可以在页面直接检查。
+- **风险会改变流程：** 查询执行、客服处理、报告导出和复核动作都有显式状态与确认边界。
+- **数据库是第二道防线：** Data Copilot 除应用 Guardrails 外，还使用权限独立收缩的只读账号。
+- **失败可以诊断：** 持久任务、重试状态以及 actor/model/prompt/policy/latency 审计让问题可定位。
+- **样例适合公开演示：** Compose 内置客户、文档、工单、指标、JD 和简历均为虚构数据。
+
+## 2.0 带来了什么
+
+[v2.0.0](https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.0.0) 不增加第六个模块，而是把现有五个流程升级为可信、可诊断、可交付的业务样板：
+
+- schema-aware SQL 白名单、受限字面量与结果集、独立 PostgreSQL/MySQL 只读查询目标；
+- Knowledge 持久索引任务、失败重试、混合检索与引用原文校验；
+- Support 和 Report 显式状态机、版本化证据与人工复核草稿；
+- Resume 统一脱敏、默认中文评估、修订再校验和主动删除控制；
+- PostgreSQL 迁移、固定评测集、SBOM、依赖审查和容器扫描。
 
 ## 快速开始
 

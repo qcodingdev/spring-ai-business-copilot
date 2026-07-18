@@ -2,58 +2,68 @@
 
 [简体中文](README.zh-CN.md) | [GitHub](https://github.com/qcodingdev/spring-ai-business-copilot) | [Gitee](https://gitee.com/qcodingdev/spring-ai-business-copilot)
 
-![Java 21](https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&logoColor=white)
-![Spring Boot 4.1](https://img.shields.io/badge/Spring%20Boot-4.1-6DB33F?logo=springboot&logoColor=white)
-![Spring AI 2.0](https://img.shields.io/badge/Spring%20AI-2.0-6DB33F)
-![Version](https://img.shields.io/badge/version-2.0.0-5B7CFA)
-![License](https://img.shields.io/badge/License-MIT-blue)
+[![Release](https://img.shields.io/github/v/release/qcodingdev/spring-ai-business-copilot?display_name=tag&sort=semver)](https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.0.0)
+[![Java 21](https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&logoColor=white)](https://openjdk.org/projects/jdk/21/)
+[![Spring Boot 4.1](https://img.shields.io/badge/Spring%20Boot-4.1-6DB33F?logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
+[![Spring AI 2.0](https://img.shields.io/badge/Spring%20AI-2.0-6DB33F)](https://spring.io/projects/spring-ai)
+[![License](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 
-Five runnable Spring AI business applications for real internal workflows, with deterministic guardrails, actor-bound confirmation, evidence citations, durable lifecycle state, audit v2 metadata, PostgreSQL, and one workbench.
+**Five runnable Spring AI business workflows in one Java application — Text-to-SQL, cited RAG, customer support, grounded reports, and evidence-based resume review.**
 
-This repository is an application suite, not another AI framework. Clone it, run it, inspect the boundaries, and adapt one module to your own system.
+Most AI repositories end at a chat box. This one shows what happens next: typed model output, deterministic guardrails, evidence, human confirmation, lifecycle state, and audit trails. Clone it, run it, and adapt one complete workflow instead of assembling another demo from scratch.
 
-![Business Copilot 2.0 landing page and workbench](assets/workbench-demo.gif)
+![Five real Spring AI Business Copilot workflows](assets/workbench-demo.gif)
 
-## 2.0 Release
+```bash
+git clone https://github.com/qcodingdev/spring-ai-business-copilot.git
+cd spring-ai-business-copilot/examples
+cp .env.example .env && docker compose up --build
+```
 
-The current default branch is the `2.0.0` release. It turns the five demos into trusted, diagnosable, and deliverable business samples:
+Open [http://localhost:8080](http://localhost:8080), select **Log in to try**, and use `admin / admin-change-me`. The application starts without an AI key for infrastructure and UI inspection; add chat and embedding settings in `examples/.env` to run the AI workflows.
 
-- Data queries use schema/table/column allowlists, deny ordinary functions, require bounded literal limits, and support separate read-only PostgreSQL or MySQL query targets.
-- Knowledge documents are versioned, indexed through durable retryable jobs, retrieved through hybrid text/vector search, and checked against exact citation excerpts.
-- Support tickets and reply drafts use explicit state machines, versioned knowledge evidence, editable drafts, feedback, and recorded outcomes.
-- Report sources are immutable snapshots with freshness metadata; bounded CSV/JSON imports and deterministic Markdown/HTML exports are supported.
-- Resume criteria are versioned; TXT/Markdown/PDF/DOCX inputs are sanitized, reviewer corrections are revalidated, and sanitized submissions have automatic and manual deletion.
-- Fixed evaluation sets, PostgreSQL migrations, MySQL 5.7/8.4 compatibility, CycloneDX SBOM generation, dependency review, and container scanning run as release gates.
+> If this project saves you time or gives you a useful reference architecture, a GitHub star helps more developers find it.
 
-## Latest Workbench
+## See the outputs, not just the prompts
 
-- The public landing page previews all five modules. Its login form stays hidden until the user selects **Log in to try**.
-- The authenticated workbench uses a persistent dark module sidebar. Selecting the QCoding logo or product name returns to the default Data Copilot home.
-- Knowledge uploads remain searchable through bounded text retrieval when embeddings are unavailable, while cited vector retrieval is used when an embedding model is configured.
-- Support examples distinguish low-risk, knowledge-backed suggestions from refund and incident cases that still require human review.
-- Resume criteria, evidence assessments, interview verification questions, full-sentence drafts, and limitation notes are Simplified Chinese by default.
-- Data, Support, Report, and Resume views move to the first result panel after an asynchronous result is rendered, while respecting reduced-motion preferences.
+| Read-only Text-to-SQL with confirmation and audit | Knowledge answers with exact citations |
+|---|---|
+| ![Data Copilot query result](assets/data-copilot-result.png) | ![Knowledge Copilot cited answer](assets/knowledge-copilot-result.png) |
+| Knowledge-backed support suggestion | Source-grounded report draft |
+| ![Support Copilot evidence and draft](assets/support-copilot-result.png) | ![Report Copilot grounded draft](assets/report-copilot-result.png) |
 
-## Why This Project
+![Resume Copilot evidence-based Chinese assessment](assets/resume-copilot-result.png)
 
-AI demos often stop at a chat box. Business systems need a little more discipline:
+All screenshots above were captured from the runnable Docker Compose application using fictional sample data.
 
-- model output is structured and validated before it becomes a business action;
-- module-specific sensitive fields are masked before model calls or persistence where that boundary is implemented;
-- facts are tied to current evidence IDs;
-- risky actions require a server-generated token and explicit human confirmation;
-- audit logs avoid full model responses and confirmation tokens, but the current Data and Knowledge audits can retain question text, so demo inputs must remain fictional and sanitized;
-- each module has a narrow scope and can explain its business value independently.
+## Pick a workflow
 
-## Included Copilots
-
-| Module | Business workflow | Safety default |
+| Module | What you can run | Trust boundary |
 |---|---|---|
-| [Data Copilot](modules/data-copilot/README.md) | Natural language to SQL and query explanation | Read-only SQL, schema/table/column allowlists, confirm before execution |
-| [Knowledge Copilot](modules/knowledge-copilot/README.md) | Versioned document ingestion and cited Q&A | Exact citations and `NO_EVIDENCE` refusal |
-| [Support Copilot](modules/support-copilot/README.md) | Ticket classification and editable reply drafts | Explicit state machine, human handoff, no automatic sending or refunds |
-| [Report Copilot](modules/report-copilot/README.md) | Source-grounded reports from typed or CSV/JSON evidence | Immutable source snapshots, exact metrics, confirm before export |
-| [Resume Copilot](modules/resume-copilot/README.md) | One versioned JD and one sanitized resume review | Retention-bound sanitized storage, no score, rank, or hiring decision |
+| [Data Copilot](modules/data-copilot/README.md) | Ask a business question, inspect SQL, confirm a query | Read-only datasource; schema/table/column/function/limit checks |
+| [Knowledge Copilot](modules/knowledge-copilot/README.md) | Upload TXT/Markdown/PDF/DOCX and ask cited questions | Versioned indexing, hybrid retrieval, exact citation validation |
+| [Support Copilot](modules/support-copilot/README.md) | Classify a ticket and review an editable reply draft | Low-risk suggestions; refunds and incidents remain human-reviewed |
+| [Report Copilot](modules/report-copilot/README.md) | Turn typed or CSV/JSON sources into an exportable report | Immutable source snapshots and exact metric checks |
+| [Resume Copilot](modules/resume-copilot/README.md) | Confirm JD criteria and review one sanitized resume | No score/rank/decision; evidence gaps and limitations stay visible |
+
+## Why this is more than a chat demo
+
+- **Model output is not authority.** Structured responses pass deterministic, module-specific validation before they can change business state.
+- **Evidence travels with the answer.** Knowledge citations, report source IDs, and resume evidence IDs remain inspectable in the UI.
+- **Risk changes the workflow.** Query execution, support handling, report export, and reviewer actions use explicit lifecycle transitions and confirmation boundaries.
+- **The database is a second line of defense.** Data Copilot uses an independently restricted reader in addition to application guardrails.
+- **Failure is diagnosable.** Durable jobs, retry state, actor/model/prompt/policy metadata, latency, and bounded audit records make problems visible.
+- **The examples are safe to share.** Docker Compose loads fictional customers, documents, tickets, metrics, JDs, and resumes.
+
+## What changed in 2.0
+
+[v2.0.0](https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.0.0) turns the original demos into trusted, diagnosable, and deliverable reference workflows:
+
+- schema-aware SQL allowlists, bounded literals/results, and independent PostgreSQL/MySQL read-only targets;
+- durable Knowledge indexing with retry, hybrid retrieval, and citation excerpt validation;
+- Support and Report state machines with versioned evidence and human-reviewed drafts;
+- sanitized Resume ingestion, Chinese-by-default assessments, revalidated corrections, and deletion controls;
+- PostgreSQL migrations, fixed evaluation sets, SBOM generation, dependency review, and container scanning.
 
 ## Quick Start
 
