@@ -4,9 +4,13 @@ import dev.qcoding.businesscopilot.aicore.AiChatService;
 import dev.qcoding.businesscopilot.aicore.AiEmbeddingService;
 import dev.qcoding.businesscopilot.aicore.PromptTemplateService;
 import dev.qcoding.businesscopilot.guardrails.SensitiveTextMasker;
+import dev.qcoding.businesscopilot.commonsecurity.CurrentActorProvider;
+import dev.qcoding.businesscopilot.commonsecurity.CurrentActor;
+import dev.qcoding.businesscopilot.documentprocessing.DocumentTextExtractor;
 import dev.qcoding.businesscopilot.knowledgecopilot.answer.KnowledgeQuestionService;
 import dev.qcoding.businesscopilot.knowledgecopilot.chunking.ChunkingProperties;
 import dev.qcoding.businesscopilot.knowledgecopilot.document.KnowledgeDocumentRepository;
+import dev.qcoding.businesscopilot.knowledgecopilot.web.KnowledgeCopilotController;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
@@ -29,7 +33,9 @@ class KnowledgeCopilotAutoConfigurationTest {
             .withBean(AiChatService.class, () -> mock(AiChatService.class))
             .withBean(AiEmbeddingService.class, () -> mock(AiEmbeddingService.class))
             .withBean(PromptTemplateService.class, PromptTemplateService::new)
-            .withBean(SensitiveTextMasker.class, SensitiveTextMasker::new);
+            .withBean(SensitiveTextMasker.class, SensitiveTextMasker::new)
+            .withBean(DocumentTextExtractor.class, () -> mock(DocumentTextExtractor.class))
+            .withBean(CurrentActorProvider.class, () -> () -> new CurrentActor("test", java.util.Set.of()));
 
     @Test
     @DisplayName("AutoConfiguration 类存在且可实例化")
@@ -85,6 +91,7 @@ class KnowledgeCopilotAutoConfigurationTest {
                 .run(context -> {
                     assertThat(context).hasSingleBean(KnowledgeQuestionService.class);
                     assertThat(context).hasSingleBean(KnowledgeDocumentRepository.class);
+                    assertThat(context).hasSingleBean(KnowledgeCopilotController.class);
                 });
     }
 }

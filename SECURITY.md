@@ -11,6 +11,7 @@ The latest main branch receives security fixes. This repository is a reference a
 ## Important deployment notes
 
 - Replace demo database credentials and protect all endpoints with your organization’s authentication and authorization.
+- Activate the `prod` Spring profile so missing database credentials or role passwords fail startup instead of using demo defaults.
 - Store model API keys in a secret manager, not `.env` files committed to source control.
 - Restrict database network access and review audit retention.
 - Do not process real customer data, internal documents, or resumes until privacy, retention, legal, and access-control requirements are implemented.

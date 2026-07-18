@@ -1,0 +1,35 @@
+[
+  {
+    "sourceType": "METRIC",
+    "title": "本周经营指标",
+    "content": "成交额 238600 元，支付订单 1860 单，退款率 1.6%，新增客户 428 人。",
+    "providerId": "demo-metrics",
+    "sourceVersion": "2026-W28",
+    "observedAt": "2026-07-17T09:00:00Z",
+    "sourceTimezone": "Asia/Shanghai",
+    "sourceUnit": "CNY/orders/percent/users",
+    "validUntil": "2026-07-24T09:00:00Z"
+  },
+  {
+    "sourceType": "TASK",
+    "title": "支付链路监控",
+    "content": "已完成支付失败监控和告警分级；负责人：平台组。",
+    "providerId": "demo-task-board",
+    "sourceVersion": "2026-W28",
+    "observedAt": "2026-07-17T08:30:00Z",
+    "sourceTimezone": "Asia/Shanghai",
+    "sourceUnit": "",
+    "validUntil": "2026-07-24T08:30:00Z"
+  },
+  {
+    "sourceType": "MEETING_NOTE",
+    "title": "周交付例会",
+    "content": "决定：支付监控连续稳定七天前，灰度比例保持 20%；行动：下周二复盘。",
+    "providerId": "demo-meeting",
+    "sourceVersion": "2026-W28",
+    "observedAt": "2026-07-16T02:00:00Z",
+    "sourceTimezone": "Asia/Shanghai",
+    "sourceUnit": "",
+    "validUntil": "2026-07-23T02:00:00Z"
+  }
+]

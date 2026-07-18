@@ -5,34 +5,55 @@
 ![Java 21](https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&logoColor=white)
 ![Spring Boot 4.1](https://img.shields.io/badge/Spring%20Boot-4.1-6DB33F?logo=springboot&logoColor=white)
 ![Spring AI 2.0](https://img.shields.io/badge/Spring%20AI-2.0-6DB33F)
+![Version](https://img.shields.io/badge/version-2.0.0--SNAPSHOT-5B7CFA)
 ![License](https://img.shields.io/badge/License-MIT-blue)
 
-Five runnable Spring AI business applications for real internal workflows, with deterministic guardrails, human confirmation, evidence citations, audit metadata, PostgreSQL, and one workbench.
+Five runnable Spring AI business applications for real internal workflows, with deterministic guardrails, actor-bound confirmation, evidence citations, durable lifecycle state, audit v2 metadata, PostgreSQL, and one workbench.
 
 This repository is an application suite, not another AI framework. Clone it, run it, inspect the boundaries, and adapt one module to your own system.
 
-![Business Copilot workbench demo](assets/workbench-demo.gif)
+![Business Copilot 2.0 snapshot landing page and workbench](assets/workbench-demo.gif)
+
+## 2.0 Snapshot
+
+The current branch is a `2.0.0-SNAPSHOT` preview, not the formal 2.0 release. It turns the five demos into trusted, diagnosable, and deliverable business samples while the final remote release gates remain pending:
+
+- Data queries use schema/table/column allowlists, deny ordinary functions, require bounded literal limits, and support separate read-only PostgreSQL or MySQL query targets.
+- Knowledge documents are versioned, indexed through durable retryable jobs, retrieved through hybrid text/vector search, and checked against exact citation excerpts.
+- Support tickets and reply drafts use explicit state machines, versioned knowledge evidence, editable drafts, feedback, and recorded outcomes.
+- Report sources are immutable snapshots with freshness metadata; bounded CSV/JSON imports and deterministic Markdown/HTML exports are supported.
+- Resume criteria are versioned; TXT/Markdown/PDF/DOCX inputs are sanitized, reviewer corrections are revalidated, and sanitized submissions have automatic and manual deletion.
+- Fixed evaluation sets, PostgreSQL migrations, MySQL 5.7/8.4 compatibility, CycloneDX SBOM generation, dependency review, and container scanning run as release gates.
+
+## Latest Workbench
+
+- The public landing page previews all five modules. Its login form stays hidden until the user selects **Log in to try**.
+- The authenticated workbench uses a persistent dark module sidebar. Selecting the QCoding logo or product name returns to the default Data Copilot home.
+- Knowledge uploads remain searchable through bounded text retrieval when embeddings are unavailable, while cited vector retrieval is used when an embedding model is configured.
+- Support examples distinguish low-risk, knowledge-backed suggestions from refund and incident cases that still require human review.
+- Resume criteria, evidence assessments, interview verification questions, full-sentence drafts, and limitation notes are Simplified Chinese by default.
+- Data, Support, Report, and Resume views move to the first result panel after an asynchronous result is rendered, while respecting reduced-motion preferences.
 
 ## Why This Project
 
 AI demos often stop at a chat box. Business systems need a little more discipline:
 
 - model output is structured and validated before it becomes a business action;
-- sensitive input is masked before model calls and persistence;
+- module-specific sensitive fields are masked before model calls or persistence where that boundary is implemented;
 - facts are tied to current evidence IDs;
 - risky actions require a server-generated token and explicit human confirmation;
-- audit logs store metadata, not sensitive payloads or full model responses;
+- audit logs avoid full model responses and confirmation tokens, but the current Data and Knowledge audits can retain question text, so demo inputs must remain fictional and sanitized;
 - each module has a narrow scope and can explain its business value independently.
 
 ## Included Copilots
 
 | Module | Business workflow | Safety default |
 |---|---|---|
-| [Data Copilot](modules/data-copilot/README.md) | Natural language to SQL and query explanation | Read-only SQL, allowlisted schema, confirm before execution |
-| [Knowledge Copilot](modules/knowledge-copilot/README.md) | Internal document Q&A | Mandatory citations and `NO_EVIDENCE` refusal |
-| [Support Copilot](modules/support-copilot/README.md) | Ticket classification and reply drafting | Human handoff, no automatic sending or refunds |
-| [Report Copilot](modules/report-copilot/README.md) | Source-grounded weekly reports | Exact metric evidence, confirm before Markdown export |
-| [Resume Copilot](modules/resume-copilot/README.md) | One JD and one resume evidence review | No raw resume storage, score, rank, or hiring decision |
+| [Data Copilot](modules/data-copilot/README.md) | Natural language to SQL and query explanation | Read-only SQL, schema/table/column allowlists, confirm before execution |
+| [Knowledge Copilot](modules/knowledge-copilot/README.md) | Versioned document ingestion and cited Q&A | Exact citations and `NO_EVIDENCE` refusal |
+| [Support Copilot](modules/support-copilot/README.md) | Ticket classification and editable reply drafts | Explicit state machine, human handoff, no automatic sending or refunds |
+| [Report Copilot](modules/report-copilot/README.md) | Source-grounded reports from typed or CSV/JSON evidence | Immutable source snapshots, exact metrics, confirm before export |
+| [Resume Copilot](modules/resume-copilot/README.md) | One versioned JD and one sanitized resume review | Retention-bound sanitized storage, no score, rank, or hiring decision |
 
 ## Quick Start
 
@@ -47,6 +68,12 @@ docker compose up --build
 ```
 
 Open [http://localhost:8080](http://localhost:8080). PostgreSQL is available on `localhost:5432`, and Flyway creates all sample and Copilot tables automatically.
+
+If those host ports are already in use, set `APP_HOST_PORT` and `POSTGRES_HOST_PORT` in `examples/.env`; Compose service-to-service addresses remain unchanged.
+
+The public product page is available before login; the login card expands only after an explicit login action. All business operations still require authentication. Demo credentials are `admin/admin-change-me`, `operator/operator-change-me`, and `reviewer/reviewer-change-me`. Operators run standard workflows, reviewers inspect audits and may perform confirmations/reviews, and admins have full access. Change every default password through the `BUSINESS_COPILOT_*` environment variables before deploying to a shared environment.
+
+For a shared or production-like deployment, set `SPRING_PROFILES_ACTIVE=prod`. The production profile requires explicit platform database credentials, all three role passwords, and the dedicated read-only business-query datasource. Startup fails instead of falling back to demo secrets or the platform query connection.
 
 The default `.env` starts with chat and embedding models disabled, so infrastructure and non-AI previews can run without an API key. To use AI workflows:
 
@@ -64,9 +91,12 @@ SPRING_AI_MODEL_EMBEDDING=openai
 SPRING_AI_OPENAI_EMBEDDING_API_KEY=your-embedding-key
 SPRING_AI_OPENAI_EMBEDDING_BASE_URL=https://api.openai.com
 SPRING_AI_OPENAI_EMBEDDING_MODEL=text-embedding-3-small
+SPRING_AI_OPENAI_EMBEDDING_DIMENSION=1536
 ```
 
-Chat and embedding endpoints are intentionally separate: many OpenAI-compatible chat providers do not expose a compatible embedding model.
+`SPRING_AI_OPENAI_EMBEDDING_DIMENSION` must equal the model's actual output dimension; some compatible models return 2560 dimensions. Since V17 the database column is no longer fixed to one dimension. After switching models or dimensions, reindex every enabled document to avoid mixed-dimension similarity queries.
+
+Chat and embedding endpoints are intentionally separate: many OpenAI-compatible chat providers do not expose a compatible embedding model. `examples/.env` is loaded automatically only by `cd examples && docker compose ...`. IDE and Maven runs must export the same variables in the shell or Run Configuration. Do not reuse the Compose-only database host `postgres` for a host-side run; use `localhost`.
 
 ### Local Development
 
@@ -80,13 +110,21 @@ Requirements: Java 21 and PostgreSQL 16 with pgvector.
 
 Default database settings are `jdbc:postgresql://localhost:5432/business_copilot`, user `copilot`, password `copilot`. Override them with `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, and `SPRING_DATASOURCE_PASSWORD`.
 
+Data Copilot can use a separate PostgreSQL or MySQL business query database through `BUSINESS_QUERY_DATASOURCE_ENABLED=true` and the `BUSINESS_QUERY_DATASOURCE_*` settings. The dialect is detected from the JDBC URL by default and can be pinned with `BUSINESS_QUERY_DATASOURCE_DIALECT=postgresql|mysql`; mismatches fail closed. The database account must be independently created with least-privilege `SELECT` access to only the approved business schema/tables. Compose enables an example PostgreSQL `business_reader` connection by default; it can select only the six fictional sample tables, cannot read platform audits or other Copilot tables, and cannot perform DML/DDL. Platform audits, knowledge vectors, and other module state remain in PostgreSQL + pgvector; MySQL is supported only as a Data Copilot query target.
+
+The SQL boundary requires schema-qualified allowlisted tables (`public.customers`, not `customers`) and fully-qualified allowlisted columns. Wildcard projections such as `SELECT *` and `table.*` are rejected. Database functions are denied by default except the explicit `count`/`sum`/`avg`/`min`/`max` aggregate allowlist. Relative business periods are resolved to fixed date literals before SQL generation instead of enabling database date functions. `LIMIT` must be a bounded integer literal. JDBC independently caps timeout, rows, fetch size, columns, and approximate result bytes.
+
+When a custom business database is enabled, configure both `business-copilot.data-copilot.schema.queryable-tables` and `business-copilot.guardrails.queryable-columns` for that database. Missing or mismatched column entries fail closed instead of falling back to unrestricted metadata.
+
+Admins and reviewers can access `/actuator/metrics`. Spring AI model observations record call latency and provider-reported token usage without exposing prompt or business content in the metrics.
+
 ## Try the Workflows
 
 1. **Data:** ask a business question, inspect the generated SQL, then confirm the read-only query.
-2. **Knowledge:** upload Markdown/TXT content, index it, and ask a question with citations.
-3. **Support:** paste a fictional ticket, inspect classification and evidence, then confirm or cancel the reply draft.
-4. **Report:** preview typed sources, generate a report, confirm it, and export server-rendered Markdown.
-5. **Resume:** parse a fictional JD, confirm the extracted criteria, then analyze one fictional resume and mark the evidence review as read.
+2. **Knowledge:** upload TXT/Markdown/PDF/DOCX content, let the durable index job complete, and ask a question with citations.
+3. **Support:** paste a fictional ticket, inspect classification and versioned evidence, edit if needed, then confirm or cancel the reply draft.
+4. **Report:** preview typed or CSV/JSON sources, generate a report, confirm it, and export deterministic Markdown or HTML.
+5. **Resume:** parse a fictional text or document JD, confirm its versioned criteria, analyze one fictional resume, record reviewer corrections, and delete the sanitized submission when finished.
 
 All sample data is fictional. Do not paste production credentials, customer data, internal documents, or real resumes into a demo deployment.
 
@@ -96,6 +134,7 @@ All sample data is fictional. Do not paste production credentials, customer data
 flowchart LR
     UI["Thymeleaf + Vanilla JS Workbench"] --> APP["business-copilot-app"]
     APP --> DATA["Data"] & KNOW["Knowledge"] & SUPPORT["Support"] & REPORT["Report"] & RESUME["Resume"]
+    KNOW & REPORT & RESUME --> DOC["document-processing"]
     DATA & KNOW & SUPPORT & REPORT & RESUME --> AI["ai-core"]
     DATA & KNOW & SUPPORT & REPORT & RESUME --> GUARD["ai-guardrails"]
     DATA & KNOW & SUPPORT & REPORT & RESUME --> WEB["common-web"]
@@ -104,9 +143,9 @@ flowchart LR
 
 | Layer | Technology | Rule |
 |---|---|---|
-| Runtime | Java 21, Spring Boot 4.1 | One executable app, explicit module auto-configuration |
+| Runtime | Java 21, Spring Boot 4.1 | One executable app; every module explicitly auto-configures its web and persistence entrypoints |
 | AI | Spring AI 2.0, Jackson 3 | Central prompts and typed output before guardrails |
-| Persistence | JDBC + MyBatis-Plus 3.5.16 | MyBatis-Plus for stable CRUD; JDBC for dynamic or batch-specific access |
+| Persistence | Spring JDBC | Explicit module repositories, conditional state transitions, dynamic SQL, metadata, batches, and pgvector access |
 | Database | PostgreSQL 16, pgvector, Flyway | Flyway is the only DDL authority |
 | Web | Spring MVC, Thymeleaf, vanilla JS | One operational workbench, no frontend build toolchain |
 
@@ -118,6 +157,8 @@ platform/ai-core/               model calls, embeddings, prompt templates
 platform/ai-guardrails/         reusable deterministic safety rules
 platform/ai-tool-audit/         Data Copilot query audit boundary
 platform/common-web/            API responses and exception handling
+platform/common-security/       actor, role, object-policy, and token-digest primitives
+platform/document-processing/   bounded TXT/Markdown/PDF/DOCX text extraction
 modules/data-copilot/           database query assistant
 modules/knowledge-copilot/      cited knowledge assistant
 modules/support-copilot/        support reply assistant
@@ -143,7 +184,9 @@ Every Maven module has its own README with architecture, flow, boundaries, API, 
 ```bash
 ./mvnw -q -DskipTests compile
 ./mvnw -q test
+./mvnw -q verify -Psbom
 ./mvnw -q -pl modules/resume-copilot -am test
+bash scripts/smoke-test.sh  # run after the application starts
 ```
 
 ## Deliberate Non-Goals
@@ -151,7 +194,7 @@ Every Maven module has its own README with architecture, flow, boundaries, API, 
 - no multi-tenant IAM, workflow platform, or model marketplace;
 - no arbitrary model-generated tool execution;
 - no automatic message sending, report publishing, or recruitment decisions;
-- no batch candidate ranking, ATS integration, or storage of raw resumes;
+- no batch candidate ranking, ATS integration, or indefinite/raw resume storage;
 - no claim that the demo configuration is production security hardening.
 
 ## Contributing and Security

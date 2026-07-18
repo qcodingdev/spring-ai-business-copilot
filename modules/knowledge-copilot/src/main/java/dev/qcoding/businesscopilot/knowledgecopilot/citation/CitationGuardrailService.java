@@ -11,13 +11,13 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Validates that LLM-generated citations are complete and reference only existing chunks.
+ * Validates that model-selected citation IDs reference only retrieved chunks.
  *
- * <p>引用完整性校验服务。对模型输出的 citations 进行合法性检查：
+ * <p>引用完整性校验服务。对模型选择的 citations 进行合法性检查：
  * <ul>
  *   <li>ANSWERED 状态必须至少有一个 citation</li>
  *   <li>每个 citation 的 chunkId 必须来自本次检索的 retrieved chunks</li>
- *   <li>不存在引用不存在的 chunkId（防止 LLM 幻觉）</li>
+ *   <li>不存在引用不存在的 chunkId（防止模型幻觉）</li>
  * </ul>
  * 校验不通过时返回拒绝理由，由调用方决定降级为 REJECTED 或 NO_EVIDENCE。</p>
  */
@@ -37,8 +37,8 @@ public class CitationGuardrailService {
         List<String> violations = new ArrayList<>();
 
         if (citations == null || citations.isEmpty()) {
-            violations.add("ANSWERED status requires at least one citation, but none were provided");
-            log.warn("Citation validation failed: no citations provided");
+            violations.add("ANSWERED 状态至少需要一条引用，但模型未返回引用");
+            log.warn("引用校验失败：模型未返回引用");
             return new CitationValidationResult(false, violations);
         }
 
@@ -48,21 +48,20 @@ public class CitationGuardrailService {
 
         for (KnowledgeCitation citation : citations) {
             if (citation.chunkId() == null) {
-                violations.add("Citation contains null chunkId");
+                violations.add("引用中的 chunkId 不能为空");
                 continue;
             }
             if (!validChunkIds.contains(citation.chunkId())) {
-                violations.add("Citation references chunkId=" + citation.chunkId()
-                        + " which was not among the retrieved chunks. "
-                        + "Valid chunk IDs: " + validChunkIds);
+                violations.add("引用的 chunkId=" + citation.chunkId()
+                        + " 不在本次召回结果中；允许的 chunkId 为 " + validChunkIds);
             }
         }
 
         boolean valid = violations.isEmpty();
         if (!valid) {
-            log.warn("Citation validation failed: {} violation(s)", violations.size());
+            log.warn("引用校验失败：共 {} 个问题", violations.size());
         } else {
-            log.debug("Citation validation passed: {} citation(s) referencing {} chunk(s)",
+            log.debug("引用校验通过：{} 条引用，候选分片共 {} 个",
                     citations.size(), validChunkIds.size());
         }
 

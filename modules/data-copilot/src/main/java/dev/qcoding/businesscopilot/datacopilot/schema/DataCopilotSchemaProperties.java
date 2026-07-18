@@ -29,8 +29,14 @@ public record DataCopilotSchemaProperties(
         if (queryableTables == null || queryableTables.isEmpty()) {
             // 默认白名单，审计表 query_audit_logs 不在其中
             queryableTables = List.of(
-                    "customers", "products", "orders", "order_items",
-                    "refunds", "marketing_events");
+                    "public.customers", "public.products", "public.orders",
+                    "public.order_items", "public.refunds", "public.marketing_events");
+        } else {
+            queryableTables = queryableTables.stream()
+                    .map(QualifiedTableName::parse)
+                    .map(QualifiedTableName::canonicalName)
+                    .distinct()
+                    .toList();
         }
         if (columnDescriptions == null) {
             columnDescriptions = Map.of();
@@ -38,12 +44,12 @@ public record DataCopilotSchemaProperties(
         if (sensitiveColumns == null) {
             // 默认敏感标记：高敏字段和脱敏字段
             sensitiveColumns = Map.of(
-                    "customers.password", "block",
-                    "customers.token", "block",
-                    "customers.secret", "block",
-                    "customers.id_card", "block",
-                    "customers.phone", "mask",
-                    "customers.email", "mask");
+                    "public.customers.password", "block",
+                    "public.customers.token", "block",
+                    "public.customers.secret", "block",
+                    "public.customers.id_card", "block",
+                    "public.customers.phone", "mask",
+                    "public.customers.email", "mask");
         }
         if (maxSchemaTextLength <= 0) {
             maxSchemaTextLength = 2000;

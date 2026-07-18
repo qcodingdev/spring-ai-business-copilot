@@ -51,9 +51,14 @@ class QueryExecutionServiceTest {
     }
 
     private SqlCandidate candidateWithAuditContext(String sql) {
-        return SqlCandidate.executable(
-                sql, Instant.now(), Instant.now().plusSeconds(600),
-                "req-001", "上个月销售额", "gpt-5-mini");
+        Instant now = Instant.now();
+        return new SqlCandidate(
+                "cand-1", sql, null, null,
+                dev.qcoding.businesscopilot.datacopilot.confirmation.SqlCandidateStatus.CONSUMED,
+                "operator-1", "req-001", "gpt-5-mini",
+                "data-copilot/sql-generation.st", "v1", null,
+                null, "sql-guardrails-v2.0",
+                now, now.plusSeconds(600), now, "operator-1");
     }
 
     // ---- 执行成功：写审计并包含 rowCount ----
@@ -63,7 +68,7 @@ class QueryExecutionServiceTest {
     void executionSuccessRecordsAuditWithRowCount() {
         String sql = "SELECT id FROM customers LIMIT 10";
         SqlCandidate candidate = candidateWithAuditContext(sql);
-        when(confirmationService.confirmAndRetrieve("cand-1", "token-1")).thenReturn(candidate);
+        when(confirmationService.confirmAndConsume("cand-1", "token-1")).thenReturn(candidate);
 
         QueryResultTable table = new QueryResultTable(
                 List.of(new QueryColumn("id", "integer")),
@@ -84,7 +89,7 @@ class QueryExecutionServiceTest {
         assertThat(event.status()).isEqualTo(AuditStatus.EXECUTED);
         assertThat(event.rowCount()).isEqualTo(2);
         assertThat(event.requestId()).isEqualTo("req-001");
-        assertThat(event.userQuestion()).isEqualTo("上个月销售额");
+        assertThat(event.userQuestion()).isEqualTo("已确认的只读业务查询");
         assertThat(event.modelName()).isEqualTo("gpt-5-mini");
         assertThat(event.confirmed()).isTrue();
         assertThat(event.finalSql()).isEqualTo(sql);
@@ -94,11 +99,11 @@ class QueryExecutionServiceTest {
     // ---- 执行失败：写审计并包含错误摘要 ----
 
     @Test
-    @DisplayName("execution failure records audit with error summary")
-    void executionFailureRecordsAuditWithErrorSummary() {
+    @DisplayName("execution failure records a stable audit outcome without provider details")
+    void executionFailureRecordsStableAuditOutcome() {
         String sql = "SELECT bad_col FROM customers LIMIT 10";
         SqlCandidate candidate = candidateWithAuditContext(sql);
-        when(confirmationService.confirmAndRetrieve("cand-1", "token-1")).thenReturn(candidate);
+        when(confirmationService.confirmAndConsume("cand-1", "token-1")).thenReturn(candidate);
 
         when(queryExecutor.execute(sql)).thenThrow(
                 new QueryExecutionException("查询执行失败"));
@@ -112,7 +117,7 @@ class QueryExecutionServiceTest {
         AuditEvent event = captor.getValue();
         assertThat(event.eventType()).isEqualTo(AuditEventType.QUERY_FAILURE);
         assertThat(event.status()).isEqualTo(AuditStatus.EXECUTION_FAILED);
-        assertThat(event.errorMessage()).contains("查询执行失败");
+        assertThat(event.errorMessage()).isNull();
         assertThat(event.rowCount()).isNull();
         assertThat(event.requestId()).isEqualTo("req-001");
         assertThat(event.modelName()).isEqualTo("gpt-5-mini");
@@ -125,7 +130,7 @@ class QueryExecutionServiceTest {
     void secondGuardrailsFailureRecordsAudit() {
         String sql = "DELETE FROM customers";
         SqlCandidate candidate = candidateWithAuditContext(sql);
-        when(confirmationService.confirmAndRetrieve("cand-1", "token-1")).thenReturn(candidate);
+        when(confirmationService.confirmAndConsume("cand-1", "token-1")).thenReturn(candidate);
 
         when(queryExecutor.execute(sql)).thenThrow(
                 new BusinessException(ErrorCode.SQL_GUARDRAIL_VIOLATION, "rejected by guardrails"));
@@ -139,7 +144,8 @@ class QueryExecutionServiceTest {
         AuditEvent event = captor.getValue();
         assertThat(event.eventType()).isEqualTo(AuditEventType.QUERY_FAILURE);
         assertThat(event.status()).isEqualTo(AuditStatus.VALIDATION_FAILED);
-        assertThat(event.validationErrors()).contains("rejected by guardrails");
+        assertThat(event.validationErrors()).isNull();
+        assertThat(event.violationCodes()).isEqualTo("SECONDARY_GUARDRAIL_REJECTED");
     }
 
     // ---- 确认失败（取消）：写 not-confirmed 审计 ----
@@ -147,7 +153,7 @@ class QueryExecutionServiceTest {
     @Test
     @DisplayName("confirmation failure records not-confirmed audit")
     void confirmationFailureRecordsNotConfirmedAudit() {
-        when(confirmationService.confirmAndRetrieve("cand-1", "wrong-token"))
+        when(confirmationService.confirmAndConsume("cand-1", "wrong-token"))
                 .thenThrow(new SqlCandidateNotExecutableException("Invalid confirmation token"));
 
         assertThatThrownBy(() -> service.execute("cand-1", "wrong-token"))
@@ -171,7 +177,7 @@ class QueryExecutionServiceTest {
     void executeReturnsTableAndExplanation() {
         String sql = "SELECT id FROM customers LIMIT 10";
         SqlCandidate candidate = candidateWithAuditContext(sql);
-        when(confirmationService.confirmAndRetrieve("cand-1", "token-1")).thenReturn(candidate);
+        when(confirmationService.confirmAndConsume("cand-1", "token-1")).thenReturn(candidate);
 
         QueryResultTable table = new QueryResultTable(
                 List.of(new QueryColumn("id", "integer")),
@@ -193,7 +199,7 @@ class QueryExecutionServiceTest {
     void auditEventHasNoResultRows() {
         String sql = "SELECT id FROM customers LIMIT 10";
         SqlCandidate candidate = candidateWithAuditContext(sql);
-        when(confirmationService.confirmAndRetrieve("cand-1", "token-1")).thenReturn(candidate);
+        when(confirmationService.confirmAndConsume("cand-1", "token-1")).thenReturn(candidate);
 
         QueryResultTable table = new QueryResultTable(
                 List.of(new QueryColumn("id", "integer")),

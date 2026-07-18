@@ -29,7 +29,7 @@ class AiChatServiceTest {
 
         assertThatThrownBy(() -> service.generateText("test"))
                 .isInstanceOf(AiModelNotEnabledException.class)
-                .hasMessageContaining("disabled");
+                .hasMessageContaining("已被配置项");
     }
 
     @Test
@@ -39,7 +39,7 @@ class AiChatServiceTest {
 
         assertThatThrownBy(() -> service.generateText("test"))
                 .isInstanceOf(AiModelNotEnabledException.class)
-                .hasMessageContaining("No AI chat model");
+                .hasMessageContaining("未配置 AI 对话模型");
     }
 
     @Test
@@ -53,7 +53,7 @@ class AiChatServiceTest {
         assertThat(service.isModelEnabled()).isFalse();
         assertThatThrownBy(() -> service.generateText("test"))
                 .isInstanceOf(AiModelNotEnabledException.class)
-                .hasMessageContaining("No AI chat model");
+                .hasMessageContaining("未配置 AI 对话模型");
     }
 
     @Test

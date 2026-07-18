@@ -18,5 +18,12 @@ public record KnowledgeAnswerResponse(
         String answer,
         List<KnowledgeCitation> citations,
         List<String> warnings,
-        String modelName) {
+        String modelName,
+        KnowledgeAnswerMetrics metrics) {
+
+    public KnowledgeAnswerResponse(KnowledgeAnswerStatus status, String answer,
+                                   List<KnowledgeCitation> citations, List<String> warnings,
+                                   String modelName) {
+        this(status, answer, citations, warnings, modelName, null);
+    }
 }

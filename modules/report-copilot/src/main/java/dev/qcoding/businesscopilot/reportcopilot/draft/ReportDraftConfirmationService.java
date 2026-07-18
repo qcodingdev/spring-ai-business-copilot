@@ -1,58 +1,90 @@
 package dev.qcoding.businesscopilot.reportcopilot.draft;
 
+import dev.qcoding.businesscopilot.commonsecurity.ConfirmationTokenService;
+import dev.qcoding.businesscopilot.commonsecurity.CurrentActor;
+import dev.qcoding.businesscopilot.commonsecurity.CurrentActorProvider;
+import dev.qcoding.businesscopilot.commonsecurity.ObjectAccessPolicy;
+import dev.qcoding.businesscopilot.commonsecurity.ObjectAction;
 import dev.qcoding.businesscopilot.commonweb.api.BusinessException;
 import dev.qcoding.businesscopilot.commonweb.api.ErrorCode;
 import dev.qcoding.businesscopilot.reportcopilot.audit.ReportAuditLog;
 import dev.qcoding.businesscopilot.reportcopilot.audit.ReportAuditService;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 
-/** Confirms a DRAFTED report or cancels a DRAFTED/NEEDS_REVIEW report using a server-generated token. */
+/** Owner-authorized digest-backed confirmation and cancellation for report drafts. */
 public class ReportDraftConfirmationService {
 
     private final ReportDraftRepository draftRepository;
     private final ReportAuditService auditService;
+    private final CurrentActorProvider actorProvider;
+    private final ObjectAccessPolicy accessPolicy;
+    private final ConfirmationTokenService tokenService;
 
-    public ReportDraftConfirmationService(ReportDraftRepository draftRepository, ReportAuditService auditService) {
+    public ReportDraftConfirmationService(ReportDraftRepository draftRepository,
+                                          ReportAuditService auditService,
+                                          CurrentActorProvider actorProvider,
+                                          ObjectAccessPolicy accessPolicy,
+                                          ConfirmationTokenService tokenService) {
         this.draftRepository = draftRepository;
         this.auditService = auditService;
+        this.actorProvider = actorProvider;
+        this.accessPolicy = accessPolicy;
+        this.tokenService = tokenService;
     }
 
+    @Transactional
     public ConfirmationResult confirm(Long draftId, String token) {
-        ReportDraft draft = resolveDraft(draftId, token);
+        ReportDraft draft = resolveDraft(draftId, token, ObjectAction.CONFIRM);
         if (draft.status() != ReportDraftStatus.DRAFTED) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Only DRAFTED reports can be confirmed.");
+            throw new BusinessException(ErrorCode.STATE_CONFLICT);
         }
-        if (!draftRepository.transitionStatus(draftId, ReportDraftStatus.DRAFTED, ReportDraftStatus.CONFIRMED)) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "The report draft cannot be confirmed in its current state.");
+        CurrentActor actor = actorProvider.currentActor();
+        if (!draftRepository.transitionStatus(
+                draftId, ReportDraftStatus.DRAFTED, ReportDraftStatus.CONFIRMED, actor.actorId())) {
+            throw new BusinessException(ErrorCode.STATE_CONFLICT);
         }
-        auditService.record(new ReportAuditLog(draft.requestId(), draftId, "CONFIRMED", 0, null, null,
-                ReportDraftStatus.CONFIRMED.name(), null));
+        auditService.recordRequired(new ReportAuditLog(
+                draft.requestId(), draftId, "CONFIRMED", 0, null, null,
+                ReportDraftStatus.CONFIRMED.name(), null, null,
+                draft.ownerActorId(), actor.actorId(), null, null,
+                null, null, null, null, null, null, null, null));
         return new ConfirmationResult(draftId, ReportDraftStatus.CONFIRMED);
     }
 
+    @Transactional
     public ConfirmationResult cancel(Long draftId, String token) {
-        ReportDraft draft = resolveDraft(draftId, token);
-        if (draft.status() != ReportDraftStatus.DRAFTED && draft.status() != ReportDraftStatus.NEEDS_REVIEW) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR,
-                    "Only DRAFTED or NEEDS_REVIEW reports can be canceled.");
+        ReportDraft draft = resolveDraft(draftId, token, ObjectAction.CANCEL);
+        if (draft.status() != ReportDraftStatus.DRAFTED
+                && draft.status() != ReportDraftStatus.NEEDS_REVIEW) {
+            throw new BusinessException(ErrorCode.STATE_CONFLICT);
         }
-        if (!draftRepository.transitionStatus(draftId, draft.status(), ReportDraftStatus.CANCELED)) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "The report draft cannot be canceled in its current state.");
+        CurrentActor actor = actorProvider.currentActor();
+        if (!draftRepository.transitionStatus(
+                draftId, draft.status(), ReportDraftStatus.CANCELED, actor.actorId())) {
+            throw new BusinessException(ErrorCode.STATE_CONFLICT);
         }
-        auditService.record(new ReportAuditLog(draft.requestId(), draftId, "CANCELED", 0, null, null,
-                ReportDraftStatus.CANCELED.name(), null));
+        auditService.recordRequired(new ReportAuditLog(
+                draft.requestId(), draftId, "CANCELED", 0, null, null,
+                ReportDraftStatus.CANCELED.name(), null, null,
+                draft.ownerActorId(), actor.actorId(), null, null,
+                null, null, null, null, null, null, null, null));
         return new ConfirmationResult(draftId, ReportDraftStatus.CANCELED);
     }
 
-    private ReportDraft resolveDraft(Long draftId, String token) {
-        ReportDraft draft = draftRepository.findByConfirmationToken(token).orElseThrow(() ->
-                new BusinessException(ErrorCode.NOT_FOUND, "Invalid confirmation token or processed report draft."));
-        if (!draft.id().equals(draftId)) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Confirmation token does not match the report draft.");
+    private ReportDraft resolveDraft(Long draftId, String rawToken, ObjectAction action) {
+        ReportDraft draft = draftRepository.findById(draftId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+        CurrentActor actor = actorProvider.currentActor();
+        if (!accessPolicy.allowed(actor, action, draft.ownerActorId(), null, false)) {
+            throw new BusinessException(ErrorCode.NOT_FOUND);
+        }
+        if (!tokenService.matches(rawToken, draft.tokenDigest())) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR);
         }
         if (draft.expiresAt() == null || !draft.expiresAt().isAfter(Instant.now())) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "The confirmation token has expired.");
+            throw new BusinessException(ErrorCode.STATE_CONFLICT);
         }
         return draft;
     }

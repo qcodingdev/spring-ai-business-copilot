@@ -42,7 +42,19 @@ class GlobalExceptionHandlerTest {
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().success()).isFalse();
         assertThat(response.getBody().errorCode()).isEqualTo(ErrorCode.NOT_FOUND.code());
-        assertThat(response.getBody().message()).isEqualTo("audit log not found");
+        assertThat(response.getBody().message()).isEqualTo(ErrorCode.NOT_FOUND.defaultMessage());
+        assertThat(response.getBody().message()).doesNotContain("audit log");
+    }
+
+    @Test
+    void businessErrorCanExposePurposeBuiltClientMessage() {
+        BusinessException ex = new BusinessException(ErrorCode.BUSINESS_ERROR, "Report title is required");
+
+        ResponseEntity<ApiResponse<Void>> response = handler.handleBusiness(ex, request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().message()).isEqualTo("Report title is required");
     }
 
     @Test

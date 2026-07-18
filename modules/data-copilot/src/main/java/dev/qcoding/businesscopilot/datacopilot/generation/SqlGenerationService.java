@@ -1,7 +1,10 @@
 package dev.qcoding.businesscopilot.datacopilot.generation;
 
 import dev.qcoding.businesscopilot.aicore.AiChatService;
+import dev.qcoding.businesscopilot.aicore.AiInvocationMetadata;
+import dev.qcoding.businesscopilot.aicore.AiInvocationResult;
 import dev.qcoding.businesscopilot.aicore.PromptTemplateService;
+import dev.qcoding.businesscopilot.aicore.RenderedPrompt;
 import dev.qcoding.businesscopilot.audit.AuditEvent;
 import dev.qcoding.businesscopilot.audit.AuditEventType;
 import dev.qcoding.businesscopilot.audit.AuditService;
@@ -17,8 +20,8 @@ import dev.qcoding.businesscopilot.guardrails.SqlGuardrailService;
 import dev.qcoding.businesscopilot.guardrails.SqlValidationResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -29,7 +32,6 @@ import java.util.UUID;
  * <p>SQL 生成服务。流程：校验问题 → 获取 schema → 渲染 prompt → 调用模型 → 解析 JSON → guardrails 校验。
  * 调用失败要写审计。输出 DTO 不包含内部异常堆栈。</p>
  */
-@Service
 public class SqlGenerationService {
 
     private static final Logger log = LoggerFactory.getLogger(SqlGenerationService.class);
@@ -72,23 +74,33 @@ public class SqlGenerationService {
         SchemaContext schemaContext = schemaContextService.buildContext();
 
         // 2. Render prompt
-        String prompt = promptTemplateService.render("data-copilot/sql-generation.st", Map.of(
+        RenderedPrompt prompt = promptTemplateService.renderWithMetadata(
+                "data-copilot/sql-generation.st", "v2", Map.of(
                 "schemaContext", schemaContext.textSummary(),
                 "question", request.question(),
+                "currentDate", LocalDate.now().toString(),
                 "maxRows", String.valueOf(guardrailsProperties.defaultMaxRows())));
 
         // 3. Call LLM and parse structured output
         GeneratedSqlCandidate candidate;
+        AiInvocationMetadata invocationMetadata;
         try {
-            candidate = aiChatService.generateJson(prompt, GeneratedSqlCandidate.class);
+            AiInvocationResult<GeneratedSqlCandidate> invocation =
+                    aiChatService.generateJsonWithMetadata(prompt.content(), GeneratedSqlCandidate.class);
+            candidate = invocation.content();
+            invocationMetadata = invocation.metadata();
         } catch (BusinessException ex) {
             // 模型调用失败，写审计
             long latencyMs = System.currentTimeMillis() - startMs;
             auditService.record(new AuditEvent(
                     requestId, AuditEventType.QUERY_FAILURE,
-                    request.question(), null, null,
+                    null, null, null,
                     AuditStatus.MODEL_FAILED, null, false,
-                    null, ex.getMessage(), aiChatService.modelName(), latencyMs));
+                    null, null, aiChatService.modelName(), latencyMs,
+                    null, null, aiChatService.providerName(), null,
+                    prompt.metadata().name(), prompt.metadata().version(),
+                    prompt.metadata().contentHash(), SqlGuardrailService.POLICY_VERSION,
+                    null, null, null, null));
             throw ex;
         }
 
@@ -103,12 +115,20 @@ public class SqlGenerationService {
 
         // Guardrails 失败时也记录审计
         if (!executable) {
-            String violationDetails = String.join("; ", validationSummary.violations());
+            String violationCodes = validationResult.violations().stream()
+                    .map(dev.qcoding.businesscopilot.guardrails.SqlViolation::code)
+                    .distinct().collect(java.util.stream.Collectors.joining(","));
             auditService.record(new AuditEvent(
                     requestId, AuditEventType.QUERY_FAILURE,
-                    request.question(), candidate.sql(), null,
-                    AuditStatus.VALIDATION_FAILED, violationDetails, false,
-                    null, null, aiChatService.modelName(), latencyMs));
+                    null, null, null,
+                    AuditStatus.VALIDATION_FAILED, null, false,
+                    null, null, invocationMetadata.modelName(), latencyMs,
+                    null, null, invocationMetadata.providerName(),
+                    invocationMetadata.providerRequestId(),
+                    prompt.metadata().name(), prompt.metadata().version(),
+                    prompt.metadata().contentHash(), SqlGuardrailService.POLICY_VERSION,
+                    violationCodes, invocationMetadata.inputTokens(),
+                    invocationMetadata.outputTokens(), invocationMetadata.finishReason()));
 
             // guardrails 失败：不生成 token，前端无法据此执行
             return SqlGenerationResponse.notExecutable(
@@ -120,7 +140,19 @@ public class SqlGenerationService {
 
         // guardrails 通过：保存候选并生成 confirmationToken（携带审计上下文，便于执行阶段写审计）
         SqlCandidate execCandidate = confirmationService.createExecutableCandidate(
-                candidate.sql(), requestId, request.question(), aiChatService.modelName());
+                candidate.sql(), requestId, invocationMetadata.modelName(),
+                prompt.metadata(), invocationMetadata, SqlGuardrailService.POLICY_VERSION);
+        auditService.record(new AuditEvent(
+                requestId, AuditEventType.QUERY_CANDIDATE_CREATED,
+                null, null, null,
+                AuditStatus.CANDIDATE_PENDING, null, false,
+                null, null, invocationMetadata.modelName(), latencyMs,
+                execCandidate.ownerActorId(), null, invocationMetadata.providerName(),
+                invocationMetadata.providerRequestId(),
+                prompt.metadata().name(), prompt.metadata().version(),
+                prompt.metadata().contentHash(), SqlGuardrailService.POLICY_VERSION,
+                null, invocationMetadata.inputTokens(), invocationMetadata.outputTokens(),
+                invocationMetadata.finishReason()));
         return new SqlGenerationResponse(
                 requestId,
                 request.question(),

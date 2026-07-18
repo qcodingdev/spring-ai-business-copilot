@@ -16,7 +16,7 @@ public interface SupportTicketRepository {
 
     List<SupportTicket> findRecent(int limit);
 
-    boolean updateStatus(Long id, String status);
+    boolean transitionStatus(Long id, SupportTicketStatus expectedStatus, SupportTicketStatus targetStatus);
 
     long count();
 }

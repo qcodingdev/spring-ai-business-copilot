@@ -2,7 +2,6 @@ package dev.qcoding.businesscopilot.datacopilot.schema;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -13,7 +12,6 @@ import java.util.List;
  * <p>Schema 上下文服务。读取白名单表结构，合并字段描述和敏感标记，
  * 输出适合 prompt 注入的文本摘要。审计表不会进入上下文。</p>
  */
-@Service
 public class SchemaContextService {
 
     private static final Logger log = LoggerFactory.getLogger(SchemaContextService.class);
@@ -34,13 +32,17 @@ public class SchemaContextService {
             try {
                 List<ColumnSchema> columns = repository.findColumns(tableName);
                 String description = properties.columnDescriptions().get(tableName.toLowerCase());
+                if ((description == null || description.isBlank()) && tableName.contains(".")) {
+                    description = properties.columnDescriptions().get(
+                            tableName.substring(tableName.indexOf('.') + 1).toLowerCase());
+                }
                 if (description == null || description.isBlank()) {
                     description = "Table " + tableName;
                 }
                 tables.add(new TableSchema(tableName, columns, description));
             } catch (RuntimeException ex) {
                 // 单表读取失败不应阻断整个 schema 构建过程
-                log.warn("Failed to read schema for table {}: {}", tableName, ex.getMessage());
+                log.warn("读取表结构失败：table={}，原因={}", tableName, ex.getMessage());
             }
         }
         String summary = renderTextSummary(tables);
@@ -81,6 +83,11 @@ public class SchemaContextService {
     /** Whether a given table name is whitelisted. */
     public boolean isQueryable(String tableName) {
         if (tableName == null) return false;
-        return properties.queryableTables().contains(tableName.toLowerCase());
+        try {
+            return properties.queryableTables()
+                    .contains(QualifiedTableName.parse(tableName).canonicalName());
+        } catch (IllegalArgumentException ex) {
+            return false;
+        }
     }
 }

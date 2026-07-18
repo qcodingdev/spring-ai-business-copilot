@@ -19,7 +19,7 @@ Respond with a single JSON object and nothing else. The JSON MUST have exactly t
   "status": "ANSWERED",
   "answer": "Your answer text here, in the same language as the question.",
   "citations": [
-    {"chunkId": 1, "excerpt": "Brief supporting quote or rationale"}
+    {"chunkId": 1}
   ],
   "warnings": []
 }
@@ -27,7 +27,7 @@ Respond with a single JSON object and nothing else. The JSON MUST have exactly t
 
 - `status`: MUST be either "ANSWERED" or "NO_EVIDENCE".
 - `answer`: the answer text. Use the language of the user's question (Chinese question → Chinese answer). Must be empty string "" when status is NO_EVIDENCE.
-- `citations`: list of citations backing the answer. For ANSWERED status, this MUST contain at least one entry. For NO_EVIDENCE status, this MUST be an empty list. Each entry must reference a chunkId from the provided context.
+- `citations`: list of citations backing the answer. For ANSWERED status, this MUST contain at least one entry. For NO_EVIDENCE status, this MUST be an empty list. Each entry contains only a chunkId from the provided context. The server will attach the authoritative source excerpt.
 - `warnings`: list of caveats or quality concerns. Empty list if none. Required even when empty.
 
 # Context chunks

@@ -16,9 +16,8 @@ public interface ReportDraftRepository {
     ReportDraft saveNeedsReview(ReportRequestPreparationService.ReportRequestPreview preview,
                                 List<String> reviewReasons, String modelName, Duration draftTtl);
 
-    Optional<ReportDraft> findByConfirmationToken(String confirmationToken);
-
     Optional<ReportDraft> findById(Long draftId);
 
-    boolean transitionStatus(Long draftId, ReportDraftStatus expected, ReportDraftStatus target);
+    boolean transitionStatus(Long draftId, ReportDraftStatus expected, ReportDraftStatus target,
+                             String actionActorId);
 }

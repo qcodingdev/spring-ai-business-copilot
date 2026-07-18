@@ -17,7 +17,7 @@ public class GuardrailsAutoConfiguration {
     @Bean
     @ConfigurationProperties(prefix = "business-copilot.guardrails")
     public GuardrailsProperties guardrailsProperties() {
-        return new GuardrailsProperties(null, null, null, 0, true);
+        return new GuardrailsProperties(null, null, null, 0, true, null);
     }
 
     @Bean
@@ -43,8 +43,13 @@ public class GuardrailsAutoConfiguration {
                 new ReadOnlyStatementValidator(),
                 new ForbiddenKeywordValidator(),
                 new SchemaWhitelistValidator(properties.queryableTables()),
+                new ColumnWhitelistValidator(properties.queryableColumns()),
+                new FunctionAllowlistValidator(properties.allowedAggregateFunctions()),
                 new SensitiveFieldValidator(sensitiveFieldPolicy),
-                new LimitRequiredValidator(properties.defaultMaxRows(), properties.requireLimit())
+                new LimitRequiredValidator(
+                        properties.defaultMaxRows(),
+                        properties.requireLimit(),
+                        properties.allowedAggregateFunctions())
         );
         return new SqlGuardrailService(validators);
     }

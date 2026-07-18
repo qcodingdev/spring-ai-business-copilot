@@ -1,6 +1,7 @@
 package dev.qcoding.businesscopilot.supportcopilot.draft;
 
 import java.util.Optional;
+import java.time.Instant;
 
 /**
  * Repository for {@link SupportReplyDraft} persistence.
@@ -13,11 +14,11 @@ public interface SupportReplyDraftRepository {
 
     Optional<SupportReplyDraft> findById(Long id);
 
-    Optional<SupportReplyDraft> findByConfirmationToken(String token);
+    boolean transitionStatus(Long id, SupportDraftStatus expectedStatus, SupportDraftStatus targetStatus,
+                             SupportDecisionOutcome outcome, String actionActorId, Instant now);
 
-    boolean markConfirmed(Long id);
-
-    boolean markCanceled(Long id);
+    boolean edit(Long id, SupportDraftStatus expectedStatus, String editedText,
+                 String editReason, String editedByActorId, Instant now);
 
     long count();
 }

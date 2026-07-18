@@ -22,12 +22,16 @@ public class SupportAuditService {
 
     public void record(SupportAuditLog auditLog) {
         try {
-            repository.save(auditLog);
-            log.debug("Support audit recorded: eventType={}, requestId={}",
-                    auditLog.eventType(), auditLog.requestId());
+            recordRequired(auditLog);
         } catch (Exception e) {
-            log.error("Failed to record support audit log", e);
+            log.error("客服模块审计日志写入失败", e);
         }
+    }
+
+    public void recordRequired(SupportAuditLog auditLog) {
+        repository.save(auditLog);
+        log.debug("客服模块审计日志已写入：eventType={}，requestId={}",
+                auditLog.eventType(), auditLog.requestId());
     }
 
     public List<SupportAuditLog> findRecent(int page, int size) {

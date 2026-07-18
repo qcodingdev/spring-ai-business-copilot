@@ -33,9 +33,9 @@ class ResumeAssessmentGuardrailTest {
         var result = guardrail.validate(content, criteria, evidence);
 
         assertThat(result.valid()).isFalse();
-        assertThat(result.reasons()).anyMatch(reason -> reason.contains("decision"));
-        assertThat(result.reasons()).anyMatch(reason -> reason.contains("protected"));
-        assertThat(result.reasons()).anyMatch(reason -> reason.contains("outside"));
+        assertThat(result.reasons()).anyMatch(reason -> reason.contains("自动录用决定"));
+        assertThat(result.reasons()).anyMatch(reason -> reason.contains("受保护属性"));
+        assertThat(result.reasons()).anyMatch(reason -> reason.contains("当前简历之外"));
     }
 
     @Test
@@ -48,7 +48,32 @@ class ResumeAssessmentGuardrailTest {
         var result = guardrail.validate(content, criteria, evidence);
 
         assertThat(result.valid()).isFalse();
-        assertThat(result.reasons()).anyMatch(reason -> reason.contains("more than once"));
-        assertThat(result.reasons()).anyMatch(reason -> reason.contains("incomplete"));
+        assertThat(result.reasons()).anyMatch(reason -> reason.contains("重复出现"));
+        assertThat(result.reasons()).anyMatch(reason -> reason.contains("内容不完整"));
+    }
+
+    @Test
+    void rejectsProxyHiringLanguageAnywhereInAssessment() {
+        var content = new ResumeModels.AssessmentContent("候选人毕业年份较新，适合年轻团队", List.of(
+                new ResumeModels.CriterionAssessment("criterion-1", ResumeModels.MatchStatus.SUPPORTED,
+                        "简历明确提及 Java 服务", List.of("evidence-1"))), List.of(), List.of(), List.of());
+
+        assertThat(guardrail.validate(content, criteria, evidence).valid()).isFalse();
+    }
+
+    @Test
+    void rejectsEnglishNarrativeUntilAnExplicitLanguageOptionExists() {
+        var content = new ResumeModels.AssessmentContent("Backend engineer with Java experience", List.of(
+                new ResumeModels.CriterionAssessment("criterion-1", ResumeModels.MatchStatus.SUPPORTED,
+                        "The resume mentions Java services", List.of("evidence-1"))),
+                List.of("Cloud experience is not described"),
+                List.of(new ResumeModels.InterviewQuestion("criterion-1",
+                        "Please describe the Java service architecture", List.of("evidence-1"))),
+                List.of("This assessment only uses resume evidence"));
+
+        var result = guardrail.validate(content, criteria, evidence);
+
+        assertThat(result.valid()).isFalse();
+        assertThat(result.reasons()).anyMatch(reason -> reason.contains("简体中文"));
     }
 }

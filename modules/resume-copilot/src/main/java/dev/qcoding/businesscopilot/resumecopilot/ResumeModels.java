@@ -2,7 +2,7 @@ package dev.qcoding.businesscopilot.resumecopilot;
 
 import java.util.List;
 
-/** Compact public contracts for the single-JD, single-resume workflow. */
+/** 单份 JD、单份简历流程的精简公开契约。 */
 public final class ResumeModels {
     private ResumeModels() {
     }

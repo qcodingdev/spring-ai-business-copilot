@@ -77,7 +77,7 @@ class KnowledgeEmbeddingServiceTest {
         assertThatThrownBy(() -> service.indexChunks(1L, List.of(chunk)))
                 .isInstanceOf(BusinessException.class)
                 .matches(ex -> ((BusinessException) ex).errorCode() == ErrorCode.EMBEDDING_DIMENSION_MISMATCH)
-                .hasMessageContaining("Embedding dimension mismatch");
+                .hasMessageContaining("向量维度不匹配");
     }
 
     @Test

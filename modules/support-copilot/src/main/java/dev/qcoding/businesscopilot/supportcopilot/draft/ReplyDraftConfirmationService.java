@@ -1,115 +1,163 @@
 package dev.qcoding.businesscopilot.supportcopilot.draft;
 
+import dev.qcoding.businesscopilot.commonsecurity.ConfirmationTokenService;
+import dev.qcoding.businesscopilot.commonsecurity.CurrentActor;
+import dev.qcoding.businesscopilot.commonsecurity.CurrentActorProvider;
+import dev.qcoding.businesscopilot.commonsecurity.ObjectAccessPolicy;
+import dev.qcoding.businesscopilot.commonsecurity.ObjectAction;
 import dev.qcoding.businesscopilot.commonweb.api.BusinessException;
 import dev.qcoding.businesscopilot.commonweb.api.ErrorCode;
+import dev.qcoding.businesscopilot.guardrails.SensitiveTextMasker;
 import dev.qcoding.businesscopilot.supportcopilot.audit.SupportAuditLog;
 import dev.qcoding.businesscopilot.supportcopilot.audit.SupportAuditService;
 import dev.qcoding.businesscopilot.supportcopilot.ticket.SupportTicketRepository;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import dev.qcoding.businesscopilot.supportcopilot.ticket.SupportTicketStatus;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.Optional;
 import java.util.UUID;
 
-/**
- * Service for confirming or canceling reply drafts via server-side tokens.
- *
- * <p>回复草稿确认服务。确认接口只接收 confirmationToken，不接收草稿正文。
- * MVP 中确认只记录审计事件，不对外发送消息。</p>
- */
+/** Object-authorized, digest-backed support draft confirmation lifecycle. */
 public class ReplyDraftConfirmationService {
-
-    private static final Logger log = LoggerFactory.getLogger(ReplyDraftConfirmationService.class);
 
     private final SupportReplyDraftRepository draftRepository;
     private final SupportTicketRepository ticketRepository;
     private final SupportAuditService auditService;
+    private final CurrentActorProvider actorProvider;
+    private final ObjectAccessPolicy accessPolicy;
+    private final ConfirmationTokenService tokenService;
+    private final SensitiveTextMasker sensitiveTextMasker;
 
     public ReplyDraftConfirmationService(SupportReplyDraftRepository draftRepository,
                                          SupportTicketRepository ticketRepository,
-                                         SupportAuditService auditService) {
+                                         SupportAuditService auditService,
+                                         CurrentActorProvider actorProvider,
+                                         ObjectAccessPolicy accessPolicy,
+                                         ConfirmationTokenService tokenService,
+                                         SensitiveTextMasker sensitiveTextMasker) {
         this.draftRepository = draftRepository;
         this.ticketRepository = ticketRepository;
         this.auditService = auditService;
+        this.actorProvider = actorProvider;
+        this.accessPolicy = accessPolicy;
+        this.tokenService = tokenService;
+        this.sensitiveTextMasker = sensitiveTextMasker;
     }
 
-    /**
-     * Confirm a reply draft using the server-generated confirmation token.
-     *
-     * <p>只接收 token，不信任客户端传递的草稿正文。token 过期后不可确认。</p>
-     *
-     * @param draftId          the draft ID (from URL path)
-     * @param confirmationToken the server-generated token
-     * @return confirmation result
-     */
+    @Transactional
     public ConfirmationResult confirm(Long draftId, String confirmationToken) {
-        Optional<SupportReplyDraft> draftOpt = draftRepository.findByConfirmationToken(confirmationToken);
-
-        if (draftOpt.isEmpty()) {
-            throw new BusinessException(ErrorCode.NOT_FOUND,
-                    "无效的确认 token 或草稿已被处理");
+        SupportReplyDraft draft = requireDraft(draftId);
+        CurrentActor actor = actorProvider.currentActor();
+        ObjectAction action = draft.reviewQueue() ? ObjectAction.REVIEW : ObjectAction.CONFIRM;
+        requireAccess(draft, actor, action);
+        validateTokenAndState(draft, confirmationToken);
+        if (!draftRepository.transitionStatus(
+                draftId, draft.status(), SupportDraftStatus.CONFIRMED,
+                draft.editedDraftText() == null
+                        ? SupportDecisionOutcome.ACCEPTED : SupportDecisionOutcome.EDITED_ACCEPTED,
+                actor.actorId(), Instant.now())) {
+            throw new BusinessException(ErrorCode.STATE_CONFLICT);
         }
-
-        SupportReplyDraft draft = draftOpt.get();
-
-        if (!draft.id().equals(draftId)) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR,
-                    "确认 token 与草稿 ID 不匹配");
+        SupportTicketStatus expectedTicketStatus = draft.reviewQueue()
+                ? SupportTicketStatus.NEEDS_HUMAN : SupportTicketStatus.DRAFTED;
+        if (!ticketRepository.transitionStatus(
+                draft.ticketId(), expectedTicketStatus, SupportTicketStatus.CONFIRMED)) {
+            throw new BusinessException(ErrorCode.STATE_CONFLICT);
         }
-
-        if (draft.expiresAt() != null && draft.expiresAt().isBefore(Instant.now())) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR,
-                    "确认 token 已过期（过期时间: " + draft.expiresAt() + "）");
-        }
-
-        draftRepository.markConfirmed(draftId);
-        ticketRepository.updateStatus(draft.ticketId(), "CONFIRMED");
-        auditService.record(new SupportAuditLog(
+        auditService.recordRequired(new SupportAuditLog(
                 null, UUID.randomUUID().toString(), draft.ticketId(), "CONFIRMED",
-                null, null, draft.riskLevel(), draft.citedChunkIds(), null,
-                null, null, null));
-        log.info("Reply draft {} confirmed via token for ticket {}", draftId, draft.ticketId());
-
-        return new ConfirmationResult(draftId, draft.ticketId(), "CONFIRMED");
+                null, null, draft.riskLevel().name(), draft.citedChunkIds(), null,
+                null, null, draft.ownerActorId(), actor.actorId(),
+                null, null, null, null, null, null,
+                null, null, null, null, null, null));
+        return new ConfirmationResult(draftId, draft.ticketId(), SupportDraftStatus.CONFIRMED);
     }
 
-    /**
-     * Cancel a reply draft using the server-generated confirmation token.
-     *
-     * @param draftId          the draft ID (from URL path)
-     * @param confirmationToken the server-generated token
-     * @return cancellation result
-     */
+    @Transactional
     public ConfirmationResult cancel(Long draftId, String confirmationToken) {
-        Optional<SupportReplyDraft> draftOpt = draftRepository.findByConfirmationToken(confirmationToken);
-
-        if (draftOpt.isEmpty()) {
-            throw new BusinessException(ErrorCode.NOT_FOUND,
-                    "无效的确认 token 或草稿已被处理");
+        SupportReplyDraft draft = requireDraft(draftId);
+        CurrentActor actor = actorProvider.currentActor();
+        requireAccess(draft, actor, ObjectAction.CANCEL);
+        validateTokenAndState(draft, confirmationToken);
+        if (!draftRepository.transitionStatus(
+                draftId, draft.status(), SupportDraftStatus.CANCELED,
+                SupportDecisionOutcome.REJECTED, actor.actorId(), Instant.now())) {
+            throw new BusinessException(ErrorCode.STATE_CONFLICT);
         }
-
-        SupportReplyDraft draft = draftOpt.get();
-
-        if (!draft.id().equals(draftId)) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR,
-                    "确认 token 与草稿 ID 不匹配");
+        SupportTicketStatus expectedTicketStatus = draft.reviewQueue()
+                ? SupportTicketStatus.NEEDS_HUMAN : SupportTicketStatus.DRAFTED;
+        if (!ticketRepository.transitionStatus(
+                draft.ticketId(), expectedTicketStatus, SupportTicketStatus.CANCELED)) {
+            throw new BusinessException(ErrorCode.STATE_CONFLICT);
         }
-
-        draftRepository.markCanceled(draftId);
-        ticketRepository.updateStatus(draft.ticketId(), "CANCELED");
-        auditService.record(new SupportAuditLog(
+        auditService.recordRequired(new SupportAuditLog(
                 null, UUID.randomUUID().toString(), draft.ticketId(), "CANCELED",
-                null, null, draft.riskLevel(), draft.citedChunkIds(), null,
-                null, null, null));
-        log.info("Reply draft {} canceled via token for ticket {}", draftId, draft.ticketId());
-
-        return new ConfirmationResult(draftId, draft.ticketId(), "CANCELED");
+                null, null, draft.riskLevel().name(), draft.citedChunkIds(), null,
+                null, null, draft.ownerActorId(), actor.actorId(),
+                null, null, null, null, null, null,
+                null, null, null, null, null, null));
+        return new ConfirmationResult(draftId, draft.ticketId(), SupportDraftStatus.CANCELED);
     }
 
-    /**
-     * Result of a draft confirmation or cancellation.
-     */
-    public record ConfirmationResult(Long draftId, Long ticketId, String status) {
+    @Transactional
+    public EditResult edit(Long draftId, String editedText, String reason) {
+        SupportReplyDraft draft = requireDraft(draftId);
+        CurrentActor actor = actorProvider.currentActor();
+        ObjectAction action = draft.reviewQueue() ? ObjectAction.REVIEW : ObjectAction.CONFIRM;
+        requireAccess(draft, actor, action);
+        if (draft.status() != SupportDraftStatus.DRAFTED
+                && draft.status() != SupportDraftStatus.NEEDS_REVIEW) {
+            throw new BusinessException(ErrorCode.STATE_CONFLICT);
+        }
+        if (draft.expiresAt() == null || !draft.expiresAt().isAfter(Instant.now())) {
+            throw new BusinessException(ErrorCode.STATE_CONFLICT);
+        }
+        String masked = sensitiveTextMasker.mask(editedText == null ? "" : editedText.trim());
+        if (masked.isBlank()) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "人工修订后的草稿不能为空。");
+        }
+        Instant now = Instant.now();
+        if (!draftRepository.edit(draftId, draft.status(), masked,
+                sensitiveTextMasker.mask(reason), actor.actorId(), now)) {
+            throw new BusinessException(ErrorCode.STATE_CONFLICT);
+        }
+        auditService.recordRequired(new SupportAuditLog(
+                null, UUID.randomUUID().toString(), draft.ticketId(), "DRAFT_EDITED",
+                null, null, draft.riskLevel().name(), draft.citedChunkIds(), null,
+                null, null, draft.ownerActorId(), actor.actorId(),
+                null, null, null, null, null, "support-human-feedback-v2",
+                null, null, null, null, null, null));
+        return new EditResult(draftId, masked, draft.status());
+    }
+
+    private SupportReplyDraft requireDraft(Long draftId) {
+        return draftRepository.findById(draftId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    private void requireAccess(SupportReplyDraft draft, CurrentActor actor, ObjectAction action) {
+        if (!accessPolicy.allowed(actor, action, draft.ownerActorId(),
+                draft.reviewerActorId(), draft.reviewQueue())) {
+            throw new BusinessException(ErrorCode.NOT_FOUND);
+        }
+    }
+
+    private void validateTokenAndState(SupportReplyDraft draft, String rawToken) {
+        if (draft.status() != SupportDraftStatus.DRAFTED
+                && draft.status() != SupportDraftStatus.NEEDS_REVIEW) {
+            throw new BusinessException(ErrorCode.STATE_CONFLICT);
+        }
+        if (!tokenService.matches(rawToken, draft.tokenDigest())) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR);
+        }
+        if (draft.expiresAt() == null || !draft.expiresAt().isAfter(Instant.now())) {
+            throw new BusinessException(ErrorCode.STATE_CONFLICT);
+        }
+    }
+
+    public record ConfirmationResult(Long draftId, Long ticketId, SupportDraftStatus status) {
+    }
+
+    public record EditResult(Long draftId, String editedText, SupportDraftStatus status) {
     }
 }

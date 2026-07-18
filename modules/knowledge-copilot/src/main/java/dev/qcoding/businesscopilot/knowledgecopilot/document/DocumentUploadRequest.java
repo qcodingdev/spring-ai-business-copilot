@@ -12,7 +12,12 @@ import jakarta.validation.constraints.NotBlank;
  * @param category optional business category tag
  */
 public record DocumentUploadRequest(
-        @NotBlank String fileName,
-        @NotBlank String content,
-        String category) {
+        @NotBlank(message = "文件名不能为空。") String fileName,
+        @NotBlank(message = "文档内容不能为空。") String content,
+        String category,
+        java.util.UUID logicalDocumentId) {
+
+    public DocumentUploadRequest(String fileName, String content, String category) {
+        this(fileName, content, category, null);
+    }
 }

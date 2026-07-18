@@ -35,7 +35,7 @@ public class KnowledgeCopilotSupportKnowledgeRetriever implements SupportKnowled
     public SupportKnowledgeResult retrieve(SupportKnowledgeQuery query) {
         // 组合检索查询：使用客户消息、摘要和分类构建检索文本
         String searchQuery = buildSearchQuery(query);
-        log.debug("Retrieving knowledge evidence for ticket: category={}, queryLength={}",
+        log.debug("开始检索工单知识依据：category={}，queryLength={}",
                 query.category(), searchQuery.length());
 
         List<RetrievedKnowledgeChunk> chunks = retrievalService.retrieve(searchQuery);
@@ -58,10 +58,13 @@ public class KnowledgeCopilotSupportKnowledgeRetriever implements SupportKnowled
                             ? chunk.content().substring(0, 200) + "..."
                             : chunk.content(),
                     String.valueOf(chunk.id()),
-                    rc.similarity()));
+                    rc.similarity(),
+                    doc.map(d -> d.logicalDocumentId()).orElse(null),
+                    doc.map(d -> d.versionNo()).orElse(1),
+                    doc.map(d -> d.contentHash()).orElse(null)));
         }
 
-        log.info("Retrieved {} knowledge evidence items for ticket category={}",
+        log.info("工单知识依据检索完成：数量={}，category={}",
                 evidence.size(), query.category());
 
         return SupportKnowledgeResult.of(evidence);
@@ -76,9 +79,9 @@ public class KnowledgeCopilotSupportKnowledgeRetriever implements SupportKnowled
             if (!sb.isEmpty()) sb.append(" ");
             sb.append(query.customerMessage());
         }
-        if (query.category() != null && !query.category().isBlank()) {
+        if (query.category() != null) {
             if (!sb.isEmpty()) sb.append(" ");
-            sb.append(query.category());
+            sb.append(query.category().name());
         }
         return sb.toString();
     }

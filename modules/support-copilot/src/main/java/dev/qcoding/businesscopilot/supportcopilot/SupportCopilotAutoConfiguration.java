@@ -1,6 +1,10 @@
 package dev.qcoding.businesscopilot.supportcopilot;
 
 import dev.qcoding.businesscopilot.guardrails.SensitiveTextMasker;
+import dev.qcoding.businesscopilot.commonsecurity.ConfirmationTokenService;
+import dev.qcoding.businesscopilot.commonsecurity.CurrentActorProvider;
+import dev.qcoding.businesscopilot.commonsecurity.ObjectAccessPolicy;
+import dev.qcoding.businesscopilot.knowledgecopilot.KnowledgeCopilotAutoConfiguration;
 import dev.qcoding.businesscopilot.knowledgecopilot.document.KnowledgeDocumentRepository;
 import dev.qcoding.businesscopilot.knowledgecopilot.retrieval.KnowledgeRetrievalService;
 import dev.qcoding.businesscopilot.supportcopilot.audit.JdbcSupportAuditRepository;
@@ -18,9 +22,11 @@ import dev.qcoding.businesscopilot.supportcopilot.knowledge.SupportKnowledgeRetr
 import dev.qcoding.businesscopilot.supportcopilot.ticket.JdbcSupportTicketRepository;
 import dev.qcoding.businesscopilot.supportcopilot.ticket.SupportTicketRepository;
 import dev.qcoding.businesscopilot.supportcopilot.ticket.TicketAnalysisService;
+import dev.qcoding.businesscopilot.supportcopilot.web.SupportCopilotController;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.AutoConfigureAfter;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -29,10 +35,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
 /**
  * Auto-configuration for the Support Copilot module.
  *
- * <p>Support Copilot 自动装配。注册模块配置、工单/草稿/审计仓库、脱敏器等组件。
- * 业务 service（分类、检索、草稿生成等）将在后续步骤补充。</p>
+ * <p>Support Copilot 自动装配。注册工单分类、知识检索、草稿生成、人审状态流转、
+ * 控制器和审计服务，不依赖宿主应用扫描项目根包。</p>
  */
 @AutoConfiguration
+@AutoConfigureAfter(KnowledgeCopilotAutoConfiguration.class)
 @ConditionalOnProperty(prefix = "business-copilot.support-copilot", name = "enabled", havingValue = "true")
 public class SupportCopilotAutoConfiguration {
 
@@ -96,17 +103,26 @@ public class SupportCopilotAutoConfiguration {
             SensitiveTextMasker sensitiveTextMasker,
             ReplyDraftGuardrailService guardrailService,
             SupportReplyDraftRepository draftRepository,
-            SupportCopilotProperties properties) {
+            SupportCopilotProperties properties,
+            CurrentActorProvider actorProvider,
+            ConfirmationTokenService tokenService) {
         return new ReplyDraftService(aiChatService, promptTemplateService,
-                sensitiveTextMasker, guardrailService, draftRepository, properties);
+                sensitiveTextMasker, guardrailService, draftRepository, properties,
+                actorProvider, tokenService);
     }
 
     @Bean
     public ReplyDraftConfirmationService replyDraftConfirmationService(
             SupportReplyDraftRepository draftRepository,
             SupportTicketRepository ticketRepository,
-            SupportAuditService auditService) {
-        return new ReplyDraftConfirmationService(draftRepository, ticketRepository, auditService);
+            SupportAuditService auditService,
+            CurrentActorProvider actorProvider,
+            ObjectAccessPolicy accessPolicy,
+            ConfirmationTokenService tokenService,
+            SensitiveTextMasker sensitiveTextMasker) {
+        return new ReplyDraftConfirmationService(
+                draftRepository, ticketRepository, auditService,
+                actorProvider, accessPolicy, tokenService, sensitiveTextMasker);
     }
 
     // ── Knowledge retriever ──────────────────────────────────────────────
@@ -135,8 +151,19 @@ public class SupportCopilotAutoConfiguration {
             SupportTicketRepository ticketRepository,
             SupportAuditService auditService,
             SensitiveTextMasker sensitiveTextMasker,
-            SupportCopilotProperties properties) {
+            SupportCopilotProperties properties,
+            CurrentActorProvider actorProvider) {
         return new TicketAnalysisService(classificationService, knowledgeRetriever,
-                draftService, ticketRepository, auditService, sensitiveTextMasker, properties);
+                draftService, ticketRepository, auditService, sensitiveTextMasker,
+                properties, actorProvider);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(SupportCopilotController.class)
+    public SupportCopilotController supportCopilotController(
+            TicketAnalysisService analysisService,
+            ReplyDraftConfirmationService confirmationService,
+            SupportAuditService auditService) {
+        return new SupportCopilotController(analysisService, confirmationService, auditService);
     }
 }

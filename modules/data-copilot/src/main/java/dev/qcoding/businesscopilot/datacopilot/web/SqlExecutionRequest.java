@@ -12,7 +12,7 @@ import jakarta.validation.constraints.Size;
  * @param confirmationToken secure confirmation token returned by the generation endpoint
  */
 public record SqlExecutionRequest(
-        @NotBlank(message = "confirmationToken 不能为空")
-        @Size(max = 128, message = "confirmationToken 长度不能超过128字符")
+        @NotBlank(message = "确认凭证不能为空。")
+        @Size(max = 128, message = "确认凭证不能超过 128 个字符。")
         String confirmationToken) {
 }

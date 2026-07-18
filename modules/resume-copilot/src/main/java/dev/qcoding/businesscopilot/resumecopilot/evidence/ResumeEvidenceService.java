@@ -6,7 +6,7 @@ import dev.qcoding.businesscopilot.resumecopilot.ResumeModels;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Deterministically creates traceable evidence chunks from already-sanitized resume text. */
+/** 从已脱敏简历文本中确定性地生成可追溯证据分片。 */
 public class ResumeEvidenceService {
     private final ResumeCopilotProperties properties;
 

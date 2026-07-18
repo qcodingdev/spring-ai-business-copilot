@@ -69,7 +69,7 @@ class ResultExplanationServiceTest {
 
         // 空结果不调用模型，直接返回友好解释
         assertThat(response.degraded()).isFalse();
-        assertThat(response.explanation()).contains("No matching data");
+        assertThat(response.explanation()).contains("未查询到匹配数据");
     }
 
     @Test
@@ -104,7 +104,7 @@ class ResultExplanationServiceTest {
         ResultExplanationResponse response = service.explain(request);
 
         assertThat(response.degraded()).isTrue();
-        assertThat(response.explanation()).contains("1 rows");
+        assertThat(response.explanation()).contains("返回 1 行结果");
     }
 
     @Test
@@ -140,9 +140,9 @@ class ResultExplanationServiceTest {
 
         String summary = summarizer.summarize(result);
 
-        assertThat(summary).contains("Columns: [id, name]");
-        assertThat(summary).contains("Row count: 2");
-        assertThat(summary).contains("Sample rows");
+        assertThat(summary).contains("列：[id, name]");
+        assertThat(summary).contains("总行数：2");
+        assertThat(summary).contains("结果样例");
         assertThat(summary).contains("Alice");
         assertThat(summary).contains("Bob");
     }
@@ -157,8 +157,8 @@ class ResultExplanationServiceTest {
 
         String summary = summarizer.summarize(result);
 
-        assertThat(summary).contains("truncated");
-        assertThat(summary).contains("Row count: 100");
+        assertThat(summary).contains("已截断");
+        assertThat(summary).contains("总行数：100");
     }
 
     @Test
@@ -170,9 +170,9 @@ class ResultExplanationServiceTest {
 
         String summary = summarizer.summarize(result);
 
-        assertThat(summary).contains("Columns: [id]");
-        assertThat(summary).contains("Row count: 0");
-        assertThat(summary).contains("empty");
+        assertThat(summary).contains("列：[id]");
+        assertThat(summary).contains("总行数：0");
+        assertThat(summary).contains("空");
     }
 
     @Test
@@ -187,8 +187,8 @@ class ResultExplanationServiceTest {
 
         String summary = summarizer.summarize(result);
 
-        // Only 5 sample rows
-        assertThat(summary).contains("5 of 10");
+        // 只展示 5 行样例
+        assertThat(summary).contains("共 10 行，展示 5 行");
         assertThat(summary).contains("id=1");
         assertThat(summary).contains("id=5");
         assertThat(summary).doesNotContain("id=6");

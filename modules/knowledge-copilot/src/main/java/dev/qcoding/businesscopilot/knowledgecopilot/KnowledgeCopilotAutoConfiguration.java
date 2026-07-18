@@ -1,6 +1,8 @@
 package dev.qcoding.businesscopilot.knowledgecopilot;
 
 import dev.qcoding.businesscopilot.guardrails.SensitiveTextMasker;
+import dev.qcoding.businesscopilot.commonsecurity.CurrentActorProvider;
+import dev.qcoding.businesscopilot.documentprocessing.DocumentTextExtractor;
 import dev.qcoding.businesscopilot.knowledgecopilot.answer.KnowledgeAnswerService;
 import dev.qcoding.businesscopilot.knowledgecopilot.answer.KnowledgeQuestionService;
 import dev.qcoding.businesscopilot.knowledgecopilot.audit.JdbcKnowledgeQaAuditRepository;
@@ -20,27 +22,30 @@ import dev.qcoding.businesscopilot.knowledgecopilot.embedding.JdbcKnowledgeEmbed
 import dev.qcoding.businesscopilot.knowledgecopilot.embedding.KnowledgeEmbeddingRepository;
 import dev.qcoding.businesscopilot.knowledgecopilot.embedding.KnowledgeEmbeddingService;
 import dev.qcoding.businesscopilot.knowledgecopilot.retrieval.KnowledgeRetrievalService;
+import dev.qcoding.businesscopilot.knowledgecopilot.indexing.JdbcKnowledgeIndexJobRepository;
+import dev.qcoding.businesscopilot.knowledgecopilot.indexing.KnowledgeIndexJobRepository;
+import dev.qcoding.businesscopilot.knowledgecopilot.indexing.KnowledgeIndexingService;
+import dev.qcoding.businesscopilot.knowledgecopilot.web.KnowledgeCopilotController;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * Auto-configuration for the Knowledge Copilot module.
  *
- * <p>Knowledge Copilot 自动装配。注册模块配置、文档/分片仓库、解析器、分片服务、
- * 上传服务等组件。embedding 调用和问答 API 将在后续步骤补充。</p>
+ * <p>Knowledge Copilot 自动装配。注册文档解析、分片、异步索引、混合检索、
+ * 问答、控制器和审计服务，不依赖宿主应用扫描项目根包。</p>
  */
 @AutoConfiguration
 @ConditionalOnProperty(prefix = "business-copilot.knowledge", name = "enabled", havingValue = "true")
+@EnableScheduling
+@EnableConfigurationProperties(KnowledgeCopilotProperties.class)
 public class KnowledgeCopilotAutoConfiguration {
-
-    @Bean
-    @ConfigurationProperties(prefix = "business-copilot.knowledge")
-    public KnowledgeCopilotProperties knowledgeCopilotProperties() {
-        return new KnowledgeCopilotProperties(false, 0, 0, 0d, null, 0);
-    }
 
     @Bean
     @ConfigurationProperties(prefix = "business-copilot.knowledge.chunking")
@@ -87,6 +92,21 @@ public class KnowledgeCopilotAutoConfiguration {
     }
 
     @Bean
+    public KnowledgeIndexJobRepository knowledgeIndexJobRepository(JdbcTemplate jdbcTemplate) {
+        return new JdbcKnowledgeIndexJobRepository(jdbcTemplate);
+    }
+
+    @Bean
+    public KnowledgeIndexingService knowledgeIndexingService(
+            KnowledgeIndexJobRepository jobRepository,
+            KnowledgeDocumentRepository documentRepository,
+            KnowledgeChunkRepository chunkRepository,
+            KnowledgeEmbeddingService embeddingService) {
+        return new KnowledgeIndexingService(
+                jobRepository, documentRepository, chunkRepository, embeddingService);
+    }
+
+    @Bean
     public DocumentUploadService documentUploadService(
             KnowledgeDocumentRepository documentRepository,
             KnowledgeChunkRepository chunkRepository,
@@ -95,11 +115,14 @@ public class KnowledgeCopilotAutoConfiguration {
             ChunkingService chunkingService,
             SensitiveTextMasker sensitiveTextMasker,
             KnowledgeCopilotProperties properties,
-            KnowledgeEmbeddingService knowledgeEmbeddingService) {
+            DocumentTextExtractor documentTextExtractor,
+            KnowledgeIndexingService indexingService,
+            KnowledgeIndexJobRepository indexJobRepository,
+            CurrentActorProvider actorProvider) {
         return new DocumentUploadService(
                 documentRepository, chunkRepository, markdownParser,
                 textParser, chunkingService, sensitiveTextMasker, properties,
-                knowledgeEmbeddingService);
+                documentTextExtractor, indexingService, indexJobRepository, actorProvider);
     }
 
     // ── Retrieval & Q&A beans ──────────────────────────────────
@@ -131,8 +154,9 @@ public class KnowledgeCopilotAutoConfiguration {
     @Bean
     public KnowledgeQuestionService knowledgeQuestionService(
             KnowledgeRetrievalService retrievalService,
-            KnowledgeAnswerService answerService) {
-        return new KnowledgeQuestionService(retrievalService, answerService);
+            KnowledgeAnswerService answerService,
+            SensitiveTextMasker sensitiveTextMasker) {
+        return new KnowledgeQuestionService(retrievalService, answerService, sensitiveTextMasker);
     }
 
     // ── Audit beans ────────────────────────────────────────────
@@ -145,5 +169,16 @@ public class KnowledgeCopilotAutoConfiguration {
     @Bean
     public KnowledgeAuditService knowledgeAuditService(KnowledgeQaAuditRepository repository) {
         return new KnowledgeAuditService(repository);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(KnowledgeCopilotController.class)
+    public KnowledgeCopilotController knowledgeCopilotController(
+            DocumentUploadService documentUploadService,
+            KnowledgeDocumentRepository documentRepository,
+            KnowledgeQuestionService questionService,
+            KnowledgeAuditService auditService) {
+        return new KnowledgeCopilotController(
+                documentUploadService, documentRepository, questionService, auditService);
     }
 }

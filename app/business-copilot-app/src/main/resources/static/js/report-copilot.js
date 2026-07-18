@@ -1,4 +1,4 @@
-/** Report Copilot workbench: source preview, report review, confirmation, and Markdown export. */
+/** 报表助手工作台：来源预览、报告复核、确认和文件导出。 */
 (function () {
   'use strict';
 
@@ -20,9 +20,12 @@
     taskSource: $('rc-task-source'),
     noteTitle: $('rc-note-title'),
     noteContent: $('rc-note-content'),
+    importFile: $('rc-import-file'),
     sampleSourcesBtn: $('rc-sample-sources-btn'),
     previewBtn: $('rc-preview-btn'),
     generateBtn: $('rc-generate-btn'),
+    importPreviewBtn: $('rc-import-preview-btn'),
+    generateFileBtn: $('rc-generate-file-btn'),
     sourcesPanel: $('rc-sources-panel'),
     sourcesCount: $('rc-sources-count'),
     sourcesList: $('rc-sources-list'),
@@ -47,16 +50,20 @@
     exportActions: $('rc-export-actions'),
     confirmBtn: $('rc-confirm-btn'),
     cancelBtn: $('rc-cancel-btn'),
-    exportBtn: $('rc-export-btn')
+    exportBtn: $('rc-export-btn'),
+    exportHtmlBtn: $('rc-export-html-btn')
   };
 
   initializePeriod();
   els.sampleSourcesBtn.addEventListener('click', loadSampleSources);
   els.previewBtn.addEventListener('click', previewSources);
   els.generateBtn.addEventListener('click', generateReport);
+  els.importPreviewBtn.addEventListener('click', previewImportedSources);
+  els.generateFileBtn.addEventListener('click', generateReportFromFile);
   els.confirmBtn.addEventListener('click', () => updateDraft('confirm'));
   els.cancelBtn.addEventListener('click', () => updateDraft('cancel'));
-  els.exportBtn.addEventListener('click', exportMarkdown);
+  els.exportBtn.addEventListener('click', () => exportReport('markdown', 'md'));
+  els.exportHtmlBtn.addEventListener('click', () => exportReport('html', 'html'));
 
   function initializePeriod() {
     const today = new Date();
@@ -94,6 +101,35 @@
     await submitRequest('/reports/generate', '正在生成报告草稿…', (data) => {
       draft = data;
       renderDraft(data);
+      scrollResultIntoView(els.draftPanel);
+    });
+  }
+
+  async function previewImportedSources() {
+    const file = selectedImportFile();
+    if (!file) return;
+    const form = new FormData();
+    form.append('file', file);
+    await submitForm('/source-imports/preview', form, '正在校验导入来源…', (data) => {
+      renderSources(data.sources || []);
+    });
+  }
+
+  async function generateReportFromFile() {
+    const file = selectedImportFile();
+    if (!file || !reportScope()) return;
+    const form = new FormData();
+    form.append('file', file);
+    const query = new URLSearchParams({
+      reportType: els.reportType.value,
+      periodStart: els.periodStart.value,
+      periodEnd: els.periodEnd.value,
+      title: els.title.value.trim()
+    });
+    await submitForm(`/reports/generate-from-file?${query}`, form, '正在从文件生成报告草稿…', (data) => {
+      draft = data;
+      renderDraft(data);
+      scrollResultIntoView(els.draftPanel);
     });
   }
 
@@ -121,16 +157,23 @@
     }
   }
 
+  async function submitForm(path, form, loadingText, onSuccess) {
+    setLoading(loadingText);
+    clearError();
+    try {
+      const response = await fetch(API_BASE + path, { method: 'POST', body: form });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok || !body.success) throw new Error(formatError(body));
+      onSuccess(body.data);
+    } catch (error) {
+      showError(error.message || '文件处理失败，请稍后重试');
+    } finally {
+      setLoading(null);
+    }
+  }
+
   function buildRequest() {
-    const required = [els.periodStart.value, els.periodEnd.value, els.title.value.trim()];
-    if (required.some((value) => !value)) {
-      showError('请填写报告范围和标题');
-      return null;
-    }
-    if (els.periodStart.value > els.periodEnd.value) {
-      showError('报告开始日期不能晚于结束日期');
-      return null;
-    }
+    if (!reportScope()) return null;
 
     const metrics = collectMetric();
     const tasks = collectTask();
@@ -145,6 +188,32 @@
       tasks,
       meetingNotes
     };
+  }
+
+  function reportScope() {
+    const required = [els.periodStart.value, els.periodEnd.value, els.title.value.trim()];
+    if (required.some((value) => !value)) {
+      showError('请填写报告范围和标题');
+      return false;
+    }
+    if (els.periodStart.value > els.periodEnd.value) {
+      showError('报告开始日期不能晚于结束日期');
+      return false;
+    }
+    return true;
+  }
+
+  function selectedImportFile() {
+    const file = els.importFile.files && els.importFile.files[0];
+    if (!file) {
+      showError('请选择 CSV 或 JSON 来源文件');
+      return null;
+    }
+    if (file.size > 1024 * 1024) {
+      showError('报告来源文件不能超过 1 MB');
+      return null;
+    }
+    return file;
   }
 
   function collectMetric() {
@@ -192,7 +261,7 @@
       title.textContent = source.title || '未命名来源';
       const type = document.createElement('span');
       type.className = 'badge badge-info';
-      type.textContent = source.sourceType || 'SOURCE';
+      type.textContent = sourceTypeLabel(source.sourceType);
       const content = document.createElement('p');
       content.className = 'snippet';
       content.textContent = source.sanitizedContent || '';
@@ -209,7 +278,7 @@
   function renderDraft(data) {
     els.draftPanel.hidden = false;
     const status = data.status || 'UNKNOWN';
-    els.statusBadge.textContent = status;
+    els.statusBadge.textContent = reportStatusLabel(status);
     els.statusBadge.className = 'badge ' + statusBadgeClass(status);
     els.draftMeta.textContent = [data.title, formatPeriod(data.period), data.modelName].filter(Boolean).join(' · ');
 
@@ -270,11 +339,11 @@
     }
   }
 
-  async function exportMarkdown() {
+  async function exportReport(format, extension) {
     if (!draft || !draft.draftId || draft.status !== 'CONFIRMED') return;
-    setLoading('正在准备 Markdown…');
+    setLoading(`正在准备 ${format.toUpperCase()}…`);
     try {
-      const response = await fetch(`${API_BASE}/reports/${draft.draftId}/markdown`);
+      const response = await fetch(`${API_BASE}/reports/${draft.draftId}/${format}`);
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
         throw new Error(formatError(body));
@@ -283,11 +352,11 @@
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `report-${draft.draftId}.md`;
+      link.download = `report-${draft.draftId}.${extension}`;
       link.click();
       URL.revokeObjectURL(url);
     } catch (error) {
-      showError(error.message || 'Markdown 导出失败');
+      showError(error.message || `${format.toUpperCase()} 导出失败`);
     } finally {
       setLoading(null);
     }
@@ -326,7 +395,33 @@
   }
 
   function formatDate(date) {
-    return date.toISOString().slice(0, 10);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  function reportStatusLabel(status) {
+    const labels = {
+      DRAFTED: '待确认',
+      NEEDS_REVIEW: '需人工复核',
+      CONFIRMED: '已确认',
+      REJECTED: '已拒绝',
+      FAILED: '失败',
+      CANCELED: '已取消',
+      UNKNOWN: '未知'
+    };
+    return labels[status] || status || '未知';
+  }
+
+  function sourceTypeLabel(sourceType) {
+    const labels = {
+      METRIC: '指标',
+      TASK: '任务',
+      MEETING_NOTE: '会议纪要',
+      TEXT: '文本'
+    };
+    return labels[sourceType] || sourceType || '来源';
   }
 
   function formatError(payload) {

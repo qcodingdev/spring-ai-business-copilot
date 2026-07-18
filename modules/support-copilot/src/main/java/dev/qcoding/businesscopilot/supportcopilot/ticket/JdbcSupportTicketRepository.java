@@ -7,7 +7,6 @@ import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
 
 import java.sql.PreparedStatement;
-import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
@@ -29,10 +28,11 @@ public class JdbcSupportTicketRepository implements SupportTicketRepository {
             rs.getString("external_id"),
             rs.getString("customer_message"),
             rs.getString("channel"),
-            rs.getString("category"),
-            rs.getString("sentiment"),
-            rs.getString("urgency"),
-            rs.getString("status"),
+            dev.qcoding.businesscopilot.supportcopilot.classification.TicketCategory.valueOf(rs.getString("category")),
+            dev.qcoding.businesscopilot.supportcopilot.classification.TicketSentiment.valueOf(rs.getString("sentiment")),
+            dev.qcoding.businesscopilot.supportcopilot.classification.TicketUrgency.valueOf(rs.getString("urgency")),
+            SupportTicketStatus.valueOf(rs.getString("status")),
+            rs.getString("owner_actor_id"),
             rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toInstant() : null,
             rs.getTimestamp("updated_at") != null ? rs.getTimestamp("updated_at").toInstant() : null);
 
@@ -44,30 +44,31 @@ public class JdbcSupportTicketRepository implements SupportTicketRepository {
     @Override
     public SupportTicket save(SupportTicket ticket) {
         String maskedMessage = sensitiveTextMasker.mask(ticket.customerMessage());
-        String sql = "INSERT INTO support_tickets (external_id, customer_message, channel, category, sentiment, urgency, status, created_at, updated_at) "
-                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        String sql = "INSERT INTO support_tickets (external_id, customer_message, channel, category, sentiment, urgency, status, owner_actor_id, created_at, updated_at) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         KeyHolder keyHolder = new GeneratedKeyHolder();
         Instant now = Instant.now();
 
         jdbcTemplate.update(connection -> {
-            PreparedStatement ps = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
+            PreparedStatement ps = connection.prepareStatement(sql, new String[]{"id"});
             ps.setString(1, ticket.externalId());
             ps.setString(2, maskedMessage);
             ps.setString(3, ticket.channel());
-            ps.setString(4, ticket.category());
-            ps.setString(5, ticket.sentiment());
-            ps.setString(6, ticket.urgency());
-            ps.setString(7, ticket.status());
-            ps.setTimestamp(8, Timestamp.from(now));
+            ps.setString(4, ticket.category().name());
+            ps.setString(5, ticket.sentiment().name());
+            ps.setString(6, ticket.urgency().name());
+            ps.setString(7, ticket.status().name());
+            ps.setString(8, ticket.ownerActorId());
             ps.setTimestamp(9, Timestamp.from(now));
+            ps.setTimestamp(10, Timestamp.from(now));
             return ps;
         }, keyHolder);
 
         long id = keyHolder.getKey().longValue();
         return new SupportTicket(id, ticket.externalId(), maskedMessage,
                 ticket.channel(), ticket.category(), ticket.sentiment(),
-                ticket.urgency(), ticket.status(), now, now);
+                ticket.urgency(), ticket.status(), ticket.ownerActorId(), now, now);
     }
 
     @Override
@@ -85,11 +86,11 @@ public class JdbcSupportTicketRepository implements SupportTicketRepository {
     }
 
     @Override
-    public boolean updateStatus(Long id, String status) {
+    public boolean transitionStatus(Long id, SupportTicketStatus expectedStatus, SupportTicketStatus targetStatus) {
         int rows = jdbcTemplate.update(
-                "UPDATE support_tickets SET status = ?, updated_at = ? WHERE id = ?",
-                status, Timestamp.from(Instant.now()), id);
-        return rows > 0;
+                "UPDATE support_tickets SET status = ?, updated_at = ? WHERE id = ? AND status = ?",
+                targetStatus.name(), Timestamp.from(Instant.now()), id, expectedStatus.name());
+        return rows == 1;
     }
 
     @Override

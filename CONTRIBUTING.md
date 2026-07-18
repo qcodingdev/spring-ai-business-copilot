@@ -20,3 +20,5 @@ Thank you for helping improve Spring AI Business Copilot.
 ## Pull requests
 
 Describe the business problem, behavioral change, guardrails, tests, and remaining limitations. Keep unrelated refactors out of the same change.
+
+Release branches, version promotion, main-branch merging, tagging, and publication follow [RELEASING.md](RELEASING.md). Passing tests does not by itself authorize a formal release.

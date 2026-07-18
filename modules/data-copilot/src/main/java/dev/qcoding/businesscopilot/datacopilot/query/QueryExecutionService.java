@@ -16,6 +16,7 @@ import dev.qcoding.businesscopilot.datacopilot.explanation.ResultExplanationServ
 import dev.qcoding.businesscopilot.datacopilot.web.SqlExecutionResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Orchestrates the full SQL execution lifecycle with centralized audit.
@@ -61,13 +62,14 @@ public class QueryExecutionService {
      * @param confirmationToken the confirmation token
      * @return execution response containing the result table and AI explanation
      */
+    @Transactional
     public SqlExecutionResponse execute(String candidateId, String confirmationToken) {
         long startMs = System.currentTimeMillis();
 
         // 1. 确认候选（校验 candidateId + token + 过期 + executable）
         SqlCandidate candidate;
         try {
-            candidate = confirmationService.confirmAndRetrieve(candidateId, confirmationToken);
+            candidate = confirmationService.confirmAndConsume(candidateId, confirmationToken);
         } catch (SqlCandidateNotExecutableException | SqlCandidateExpiredException ex) {
             // 确认失败：用户未有效确认，记录 QUERY_NOT_CONFIRMED 审计
             recordNotConfirmedAudit(candidateId, ex.getMessage(), startMs);
@@ -75,9 +77,26 @@ public class QueryExecutionService {
         }
 
         String requestId = candidate.requestId();
-        String userQuestion = candidate.userQuestion();
+        // The candidate table intentionally does not persist the full user question.
+        String userQuestion = "已确认的只读业务查询";
         String sql = candidate.sql();
         String modelName = candidate.modelName();
+        var aiMetadata = candidate.aiMetadata();
+
+        // External execution is forbidden unless a durable intent exists in the platform database.
+        auditService.recordRequired(new AuditEvent(
+                requestId, AuditEventType.QUERY_EXECUTION_INTENT,
+                null, sql, sql, AuditStatus.EXECUTION_PENDING,
+                null, true, null, null, modelName,
+                System.currentTimeMillis() - startMs,
+                candidate.ownerActorId(), candidate.actionActorId(),
+                aiMetadata != null ? aiMetadata.providerName() : null,
+                aiMetadata != null ? aiMetadata.providerRequestId() : null,
+                candidate.promptName(), candidate.promptVersion(), candidate.promptHash(),
+                candidate.policyVersion(), null,
+                aiMetadata != null ? aiMetadata.inputTokens() : null,
+                aiMetadata != null ? aiMetadata.outputTokens() : null,
+                aiMetadata != null ? aiMetadata.finishReason() : null));
 
         // 2. 执行 SQL（内部包含二次 guardrails 校验、超时、max rows、脱敏）
         QueryResultTable table;
@@ -91,8 +110,16 @@ public class QueryExecutionService {
                 auditService.record(new AuditEvent(
                         requestId, AuditEventType.QUERY_FAILURE,
                         userQuestion, sql, null,
-                        AuditStatus.VALIDATION_FAILED, ex.getMessage(), true,
-                        null, null, modelName, latencyMs));
+                        AuditStatus.VALIDATION_FAILED, null, true,
+                        null, null, modelName, latencyMs,
+                        candidate.ownerActorId(), candidate.actionActorId(),
+                        aiMetadata != null ? aiMetadata.providerName() : null,
+                        aiMetadata != null ? aiMetadata.providerRequestId() : null,
+                        candidate.promptName(), candidate.promptVersion(), candidate.promptHash(),
+                        candidate.policyVersion(), "SECONDARY_GUARDRAIL_REJECTED",
+                        aiMetadata != null ? aiMetadata.inputTokens() : null,
+                        aiMetadata != null ? aiMetadata.outputTokens() : null,
+                        aiMetadata != null ? aiMetadata.finishReason() : null));
             } else if (ex.errorCode() == ErrorCode.QUERY_EXECUTION_ERROR) {
                 // 执行失败
                 long latencyMs = System.currentTimeMillis() - startMs;
@@ -100,7 +127,15 @@ public class QueryExecutionService {
                         requestId, AuditEventType.QUERY_FAILURE,
                         userQuestion, sql, sql,
                         AuditStatus.EXECUTION_FAILED, null, true,
-                        null, ex.getMessage(), modelName, latencyMs));
+                        null, null, modelName, latencyMs,
+                        candidate.ownerActorId(), candidate.actionActorId(),
+                        aiMetadata != null ? aiMetadata.providerName() : null,
+                        aiMetadata != null ? aiMetadata.providerRequestId() : null,
+                        candidate.promptName(), candidate.promptVersion(), candidate.promptHash(),
+                        candidate.policyVersion(), null,
+                        aiMetadata != null ? aiMetadata.inputTokens() : null,
+                        aiMetadata != null ? aiMetadata.outputTokens() : null,
+                        aiMetadata != null ? aiMetadata.finishReason() : null));
             }
             throw ex;
         }
@@ -111,7 +146,15 @@ public class QueryExecutionService {
                 requestId, AuditEventType.QUERY_SUCCESS,
                 userQuestion, sql, sql,
                 AuditStatus.EXECUTED, null, true,
-                table.rowCount(), null, modelName, latencyMs));
+                table.rowCount(), null, modelName, latencyMs,
+                candidate.ownerActorId(), candidate.actionActorId(),
+                aiMetadata != null ? aiMetadata.providerName() : null,
+                aiMetadata != null ? aiMetadata.providerRequestId() : null,
+                candidate.promptName(), candidate.promptVersion(), candidate.promptHash(),
+                candidate.policyVersion(), null,
+                aiMetadata != null ? aiMetadata.inputTokens() : null,
+                aiMetadata != null ? aiMetadata.outputTokens() : null,
+                aiMetadata != null ? aiMetadata.finishReason() : null));
 
         // 4. 生成 AI 解释（失败时降级，不影响表格展示）
         ResultExplanationResponse explanation = explanationService.explain(
@@ -128,6 +171,6 @@ public class QueryExecutionService {
                 null, null, null,
                 AuditStatus.NOT_CONFIRMED, null, false,
                 null, errorMessage, null, latencyMs));
-        log.info("Recorded NOT_CONFIRMED audit for candidate: {}", candidateId);
+        log.info("已记录未确认查询审计：candidateId={}", candidateId);
     }
 }

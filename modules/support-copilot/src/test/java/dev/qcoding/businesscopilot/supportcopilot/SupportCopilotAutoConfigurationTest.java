@@ -1,9 +1,16 @@
 package dev.qcoding.businesscopilot.supportcopilot;
 
 import dev.qcoding.businesscopilot.aicore.AiChatService;
+import dev.qcoding.businesscopilot.aicore.AiEmbeddingService;
 import dev.qcoding.businesscopilot.aicore.PromptTemplateService;
 import dev.qcoding.businesscopilot.guardrails.SensitiveTextMasker;
+import dev.qcoding.businesscopilot.commonsecurity.CommonSecurityAutoConfiguration;
+import dev.qcoding.businesscopilot.commonsecurity.CurrentActor;
+import dev.qcoding.businesscopilot.commonsecurity.CurrentActorProvider;
+import dev.qcoding.businesscopilot.documentprocessing.DocumentTextExtractor;
+import dev.qcoding.businesscopilot.knowledgecopilot.KnowledgeCopilotAutoConfiguration;
 import dev.qcoding.businesscopilot.supportcopilot.knowledge.FallbackSupportKnowledgeRetriever;
+import dev.qcoding.businesscopilot.supportcopilot.knowledge.KnowledgeCopilotSupportKnowledgeRetriever;
 import dev.qcoding.businesscopilot.supportcopilot.knowledge.SupportKnowledgeRetriever;
 import dev.qcoding.businesscopilot.supportcopilot.ticket.TicketAnalysisService;
 import org.junit.jupiter.api.Test;
@@ -17,7 +24,9 @@ import static org.mockito.Mockito.mock;
 class SupportCopilotAutoConfigurationTest {
 
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
-            .withConfiguration(AutoConfigurations.of(SupportCopilotAutoConfiguration.class))
+            .withConfiguration(AutoConfigurations.of(
+                    CommonSecurityAutoConfiguration.class,
+                    SupportCopilotAutoConfiguration.class))
             .withBean(JdbcTemplate.class, () -> mock(JdbcTemplate.class))
             .withBean(AiChatService.class, () -> mock(AiChatService.class))
             .withBean(PromptTemplateService.class, PromptTemplateService::new)
@@ -39,6 +48,31 @@ class SupportCopilotAutoConfigurationTest {
                     assertThat(context).hasSingleBean(SupportKnowledgeRetriever.class);
                     assertThat(context.getBean(SupportKnowledgeRetriever.class))
                             .isInstanceOf(FallbackSupportKnowledgeRetriever.class);
+                });
+    }
+
+    @Test
+    void usesKnowledgeCopilotRetrieverWhenBothModulesAreEnabled() {
+        new ApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(
+                        CommonSecurityAutoConfiguration.class,
+                        SupportCopilotAutoConfiguration.class,
+                        KnowledgeCopilotAutoConfiguration.class))
+                .withPropertyValues(
+                        "business-copilot.knowledge.enabled=true",
+                        "business-copilot.support-copilot.enabled=true")
+                .withBean(JdbcTemplate.class, () -> mock(JdbcTemplate.class))
+                .withBean(AiChatService.class, () -> mock(AiChatService.class))
+                .withBean(AiEmbeddingService.class, () -> mock(AiEmbeddingService.class))
+                .withBean(PromptTemplateService.class, PromptTemplateService::new)
+                .withBean(SensitiveTextMasker.class, SensitiveTextMasker::new)
+                .withBean(DocumentTextExtractor.class, () -> mock(DocumentTextExtractor.class))
+                .withBean(CurrentActorProvider.class,
+                        () -> () -> new CurrentActor("test", java.util.Set.of()))
+                .run(context -> {
+                    assertThat(context).hasSingleBean(SupportKnowledgeRetriever.class);
+                    assertThat(context.getBean(SupportKnowledgeRetriever.class))
+                            .isInstanceOf(KnowledgeCopilotSupportKnowledgeRetriever.class);
                 });
     }
 }

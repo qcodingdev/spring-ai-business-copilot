@@ -2,30 +2,42 @@ package dev.qcoding.businesscopilot.supportcopilot.draft;
 
 import java.time.Instant;
 
-/**
- * Immutable domain model for a support reply draft.
- *
- * <p>客服回复草稿。draftText 入库前必须脱敏。confirmationToken 由服务端生成，
- * expiresAt 控制确认有效期。</p>
- *
- * @param id                primary key
- * @param ticketId          associated ticket ID
- * @param draftText         masked reply draft text
- * @param citedChunkIds     comma-separated knowledge chunk IDs used as evidence
- * @param riskLevel         LOW, MEDIUM, HIGH
- * @param riskReasons       comma-separated risk reasons
- * @param confirmationToken server-generated confirmation token
- * @param expiresAt         token expiry timestamp
- * @param createdAt         creation timestamp
- */
+/** Persisted support draft plus a creation-only raw confirmation token. */
 public record SupportReplyDraft(
         Long id,
         Long ticketId,
         String draftText,
         String citedChunkIds,
-        String riskLevel,
+        String knowledgeVersionIds,
+        dev.qcoding.businesscopilot.supportcopilot.classification.SupportRiskLevel riskLevel,
         String riskReasons,
         String confirmationToken,
+        String tokenDigest,
+        SupportDraftStatus status,
+        String ownerActorId,
+        boolean reviewQueue,
+        String reviewerActorId,
+        String actionActorId,
+        String originalDraftText,
+        String editedDraftText,
+        String editReason,
+        String editedByActorId,
+        Instant editedAt,
+        SupportDecisionOutcome decisionOutcome,
         Instant expiresAt,
-        Instant createdAt) {
+        Instant createdAt,
+        Instant updatedAt) {
+
+    public SupportReplyDraft(
+            Long id, Long ticketId, String draftText, String citedChunkIds,
+            dev.qcoding.businesscopilot.supportcopilot.classification.SupportRiskLevel riskLevel,
+            String riskReasons, String confirmationToken, String tokenDigest,
+            SupportDraftStatus status, String ownerActorId, boolean reviewQueue,
+            String reviewerActorId, String actionActorId, Instant expiresAt,
+            Instant createdAt, Instant updatedAt) {
+        this(id, ticketId, draftText, citedChunkIds, null, riskLevel, riskReasons,
+                confirmationToken, tokenDigest, status, ownerActorId, reviewQueue,
+                reviewerActorId, actionActorId, draftText, null, null, null, null,
+                SupportDecisionOutcome.PENDING, expiresAt, createdAt, updatedAt);
+    }
 }

@@ -27,5 +27,20 @@ public record KnowledgeDocument(
         String contentHash,
         boolean enabled,
         Instant createdAt,
-        Instant updatedAt) {
+        Instant updatedAt,
+        java.util.UUID logicalDocumentId,
+        int versionNo,
+        boolean currentVersion,
+        String indexStatus,
+        String indexErrorCategory,
+        String contentType,
+        String ownerActorId) {
+
+    public KnowledgeDocument(Long id, String title, String sourceType, String sourceName,
+                             String category, String contentHash, boolean enabled,
+                             Instant createdAt, Instant updatedAt) {
+        this(id, title, sourceType, sourceName, category, contentHash, enabled,
+                createdAt, updatedAt, null, 1, true,
+                enabled ? "INDEXED" : "PENDING", null, "text/plain", null);
+    }
 }

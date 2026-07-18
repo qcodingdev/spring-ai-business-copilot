@@ -5,7 +5,12 @@ target/
 *.iml
 .vscode/
 .jdk/
-docs/
+
+# 本地环境变量和密钥文件；只提交脱敏后的 .env.example。
+.env
+.env.*
+!.env.example
+!**/.env.example
 
 # Local AI-agent and change-review files
 AGENTS.md

@@ -22,4 +22,17 @@ public interface KnowledgeChunkRepository {
 
     /** Find a single chunk by its primary key. */
     Optional<KnowledgeChunk> findById(Long id);
+
+    /** PostgreSQL full-text retrieval from current, indexed, enabled document versions. */
+    List<TextSearchResult> findByTextSearch(String query, int limit);
+
+    /**
+     * 中文友好的有限关键词检索。
+     *
+     * <p>只接受应用生成的有限词项，并仍然限制为当前、已索引、已启用文档。</p>
+     */
+    List<TextSearchResult> findByKeywordSearch(List<String> terms, int limit);
+
+    record TextSearchResult(Long chunkId, double rank) {
+    }
 }

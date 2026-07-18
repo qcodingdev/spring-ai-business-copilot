@@ -15,7 +15,7 @@ public class FallbackSupportKnowledgeRetriever implements SupportKnowledgeRetrie
 
     @Override
     public SupportKnowledgeResult retrieve(SupportKnowledgeQuery query) {
-        log.warn("Knowledge retrieval is not available (fallback retriever in use). "
+        log.warn("知识检索不可用，当前使用兜底检索器。"
                 + "Ticket category={}, query summary={}", query.category(), query.summary());
         return SupportKnowledgeResult.noResults("知识库检索不可用：未配置 Knowledge Copilot 或检索服务");
     }

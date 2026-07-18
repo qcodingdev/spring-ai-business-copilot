@@ -23,9 +23,11 @@ class PromptTemplateServiceTest {
         String rendered = service.render("data-copilot/sql-generation.st",
                 Map.of("schemaContext", "table: customers (id, name)",
                         "question", "last month sales",
+                        "currentDate", "2026-07-18",
                         "maxRows", "100"));
         assertThat(rendered).contains("table: customers (id, name)");
         assertThat(rendered).contains("last month sales");
+        assertThat(rendered).contains("current business date is 2026-07-18");
         assertThat(rendered).contains("Maximum allowed limit is 100");
     }
 
@@ -33,6 +35,6 @@ class PromptTemplateServiceTest {
     void throwsWhenTemplateNotFound() {
         assertThatThrownBy(() -> service.loadTemplate("nonexistent.st"))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("not found");
+                .hasMessageContaining("未找到提示词模板");
     }
 }

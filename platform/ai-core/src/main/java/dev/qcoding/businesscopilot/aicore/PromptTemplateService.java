@@ -6,6 +6,9 @@ import org.springframework.util.StreamUtils;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.Map;
 
 /**
@@ -25,20 +28,28 @@ public class PromptTemplateService {
      * given variables. Template variables use the {@code {name}} syntax and are replaced verbatim.
      */
     public String render(String location, Map<String, String> variables) {
+        return renderWithMetadata(location, "v1", variables).content();
+    }
+
+    /** Render a template and return stable metadata without retaining prompt content. */
+    public RenderedPrompt renderWithMetadata(String location, String version,
+                                             Map<String, String> variables) {
         String template = loadTemplate(location);
-        return substitute(template, variables);
+        return new RenderedPrompt(
+                substitute(template, variables),
+                new PromptTemplateMetadata(location, version, sha256(template)));
     }
 
     /** Load a raw template without variable substitution. */
     public String loadTemplate(String location) {
         Resource resource = resourceResolver.getResource(PROMPTS_PREFIX + location);
         if (!resource.exists()) {
-            throw new IllegalStateException("Prompt template not found: " + location);
+            throw new IllegalStateException("未找到提示词模板：" + location);
         }
         try (var input = resource.getInputStream()) {
             return StreamUtils.copyToString(input, StandardCharsets.UTF_8);
         } catch (IOException ex) {
-            throw new IllegalStateException("Failed to read prompt template: " + location, ex);
+            throw new IllegalStateException("读取提示词模板失败：" + location, ex);
         }
     }
 
@@ -51,5 +62,14 @@ public class PromptTemplateService {
             result = result.replace("{" + entry.getKey() + "}", value);
         }
         return result;
+    }
+
+    private String sha256(String value) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                    .digest(value.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("当前运行环境不支持 SHA-256", ex);
+        }
     }
 }

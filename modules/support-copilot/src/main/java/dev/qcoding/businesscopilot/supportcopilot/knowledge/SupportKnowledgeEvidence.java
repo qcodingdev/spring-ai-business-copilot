@@ -17,5 +17,19 @@ public record SupportKnowledgeEvidence(
         String sectionTitle,
         String snippet,
         String chunkId,
-        double similarity) {
+        double similarity,
+        java.util.UUID logicalDocumentId,
+        int documentVersion,
+        String contentHash) {
+
+    public SupportKnowledgeEvidence(String sourceTitle, String sectionTitle, String snippet,
+                                    String chunkId, double similarity) {
+        this(sourceTitle, sectionTitle, snippet, chunkId, similarity, null, 1, null);
+    }
+
+    public String versionReference() {
+        return logicalDocumentId == null
+                ? "chunk:" + chunkId
+                : logicalDocumentId + ":v" + documentVersion + ":" + contentHash;
+    }
 }

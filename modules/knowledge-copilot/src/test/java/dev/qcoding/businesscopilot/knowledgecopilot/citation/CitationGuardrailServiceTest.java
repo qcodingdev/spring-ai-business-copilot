@@ -28,8 +28,8 @@ class CitationGuardrailServiceTest {
     void validCitationsPassValidation() {
         List<RetrievedKnowledgeChunk> retrieved = List.of(retrievedChunk(1L), retrievedChunk(2L));
         List<KnowledgeCitation> citations = List.of(
-                new KnowledgeCitation(1L, "excerpt"),
-                new KnowledgeCitation(2L, "another excerpt"));
+                new KnowledgeCitation(1L, "content"),
+                new KnowledgeCitation(2L, "content"));
 
         CitationGuardrailService.CitationValidationResult result = service.validate(citations, retrieved);
 
@@ -45,7 +45,7 @@ class CitationGuardrailServiceTest {
         CitationGuardrailService.CitationValidationResult result = service.validate(citations, retrieved);
 
         assertThat(result.valid()).isFalse();
-        assertThat(result.violations()).anyMatch(v -> v.contains("at least one citation"));
+        assertThat(result.violations()).anyMatch(v -> v.contains("至少需要一条引用"));
     }
 
     @Test
@@ -66,7 +66,7 @@ class CitationGuardrailServiceTest {
 
         assertThat(result.valid()).isFalse();
         assertThat(result.violations()).anyMatch(v -> v.contains("999"));
-        assertThat(result.violations()).anyMatch(v -> v.contains("not among the retrieved chunks"));
+        assertThat(result.violations()).anyMatch(v -> v.contains("不在本次召回结果中"));
     }
 
     @Test
@@ -77,14 +77,14 @@ class CitationGuardrailServiceTest {
         CitationGuardrailService.CitationValidationResult result = service.validate(citations, retrieved);
 
         assertThat(result.valid()).isFalse();
-        assertThat(result.violations()).anyMatch(v -> v.contains("null chunkId"));
+        assertThat(result.violations()).anyMatch(v -> v.contains("不能为空"));
     }
 
     @Test
     void mixedValidAndInvalidCitationsFail() {
         List<RetrievedKnowledgeChunk> retrieved = List.of(retrievedChunk(1L), retrievedChunk(2L));
         List<KnowledgeCitation> citations = List.of(
-                new KnowledgeCitation(1L, "valid"),
+                new KnowledgeCitation(1L, "content"),
                 new KnowledgeCitation(999L, "invalid"));
 
         CitationGuardrailService.CitationValidationResult result = service.validate(citations, retrieved);

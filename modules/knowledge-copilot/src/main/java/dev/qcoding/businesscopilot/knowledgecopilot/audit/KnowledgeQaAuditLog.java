@@ -31,5 +31,28 @@ public record KnowledgeQaAuditLog(
         String modelName,
         String embeddingModel,
         Long latencyMs,
+        String creatorActorId,
+        String actionActorId,
+        String providerName,
+        String providerRequestId,
+        String promptName,
+        String promptVersion,
+        String promptHash,
+        String policyVersion,
+        String violationCodes,
+        Integer inputTokens,
+        Integer outputTokens,
+        String finishReason,
+        Instant anonymizedAt,
         Instant createdAt) {
+
+    public KnowledgeQaAuditLog(Long id, String requestId, String question,
+                               String retrievedChunkIds, String citedChunkIds,
+                               String answerStatus, String refusalReason, String modelName,
+                               String embeddingModel, Long latencyMs, Instant createdAt) {
+        this(id, requestId, question, retrievedChunkIds, citedChunkIds,
+                answerStatus, refusalReason, modelName, embeddingModel, latencyMs,
+                null, null, null, null, null, null, null,
+                null, null, null, null, null, null, createdAt);
+    }
 }

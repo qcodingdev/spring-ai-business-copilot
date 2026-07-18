@@ -1,5 +1,8 @@
 package dev.qcoding.businesscopilot.audit;
 
+import dev.qcoding.businesscopilot.commonweb.request.BusinessRequestContext;
+import dev.qcoding.businesscopilot.commonweb.request.BusinessRequestContextHolder;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -12,6 +15,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -26,8 +30,14 @@ class JdbcQueryAuditRepositoryTest {
         repository = new JdbcQueryAuditRepository(jdbcTemplate);
     }
 
+    @AfterEach
+    void clearRequestContext() {
+        BusinessRequestContextHolder.clear();
+    }
+
     @Test
     void savesSuccessEventAndReturnsId() {
+        BusinessRequestContextHolder.set(new BusinessRequestContext("http-req-001", "operator-1"));
         AuditEvent event = new AuditEvent(
                 "req-001", AuditEventType.QUERY_SUCCESS,
                 "上个月销售额", "SELECT SUM(amount) FROM orders LIMIT 100",
@@ -42,6 +52,34 @@ class JdbcQueryAuditRepositoryTest {
         Long id = repository.save(event);
 
         assertThat(id).isEqualTo(42L);
+        verify(jdbcTemplate).queryForObject(anyString(), eq(Long.class),
+                eq("req-001"),
+                eq("http-req-001"),
+                eq("operator-1"),
+                eq("上个月销售额"),
+                eq("SELECT SUM(amount) FROM orders LIMIT 100"),
+                eq("SELECT SUM(amount) FROM orders LIMIT 100"),
+                eq("EXECUTED"),
+                eq(null),
+                eq(true),
+                eq("QUERY_SUCCESS"),
+                eq(5),
+                eq(null),
+                eq("gpt-5-mini"),
+                eq(250L),
+                eq("operator-1"),
+                eq(null),
+                eq(null),
+                eq(null),
+                eq(null),
+                eq(null),
+                eq(null),
+                eq(null),
+                eq(null),
+                eq(null),
+                eq(null),
+                eq(null),
+                any(java.sql.Timestamp.class));
     }
 
     @Test
@@ -81,7 +119,7 @@ class JdbcQueryAuditRepositoryTest {
     @Test
     void findsRecentLogs() {
         QueryAuditLog sample = new QueryAuditLog(
-                1L, "req-001", "question", "sql", "sql",
+                1L, "req-001", "http-req-001", "operator", "question", "sql", "sql",
                 "EXECUTED", null, true, "EXECUTED", 5,
                 null, "gpt-5-mini", 100L, java.time.Instant.now());
         when(jdbcTemplate.query(anyString(), any(RowMapper.class), anyInt(), anyInt()))

@@ -1,6 +1,8 @@
 package dev.qcoding.businesscopilot.reportcopilot.generation;
 
 import dev.qcoding.businesscopilot.aicore.AiChatService;
+import dev.qcoding.businesscopilot.aicore.AiInvocationMetadata;
+import dev.qcoding.businesscopilot.aicore.AiInvocationResult;
 import dev.qcoding.businesscopilot.aicore.PromptTemplateService;
 import dev.qcoding.businesscopilot.reportcopilot.request.ReportGenerateRequest;
 import dev.qcoding.businesscopilot.reportcopilot.request.ReportPeriod;
@@ -42,10 +44,13 @@ class ReportGenerationServiceTest {
         ReportRequestPreparationService.ReportRequestPreview preview = preview();
         when(preparationService.prepare(org.mockito.ArgumentMatchers.any())).thenReturn(preview);
         when(aiChatService.modelName()).thenReturn("test-model");
-        when(aiChatService.generateJson(anyString(), eq(LlmReportOutput.class))).thenReturn(validOutput("source-1"));
-        when(draftPersistenceService.createDraft(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), eq("test-model")))
+        when(aiChatService.generateJsonWithMetadata(anyString(), eq(LlmReportOutput.class)))
+                .thenReturn(invocation(validOutput("source-1")));
+        when(draftPersistenceService.createDraft(any(), any(), eq("test-model"),
+                any(), any(), anyString(), any()))
                 .thenReturn(new ReportDraft(10L, 20L, validOutput("source-1"), ReportDraftStatus.DRAFTED, null,
-                        "confirm-token", Instant.parse("2026-07-11T12:00:00Z"), Instant.now(), Instant.now()));
+                        "confirm-token", "digest", "operator-1", null,
+                        Instant.parse("2026-07-11T12:00:00Z"), Instant.now(), Instant.now()));
 
         ReportDraftResponse response = service.generate(new ReportGenerateRequest(null, null, null, null, null, null));
 
@@ -53,17 +58,21 @@ class ReportGenerationServiceTest {
         assertThat(response.draftId()).isEqualTo(10L);
         assertThat(response.confirmationToken()).isEqualTo("confirm-token");
         assertThat(response.content().executiveSummary()).isEqualTo("Orders remained stable.");
-        verify(aiChatService).generateJson(org.mockito.ArgumentMatchers.contains("sourceId=source-1"), eq(LlmReportOutput.class));
+        verify(aiChatService).generateJsonWithMetadata(
+                org.mockito.ArgumentMatchers.contains("sourceId=source-1"), eq(LlmReportOutput.class));
     }
 
     @Test
     void storesOnlyReviewReasonsWhenOutputCitesAnUnknownSource() {
         when(preparationService.prepare(org.mockito.ArgumentMatchers.any())).thenReturn(preview());
         when(aiChatService.modelName()).thenReturn("test-model");
-        when(aiChatService.generateJson(anyString(), eq(LlmReportOutput.class))).thenReturn(validOutput("invented-source"));
-        when(draftPersistenceService.createNeedsReviewDraft(any(), any(), eq("test-model")))
+        when(aiChatService.generateJsonWithMetadata(anyString(), eq(LlmReportOutput.class)))
+                .thenReturn(invocation(validOutput("invented-source")));
+        when(draftPersistenceService.createNeedsReviewDraft(
+                any(), any(), eq("test-model"), any(), any(), anyString(), any()))
                 .thenReturn(new ReportDraft(11L, 21L, null, ReportDraftStatus.NEEDS_REVIEW,
                         "Citation refers to a source outside the current request.", "review-token",
+                        "digest", "operator-1", null,
                         Instant.parse("2026-07-11T12:00:00Z"), Instant.now(), Instant.now()));
 
         ReportDraftResponse response = service.generate(new ReportGenerateRequest(null, null, null, null, null, null));
@@ -73,7 +82,8 @@ class ReportGenerationServiceTest {
         assertThat(response.content()).isNull();
         assertThat(response.reviewReasons()).isNotEmpty();
         assertThat(response.confirmationToken()).isEqualTo("review-token");
-        verify(draftPersistenceService).createNeedsReviewDraft(any(), any(), eq("test-model"));
+        verify(draftPersistenceService).createNeedsReviewDraft(
+                any(), any(), eq("test-model"), any(), any(), anyString(), any());
     }
 
     @Test
@@ -81,13 +91,15 @@ class ReportGenerationServiceTest {
         ReportRequestPreparationService.ReportRequestPreview preview = preview();
         when(preparationService.prepare(org.mockito.ArgumentMatchers.any())).thenReturn(preview);
         when(aiChatService.modelName()).thenReturn("test-model");
-        when(aiChatService.generateJson(anyString(), eq(LlmReportOutput.class))).thenThrow(new IllegalStateException("model offline"));
+        when(aiChatService.generateJsonWithMetadata(anyString(), eq(LlmReportOutput.class)))
+                .thenThrow(new IllegalStateException("model offline"));
 
         assertThatThrownBy(() -> service.generate(new ReportGenerateRequest(null, null, null, null, null, null)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("model offline");
 
-        verify(draftPersistenceService).recordGenerationFailure(preview, "test-model");
+        verify(draftPersistenceService).recordGenerationFailure(
+                eq(preview), eq("test-model"), any(), eq(null), anyString(), any());
     }
 
     private ReportRequestPreparationService.ReportRequestPreview preview() {
@@ -102,5 +114,11 @@ class ReportGenerationServiceTest {
         return new LlmReportOutput("Orders remained stable.", List.of(sourceId),
                 List.of(new MetricHighlight("Orders", "1284", "orders", "Orders remained stable.", List.of(sourceId))),
                 List.of(), List.of(), List.of(), List.of(), List.of(new ReportCitation(sourceId, "Metric source")));
+    }
+
+    private AiInvocationResult<LlmReportOutput> invocation(LlmReportOutput output) {
+        return new AiInvocationResult<>(output, new AiInvocationMetadata(
+                "openai-compatible", "test-model", "request-1",
+                10, 20, "stop", 25L));
     }
 }

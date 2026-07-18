@@ -2,6 +2,7 @@ package dev.qcoding.businesscopilot.knowledgecopilot.answer;
 
 import dev.qcoding.businesscopilot.knowledgecopilot.retrieval.KnowledgeRetrievalService;
 import dev.qcoding.businesscopilot.knowledgecopilot.retrieval.RetrievedKnowledgeChunk;
+import dev.qcoding.businesscopilot.guardrails.SensitiveTextMasker;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,11 +27,14 @@ public class KnowledgeQuestionService {
 
     private final KnowledgeRetrievalService retrievalService;
     private final KnowledgeAnswerService answerService;
+    private final SensitiveTextMasker sensitiveTextMasker;
 
     public KnowledgeQuestionService(KnowledgeRetrievalService retrievalService,
-                                     KnowledgeAnswerService answerService) {
+                                     KnowledgeAnswerService answerService,
+                                     SensitiveTextMasker sensitiveTextMasker) {
         this.retrievalService = retrievalService;
         this.answerService = answerService;
+        this.sensitiveTextMasker = sensitiveTextMasker;
     }
 
     /**
@@ -48,8 +52,12 @@ public class KnowledgeQuestionService {
      * @return structured answer response with status, answer, citations, and warnings
      */
     public KnowledgeAnswerResponse ask(@Valid KnowledgeAnswerRequest request) {
-        String question = request.question().trim();
-        log.info("Knowledge Q&A: question='{}'", truncate(question));
+        return askWithAudit(request).response();
+    }
+
+    public QuestionInvocation askWithAudit(@Valid KnowledgeAnswerRequest request) {
+        String question = sensitiveTextMasker.mask(request.question().trim());
+        log.info("知识问答开始：脱敏后问题长度={}", question.length());
 
         long startTime = System.currentTimeMillis();
 
@@ -57,19 +65,50 @@ public class KnowledgeQuestionService {
         List<RetrievedKnowledgeChunk> retrievedChunks = retrievalService.retrieve(question);
 
         // 2. 答案生成（含 citation 校验和脱敏）
-        KnowledgeAnswerResponse response = answerService.answer(question, retrievedChunks);
+        KnowledgeAnswerService.AnswerInvocation answerInvocation =
+                answerService.answerWithMetadata(question, retrievedChunks);
+        KnowledgeAnswerResponse response = answerInvocation.response();
 
         long latencyMs = System.currentTimeMillis() - startTime;
-        log.info("Knowledge Q&A completed: status={}, citations={}, latencyMs={}",
+        log.info("知识问答完成：status={}，citations={}，latencyMs={}",
                 response.status(),
                 response.citations() != null ? response.citations().size() : 0,
                 latencyMs);
 
-        return response;
+        String retrievedChunkIds = retrievedChunks.stream()
+                .map(item -> String.valueOf(item.chunk().id()))
+                .collect(java.util.stream.Collectors.joining(","));
+        return new QuestionInvocation(
+                response,
+                retrievedChunkIds.isBlank() ? null : retrievedChunkIds,
+                retrievalService.embeddingModelName(),
+                latencyMs,
+                answerInvocation.promptMetadata(),
+                answerInvocation.aiMetadata(),
+                answerInvocation.violationCodes(),
+                question);
     }
 
-    private static String truncate(String text) {
-        if (text == null) return "null";
-        return text.length() > 100 ? text.substring(0, 100) + "..." : text;
+    public record QuestionInvocation(
+            KnowledgeAnswerResponse response,
+            String retrievedChunkIds,
+            String embeddingModel,
+            Long latencyMs,
+            dev.qcoding.businesscopilot.aicore.PromptTemplateMetadata promptMetadata,
+            dev.qcoding.businesscopilot.aicore.AiInvocationMetadata aiMetadata,
+            String violationCodes,
+            String sanitizedQuestion) {
+
+        public QuestionInvocation(
+                KnowledgeAnswerResponse response,
+                String retrievedChunkIds,
+                String embeddingModel,
+                Long latencyMs,
+                dev.qcoding.businesscopilot.aicore.PromptTemplateMetadata promptMetadata,
+                dev.qcoding.businesscopilot.aicore.AiInvocationMetadata aiMetadata,
+                String violationCodes) {
+            this(response, retrievedChunkIds, embeddingModel, latencyMs,
+                    promptMetadata, aiMetadata, violationCodes, null);
+        }
     }
 }

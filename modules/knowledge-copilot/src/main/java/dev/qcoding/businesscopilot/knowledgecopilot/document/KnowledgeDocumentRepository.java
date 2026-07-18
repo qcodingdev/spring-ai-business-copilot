@@ -3,25 +3,36 @@ package dev.qcoding.businesscopilot.knowledgecopilot.document;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * Repository for {@link KnowledgeDocument} persistence.
- *
- * <p>知识文档持久化接口。提供文档的增删查改，以及按 contentHash 去重检查。</p>
- */
+/** 知识文档持久化接口，提供版本管理和按 contentHash 去重检查。 */
 public interface KnowledgeDocumentRepository {
 
-    /** Save a new document and return the generated ID. */
+    /** 保存文档并返回数据库生成的 ID。 */
     Long save(KnowledgeDocument document);
 
-    /** Find a document by its primary key. */
+    /** 按主键查询文档。 */
     Optional<KnowledgeDocument> findById(Long id);
 
-    /** List all documents ordered by creation time descending. */
+    /** 按创建时间倒序列出文档。 */
     List<KnowledgeDocument> findAll();
 
-    /** Check whether a document with the given content hash already exists. */
+    /** 检查指定内容摘要的文档是否存在。 */
     boolean existsByContentHash(String contentHash);
 
-    /** Update the enabled flag of a document. Returns true if the row was updated. */
+    /** 更新文档启用状态，并返回是否更新成功。 */
     boolean updateEnabled(Long id, boolean enabled);
+
+    /** 获取逻辑文档的下一个递增版本号。 */
+    int nextVersion(java.util.UUID logicalDocumentId);
+
+    /** 保存替代版本前，将旧版本标记为非当前版本。 */
+    void supersedeCurrent(java.util.UUID logicalDocumentId);
+
+    /** 更新异步索引状态，不暴露模型提供方原始错误。 */
+    boolean updateIndexStatus(Long id, String status, String errorCategory, boolean enabled);
+
+    /** 删除一个归属明确的文档版本及其分片和索引任务。 */
+    boolean deleteById(Long id, String ownerActorId);
+
+    /** 删除当前版本后，将同一逻辑文档最近的旧版本提升为当前版本并保持停用。 */
+    void promoteLatestVersion(java.util.UUID logicalDocumentId);
 }

@@ -1,0 +1,14 @@
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+
+business-copilot:
+  security:
+    admin:
+      password: ${BUSINESS_COPILOT_ADMIN_PASSWORD}
+    operator:
+      password: ${BUSINESS_COPILOT_OPERATOR_PASSWORD}
+    reviewer:
+      password: ${BUSINESS_COPILOT_REVIEWER_PASSWORD}

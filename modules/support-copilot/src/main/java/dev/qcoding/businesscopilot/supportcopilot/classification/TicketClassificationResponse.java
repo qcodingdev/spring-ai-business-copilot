@@ -16,9 +16,9 @@ import java.util.List;
  * @param reasons     reasons for the classification and needsHuman decision
  */
 public record TicketClassificationResponse(
-        String category,
-        String sentiment,
-        String urgency,
+        TicketCategory category,
+        TicketSentiment sentiment,
+        TicketUrgency urgency,
         String summary,
         boolean needsHuman,
         List<String> reasons) {

@@ -33,12 +33,25 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiResponse<Void>> handleBusiness(BusinessException ex, HttpServletRequest request) {
-        log.warn("Business error on {}: code={}, message={}", request.getRequestURI(),
+        log.warn("业务请求失败：uri={}，code={}，message={}", request.getRequestURI(),
                 ex.errorCode().code(), ex.getMessage());
 
         HttpStatus status = mapToHttpStatus(ex.errorCode());
-        ApiResponse<Void> body = ApiResponse.fail(ex.errorCode(), ex.getMessage());
+        String clientMessage = exposesBusinessMessage(ex.errorCode())
+                ? ex.getMessage()
+                : ex.errorCode().defaultMessage();
+        ApiResponse<Void> body = ApiResponse.fail(ex.errorCode(), clientMessage);
         return ResponseEntity.status(status).body(body);
+    }
+
+    private boolean exposesBusinessMessage(ErrorCode errorCode) {
+        return switch (errorCode) {
+            case BUSINESS_ERROR, VALIDATION_ERROR, DOCUMENT_EMPTY, DOCUMENT_TOO_LARGE,
+                    DOCUMENT_FORMAT_UNSUPPORTED, DOCUMENT_DUPLICATE -> true;
+            case NOT_FOUND, STATE_CONFLICT, AI_MODEL_ERROR, AI_OUTPUT_PARSE_ERROR,
+                    SQL_GUARDRAIL_VIOLATION, SQL_CANDIDATE_NOT_EXECUTABLE,
+                    QUERY_EXECUTION_ERROR, EMBEDDING_DIMENSION_MISMATCH, INTERNAL_ERROR -> false;
+        };
     }
 
     /**
@@ -47,14 +60,14 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<ValidationErrorResponse>> handleValidation(
             MethodArgumentNotValidException ex, HttpServletRequest request) {
-        log.warn("Validation error on {}", request.getRequestURI());
+        log.warn("请求参数校验失败：uri={}", request.getRequestURI());
 
         List<FieldError> fieldErrors = ex.getBindingResult().getFieldErrors().stream()
                 .map(fe -> new FieldError(fe.getField(), fe.getDefaultMessage()))
                 .toList();
 
         ValidationErrorResponse validation = ValidationErrorResponse.of(fieldErrors);
-        ApiResponse<ValidationErrorResponse> body = ApiResponse.ok(validation, "Validation failed");
+        ApiResponse<ValidationErrorResponse> body = ApiResponse.ok(validation, "请求参数校验失败");
         return ResponseEntity.badRequest().body(body);
     }
 
@@ -65,16 +78,17 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleUnexpected(Exception ex, HttpServletRequest request) {
-        log.error("Unexpected error on {}", request.getRequestURI(), ex);
+        log.error("请求发生未预期异常：uri={}", request.getRequestURI(), ex);
         ApiResponse<Void> body = ApiResponse.fail(ErrorCode.INTERNAL_ERROR);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(body);
     }
 
-    /** Map {@link ErrorCode} to an HTTP status code. */
+    /** 将 {@link ErrorCode} 映射为 HTTP 状态码。 */
     private HttpStatus mapToHttpStatus(ErrorCode errorCode) {
         return switch (errorCode) {
             case VALIDATION_ERROR -> HttpStatus.BAD_REQUEST;
             case NOT_FOUND -> HttpStatus.NOT_FOUND;
+            case STATE_CONFLICT -> HttpStatus.CONFLICT;
             case BUSINESS_ERROR -> HttpStatus.BAD_REQUEST;
             case SQL_GUARDRAIL_VIOLATION -> HttpStatus.BAD_REQUEST;
             case SQL_CANDIDATE_NOT_EXECUTABLE -> HttpStatus.BAD_REQUEST;

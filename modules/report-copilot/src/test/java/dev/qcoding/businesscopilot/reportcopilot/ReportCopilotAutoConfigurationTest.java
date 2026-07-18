@@ -5,20 +5,26 @@ import dev.qcoding.businesscopilot.aicore.AiChatService;
 import dev.qcoding.businesscopilot.aicore.PromptTemplateService;
 import dev.qcoding.businesscopilot.reportcopilot.source.ReportSourcePreviewService;
 import dev.qcoding.businesscopilot.reportcopilot.request.ReportRequestPreparationService;
+import dev.qcoding.businesscopilot.commonsecurity.CommonSecurityAutoConfiguration;
+import dev.qcoding.businesscopilot.reportcopilot.web.ReportCopilotController;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.jdbc.core.JdbcTemplate;
+import tools.jackson.databind.ObjectMapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class ReportCopilotAutoConfigurationTest {
 
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
-            .withConfiguration(AutoConfigurations.of(ReportCopilotAutoConfiguration.class))
+            .withConfiguration(AutoConfigurations.of(
+                    CommonSecurityAutoConfiguration.class,
+                    ReportCopilotAutoConfiguration.class))
             .withBean(SensitiveTextMasker.class, SensitiveTextMasker::new)
             .withBean(AiChatService.class, () -> org.mockito.Mockito.mock(AiChatService.class))
             .withBean(PromptTemplateService.class, PromptTemplateService::new)
+            .withBean(ObjectMapper.class, ObjectMapper::new)
             .withBean(JdbcTemplate.class, () -> org.mockito.Mockito.mock(JdbcTemplate.class));
 
     @Test
@@ -36,6 +42,7 @@ class ReportCopilotAutoConfigurationTest {
                 .run(context -> {
                     assertThat(context).hasSingleBean(ReportSourcePreviewService.class);
                     assertThat(context).hasSingleBean(ReportRequestPreparationService.class);
+                    assertThat(context).hasSingleBean(ReportCopilotController.class);
                     assertThat(context.getBean(ReportCopilotProperties.class).maxSourceCount()).isEqualTo(4);
                     assertThat(context.getBean(ReportSourcePreviewService.class).preview().sources()).hasSize(4);
                 });
