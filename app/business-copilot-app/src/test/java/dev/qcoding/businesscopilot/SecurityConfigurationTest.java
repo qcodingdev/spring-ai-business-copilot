@@ -29,6 +29,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import({
         SecurityConfiguration.class,
         SecurityConfigurationTest.ProbeController.class,
+        SecurityConfigurationTest.MetricsProbeController.class,
         SecurityConfigurationTest.ConfirmationProbeController.class,
         SecurityConfigurationTest.ReviewerActionProbeController.class,
         SecurityConfigurationTest.ResumeDeleteProbeController.class,
@@ -94,6 +95,29 @@ class SecurityConfigurationTest {
                         .with(user("operator").roles("OPERATOR")))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.errorCode").value("SEC_0403"));
+    }
+
+    @Test
+    void reviewerCanReadActuatorMetrics() throws Exception {
+        mockMvc.perform(get("/actuator/metrics")
+                        .with(user("reviewer").roles("REVIEWER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ok"));
+    }
+
+    @Test
+    void operatorCannotReadActuatorMetrics() throws Exception {
+        mockMvc.perform(get("/actuator/metrics")
+                        .with(user("operator").roles("OPERATOR")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("SEC_0403"));
+    }
+
+    @Test
+    void unauthenticatedUserCannotReadActuatorMetrics() throws Exception {
+        mockMvc.perform(get("/actuator/metrics"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.errorCode").value("SEC_0401"));
     }
 
     @Test
@@ -264,6 +288,16 @@ class SecurityConfigurationTest {
         @PostMapping("/actions")
         java.util.Map<String, String> action() {
             return java.util.Map.of("status", "accepted");
+        }
+    }
+
+    /** 仅用于验证安全匹配器，不替代真实 Actuator 端点的集成测试。 */
+    @RestController
+    static class MetricsProbeController {
+
+        @GetMapping("/actuator/metrics")
+        java.util.Map<String, String> metrics() {
+            return java.util.Map.of("status", "ok");
         }
     }
 

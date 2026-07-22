@@ -17,6 +17,7 @@ class ResumeComplianceEvaluationTest {
         assertThat(resource).isNotNull();
         List<String> lines = new String(resource.readAllBytes(), StandardCharsets.UTF_8)
                 .lines().filter(line -> !line.isBlank() && !line.startsWith("#")).toList();
+        assertThat(lines).as("Resume 固定评测集不能缩减到 10 条以下").hasSizeGreaterThanOrEqualTo(10);
         ResumePrivacySanitizer sanitizer = new ResumePrivacySanitizer(
                 new ResumeCopilotProperties(true, 12000, 20000, 30, 80,
                         Duration.ofMinutes(30), true));

@@ -3,3 +3,11 @@ valid_metric	true
 unknown_summary_source	false
 invented_metric_value	false
 suggestion_claims_source	false
+valid_suggestion	true
+valid_empty_summary	true
+missing_summary_source	false
+unknown_metric_source	false
+missing_metric_source	false
+unknown_citation	false
+source_action_wrong_origin	false
+suggestion_wrong_origin	false

@@ -38,7 +38,7 @@ class KnowledgeEmbeddingServiceTest {
     @Test
     void indexChunksGeneratesAndSavesEmbeddings() {
         when(aiEmbeddingService.isModelEnabled()).thenReturn(true);
-        when(aiEmbeddingService.embed(anyString())).thenReturn(new float[1536]);
+        when(aiEmbeddingService.embed(anyString(), anyString())).thenReturn(new float[1536]);
 
         KnowledgeChunk chunk1 = new KnowledgeChunk(1L, 1L, "Section 1", 0, "content A", "preview A", 10, null);
         KnowledgeChunk chunk2 = new KnowledgeChunk(2L, 1L, "Section 2", 1, "content B", "preview B", 10, null);
@@ -57,7 +57,7 @@ class KnowledgeEmbeddingServiceTest {
     @Test
     void indexChunksDeletesExistingBeforeReindex() {
         when(aiEmbeddingService.isModelEnabled()).thenReturn(true);
-        when(aiEmbeddingService.embed(anyString())).thenReturn(new float[1536]);
+        when(aiEmbeddingService.embed(anyString(), anyString())).thenReturn(new float[1536]);
         when(embeddingRepository.deleteByDocumentId(1L)).thenReturn(5);
 
         KnowledgeChunk chunk = new KnowledgeChunk(10L, 1L, "Section", 0, "content", "preview", 5, null);
@@ -70,7 +70,7 @@ class KnowledgeEmbeddingServiceTest {
     void indexChunksThrowsOnDimensionMismatch() {
         when(aiEmbeddingService.isModelEnabled()).thenReturn(true);
         // 模型返回 768 维，配置期望 1536
-        when(aiEmbeddingService.embed(anyString())).thenReturn(new float[768]);
+        when(aiEmbeddingService.embed(anyString(), anyString())).thenReturn(new float[768]);
 
         KnowledgeChunk chunk = new KnowledgeChunk(1L, 1L, "Section", 0, "content", "preview", 5, null);
 
@@ -88,14 +88,14 @@ class KnowledgeEmbeddingServiceTest {
 
         assertThat(result.documentId()).isEqualTo(1L);
         assertThat(result.chunkCount()).isEqualTo(0);
-        verify(aiEmbeddingService, never()).embed(anyString());
+        verify(aiEmbeddingService, never()).embed(anyString(), anyString());
     }
 
     @Test
     void indexChunksRecordsModelNameInEveryEmbedding() {
         when(aiEmbeddingService.isModelEnabled()).thenReturn(true);
         float[] vector = new float[1536];
-        when(aiEmbeddingService.embed(anyString())).thenReturn(vector);
+        when(aiEmbeddingService.embed(anyString(), anyString())).thenReturn(vector);
 
         KnowledgeChunk chunk = new KnowledgeChunk(42L, 1L, "Title", 0, "text", "preview", 5, null);
         service.indexChunks(1L, List.of(chunk));
@@ -107,7 +107,7 @@ class KnowledgeEmbeddingServiceTest {
     @Test
     void reindexDelegatesToIndexChunks() {
         when(aiEmbeddingService.isModelEnabled()).thenReturn(true);
-        when(aiEmbeddingService.embed(anyString())).thenReturn(new float[1536]);
+        when(aiEmbeddingService.embed(anyString(), anyString())).thenReturn(new float[1536]);
 
         KnowledgeChunk chunk = new KnowledgeChunk(5L, 1L, "Title", 0, "reindex content", "preview", 3, null);
         EmbeddingIndexResult result = service.reindex(1L, List.of(chunk));
@@ -119,7 +119,7 @@ class KnowledgeEmbeddingServiceTest {
     @Test
     void indexChunksPropagatesEmbeddingModelError() {
         when(aiEmbeddingService.isModelEnabled()).thenReturn(true);
-        when(aiEmbeddingService.embed(anyString())).thenThrow(new AiModelNotEnabledException("no model"));
+        when(aiEmbeddingService.embed(anyString(), anyString())).thenThrow(new AiModelNotEnabledException("no model"));
 
         KnowledgeChunk chunk = new KnowledgeChunk(1L, 1L, "Section", 0, "content", "preview", 5, null);
 

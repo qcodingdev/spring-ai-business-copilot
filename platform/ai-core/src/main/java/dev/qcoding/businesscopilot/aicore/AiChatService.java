@@ -23,11 +23,19 @@ public class AiChatService {
 
     private final ObjectProvider<ChatClient.Builder> chatClientBuilderProvider;
     private final AiModelProperties properties;
+    private final AiCallCoordinator coordinator;
 
     public AiChatService(ObjectProvider<ChatClient.Builder> chatClientBuilderProvider,
                          AiModelProperties properties) {
+        this(chatClientBuilderProvider, properties, standaloneCoordinator(properties));
+    }
+
+    public AiChatService(ObjectProvider<ChatClient.Builder> chatClientBuilderProvider,
+                         AiModelProperties properties,
+                         AiCallCoordinator coordinator) {
         this.chatClientBuilderProvider = chatClientBuilderProvider;
         this.properties = properties;
+        this.coordinator = coordinator;
     }
 
     /** Whether a usable chat model is configured. */
@@ -55,20 +63,12 @@ public class AiChatService {
      * Send {@code prompt} to the chat model and return the raw text response.
      */
     public String generateText(String prompt) {
-        ChatClient chatClient = requireChatClient();
-        try {
-            return chatClient.prompt()
-                    .user(prompt)
-                    .call()
-                    .content();
-        } catch (BusinessException ex) {
-            throw ex;
-        } catch (RuntimeException ex) {
-            log.error("对话模型文本生成失败", ex);
-            // 模型调用异常转为业务可理解错误，不暴露底层 SDK 细节
-            throw new BusinessException(ErrorCode.AI_MODEL_ERROR,
-                    "AI 对话模型调用失败", ex);
-        }
+        return generateText("generic.text", prompt);
+    }
+
+    /** 使用固定操作名生成文本，操作名会进入链路日志和低基数指标。 */
+    public String generateText(String operation, String prompt) {
+        return generateTextWithMetadata(operation, prompt).content();
     }
 
     /**
@@ -79,12 +79,17 @@ public class AiChatService {
      * because OpenAI-compatible providers do not all implement it consistently.</p>
      */
     public <T> T generateJson(String prompt, Class<T> type) {
+        return generateJson("generic.json", prompt, type);
+    }
+
+    /** 使用固定操作名生成结构化结果，操作名会进入链路日志和低基数指标。 */
+    public <T> T generateJson(String operation, String prompt, Class<T> type) {
         ChatClient chatClient = requireChatClient();
         try {
-            return chatClient.prompt()
+            return coordinator.execute("chat", operation, () -> chatClient.prompt()
                     .user(prompt)
                     .call()
-                    .entity(type, spec -> spec.validateSchema());
+                    .entity(type, spec -> spec.validateSchema()));
         } catch (BusinessException ex) {
             throw ex;
         } catch (RuntimeException ex) {
@@ -96,16 +101,20 @@ public class AiChatService {
 
     /** Structured generation with metadata from the exact same provider response. */
     public <T> AiInvocationResult<T> generateJsonWithMetadata(String prompt, Class<T> type) {
+        return generateJsonWithMetadata("generic.json", prompt, type);
+    }
+
+    public <T> AiInvocationResult<T> generateJsonWithMetadata(String operation, String prompt, Class<T> type) {
         ChatClient chatClient = requireChatClient();
         long startedAt = System.nanoTime();
         try {
-            var responseEntity = chatClient.prompt()
-                    .user(prompt)
-                    .call()
-                    .responseEntity(type, spec -> spec.validateSchema());
-            return new AiInvocationResult<>(
+            var responseEntity = coordinator.execute("chat", operation, () -> chatClient.prompt()
+                    .user(prompt).call().responseEntity(type, spec -> spec.validateSchema()));
+            AiInvocationResult<T> result = new AiInvocationResult<>(
                     responseEntity.entity(),
                     metadata(responseEntity.response(), startedAt));
+            coordinator.recordTokens(operation, result.metadata().inputTokens(), result.metadata().outputTokens());
+            return result;
         } catch (BusinessException ex) {
             throw ex;
         } catch (RuntimeException ex) {
@@ -117,13 +126,20 @@ public class AiChatService {
 
     /** Text generation with metadata from the exact same provider response. */
     public AiInvocationResult<String> generateTextWithMetadata(String prompt) {
+        return generateTextWithMetadata("generic.text", prompt);
+    }
+
+    public AiInvocationResult<String> generateTextWithMetadata(String operation, String prompt) {
         ChatClient chatClient = requireChatClient();
         long startedAt = System.nanoTime();
         try {
-            ChatResponse response = chatClient.prompt().user(prompt).call().chatResponse();
+            ChatResponse response = coordinator.execute("chat", operation,
+                    () -> chatClient.prompt().user(prompt).call().chatResponse());
             String content = response != null && response.getResult() != null
                     ? response.getResult().getOutput().getText() : null;
-            return new AiInvocationResult<>(content, metadata(response, startedAt));
+            AiInvocationResult<String> result = new AiInvocationResult<>(content, metadata(response, startedAt));
+            coordinator.recordTokens(operation, result.metadata().inputTokens(), result.metadata().outputTokens());
+            return result;
         } catch (BusinessException ex) {
             throw ex;
         } catch (RuntimeException ex) {
@@ -177,5 +193,10 @@ public class AiChatService {
                     "未配置 AI 对话模型，请设置 spring.ai.model.chat 并提供模型凭证。");
         }
         return builder.build();
+    }
+
+    private static AiCallCoordinator standaloneCoordinator(AiModelProperties properties) {
+        AiResilienceProperties resilience = new AiResilienceProperties(0, null, 0, 0, 0, null);
+        return new AiCallCoordinator(resilience, new AiCallMetrics(null, properties));
     }
 }

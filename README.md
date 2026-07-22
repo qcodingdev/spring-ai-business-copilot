@@ -126,7 +126,7 @@ The SQL boundary requires schema-qualified allowlisted tables (`public.customers
 
 When a custom business database is enabled, configure both `business-copilot.data-copilot.schema.queryable-tables` and `business-copilot.guardrails.queryable-columns` for that database. Missing or mismatched column entries fail closed instead of falling back to unrestricted metadata.
 
-Admins and reviewers can access `/actuator/metrics`. Spring AI model observations record call latency and provider-reported token usage without exposing prompt or business content in the metrics.
+Admins and reviewers can access `/actuator/metrics`. AI Core emits low-cardinality call, status, latency, and provider-reported token metrics without exposing prompts or business content; fixed operation names and `requestId / aiCallId` connect the Chinese application logs. Explicit provider timeouts, bounded retry, concurrency isolation, and separate Chat/Embedding circuit breakers protect all five workflows. Deployments that need Prometheus can add the registry exporter without changing business code.
 
 ## Try the Workflows
 

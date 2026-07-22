@@ -67,7 +67,7 @@ class TicketClassificationServiceTest {
     void shouldAllowMessageWithinLengthLimit() {
         String validMsg = "我的订单还没有发货，请问什么时候能到？";
         var request = new TicketClassificationRequest(validMsg, "web");
-        when(aiChatService.generateJsonWithMetadata(anyString(), eq(LlmClassificationOutput.class)))
+        when(aiChatService.generateJsonWithMetadata(anyString(), anyString(), eq(LlmClassificationOutput.class)))
                 .thenReturn(new AiInvocationResult<>(
                         new LlmClassificationOutput(
                                 "PRODUCT_USAGE", "NEUTRAL", "LOW",

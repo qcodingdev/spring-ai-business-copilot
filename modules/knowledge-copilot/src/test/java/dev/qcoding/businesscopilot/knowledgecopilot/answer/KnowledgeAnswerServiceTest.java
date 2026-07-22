@@ -71,7 +71,7 @@ class KnowledgeAnswerServiceTest {
     @Test
     void answeredWhenRetrievedChunksAreValid() {
         List<RetrievedKnowledgeChunk> retrieved = List.of(retrievedChunk(1L, "content A"));
-        when(aiChatService.generateJsonWithMetadata(anyString(), eq(LlmAnswerOutput.class)))
+        when(aiChatService.generateJsonWithMetadata(anyString(), anyString(), eq(LlmAnswerOutput.class)))
                 .thenReturn(invocation(answeredOutput(1L)));
 
         KnowledgeAnswerResponse response = service.answer("test question", retrieved);
@@ -94,7 +94,7 @@ class KnowledgeAnswerServiceTest {
 
         assertThat(response.status()).isEqualTo(KnowledgeAnswerStatus.NO_EVIDENCE);
         assertThat(response.answer()).isNull();
-        verify(aiChatService, never()).generateJsonWithMetadata(anyString(), any());
+        verify(aiChatService, never()).generateJsonWithMetadata(anyString(), anyString(), any());
     }
 
     @Test
@@ -102,7 +102,7 @@ class KnowledgeAnswerServiceTest {
         KnowledgeAnswerResponse response = service.answer("question", null);
 
         assertThat(response.status()).isEqualTo(KnowledgeAnswerStatus.NO_EVIDENCE);
-        verify(aiChatService, never()).generateJsonWithMetadata(anyString(), any());
+        verify(aiChatService, never()).generateJsonWithMetadata(anyString(), anyString(), any());
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -115,7 +115,7 @@ class KnowledgeAnswerServiceTest {
         KnowledgeAnswerResponse response = service.answer("question", List.of());
 
         assertThat(response.status()).isEqualTo(KnowledgeAnswerStatus.NO_EVIDENCE);
-        verify(aiChatService, never()).generateJsonWithMetadata(anyString(), any());
+        verify(aiChatService, never()).generateJsonWithMetadata(anyString(), anyString(), any());
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -127,7 +127,7 @@ class KnowledgeAnswerServiceTest {
         List<RetrievedKnowledgeChunk> retrieved = List.of(retrievedChunk(1L, "content"));
         LlmAnswerOutput noEvidenceOutput = new LlmAnswerOutput(
                 "NO_EVIDENCE", "", List.of(), List.of("insufficient context"));
-        when(aiChatService.generateJsonWithMetadata(anyString(), eq(LlmAnswerOutput.class)))
+        when(aiChatService.generateJsonWithMetadata(anyString(), anyString(), eq(LlmAnswerOutput.class)))
                 .thenReturn(invocation(noEvidenceOutput));
 
         KnowledgeAnswerResponse response = service.answer("question", retrieved);
@@ -149,7 +149,7 @@ class KnowledgeAnswerServiceTest {
                 "answer",
                 List.of(new LlmAnswerOutput.CitationEntry(999L)),
                 List.of());
-        when(aiChatService.generateJsonWithMetadata(anyString(), eq(LlmAnswerOutput.class)))
+        when(aiChatService.generateJsonWithMetadata(anyString(), anyString(), eq(LlmAnswerOutput.class)))
                 .thenReturn(invocation(badCitationOutput));
 
         KnowledgeAnswerResponse response = service.answer("question", retrieved);
@@ -170,7 +170,7 @@ class KnowledgeAnswerServiceTest {
                 "answer without citation",
                 List.of(),
                 List.of());
-        when(aiChatService.generateJsonWithMetadata(anyString(), eq(LlmAnswerOutput.class)))
+        when(aiChatService.generateJsonWithMetadata(anyString(), anyString(), eq(LlmAnswerOutput.class)))
                 .thenReturn(invocation(noCitationOutput));
 
         KnowledgeAnswerResponse response = service.answer("question", retrieved);
@@ -186,7 +186,7 @@ class KnowledgeAnswerServiceTest {
     @Test
     void rejectedWhenJsonParsingFails() {
         List<RetrievedKnowledgeChunk> retrieved = List.of(retrievedChunk(1L, "content"));
-        when(aiChatService.generateJsonWithMetadata(anyString(), eq(LlmAnswerOutput.class)))
+        when(aiChatService.generateJsonWithMetadata(anyString(), anyString(), eq(LlmAnswerOutput.class)))
                 .thenThrow(new BusinessException(ErrorCode.AI_OUTPUT_PARSE_ERROR, "unparseable JSON"));
 
         KnowledgeAnswerResponse response = service.answer("question", retrieved);
@@ -208,7 +208,7 @@ class KnowledgeAnswerServiceTest {
                 "请联系 13812345678 获取更多信息。",
                 List.of(new LlmAnswerOutput.CitationEntry(1L)),
                 List.of());
-        when(aiChatService.generateJsonWithMetadata(anyString(), eq(LlmAnswerOutput.class)))
+        when(aiChatService.generateJsonWithMetadata(anyString(), anyString(), eq(LlmAnswerOutput.class)))
                 .thenReturn(invocation(sensitiveOutput));
 
         KnowledgeAnswerResponse response = service.answer("question", retrieved);
@@ -228,7 +228,7 @@ class KnowledgeAnswerServiceTest {
                 "API key is token=abc123secret for access.",
                 List.of(new LlmAnswerOutput.CitationEntry(1L)),
                 List.of());
-        when(aiChatService.generateJsonWithMetadata(anyString(), eq(LlmAnswerOutput.class)))
+        when(aiChatService.generateJsonWithMetadata(anyString(), anyString(), eq(LlmAnswerOutput.class)))
                 .thenReturn(invocation(secretOutput));
 
         KnowledgeAnswerResponse response = service.answer("question", retrieved);
@@ -246,7 +246,7 @@ class KnowledgeAnswerServiceTest {
     @Test
     void rejectedWhenLlmReturnsNull() {
         List<RetrievedKnowledgeChunk> retrieved = List.of(retrievedChunk(1L, "content"));
-        when(aiChatService.generateJsonWithMetadata(anyString(), eq(LlmAnswerOutput.class)))
+        when(aiChatService.generateJsonWithMetadata(anyString(), anyString(), eq(LlmAnswerOutput.class)))
                 .thenReturn(invocation(null));
 
         KnowledgeAnswerResponse response = service.answer("question", retrieved);

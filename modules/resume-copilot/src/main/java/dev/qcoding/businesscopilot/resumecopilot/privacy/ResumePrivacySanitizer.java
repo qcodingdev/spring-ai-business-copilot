@@ -19,9 +19,9 @@ public class ResumePrivacySanitizer {
     private static final Pattern INJECTION_LINE = Pattern.compile(
             "(?i)^.*(ignore (all |the )?previous|system prompt|developer message|follow these instructions|忽略.{0,8}(指令|要求)|系统提示词|执行以下命令).*$");
     private static final Pattern PROTECTED_CRITERION = Pattern.compile(
-            "(?i)(年龄|性别|婚育|婚姻|民族|宗教|健康|残障|政治面貌|籍贯|照片|"
+            "(?i)(年龄|性别|男性|女性|限男|限女|未婚|已婚|婚育|婚姻|民族|宗教|健康|残障|政治面貌|籍贯|照片|"
                     + "毕业年份|应届生|年轻团队|形象气质|稳定性|本地户口|家庭稳定|长期加班|996|"
-                    + "age requirement|gender|marital|ethnicity|religion|disability|"
+                    + "age requirement|under\\s+\\d{1,2}|younger than|gender|male|female|marital|ethnicity|religion|disability|"
                     + "graduation year|recent graduate|young team|appearance|local household|family status|"
                     + "culture fit|work overtime)");
     private static final Pattern RESIDUAL_PROTECTED_ATTRIBUTE = Pattern.compile(

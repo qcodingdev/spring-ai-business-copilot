@@ -3,3 +3,11 @@ true	可根据知识库说明退款申请流程。	chunk-1	chunk-1
 false	我们保证退款并马上处理。	chunk-1	chunk-1
 false	请参考处理流程。	chunk-1	chunk-999
 false	这是确定回复。		
+true	请按照知识库中的步骤提交申请，最终结果以人工审核为准。	chunk-2	chunk-2
+true	可参考账号安全处理说明完成身份核验。	chunk-3	chunk-3
+false	我们可以退款，请等待到账。	chunk-1	chunk-1
+false	我们将在24小时内处理您的请求。	chunk-1	chunk-1
+false	我们保证赔偿您的损失。	chunk-1	chunk-1
+false	请参考知识库说明。	chunk-1,chunk-2	chunk-3
+false	请参考知识库说明。	chunk-1
+false	马上开通您的账号。	chunk-1	chunk-1

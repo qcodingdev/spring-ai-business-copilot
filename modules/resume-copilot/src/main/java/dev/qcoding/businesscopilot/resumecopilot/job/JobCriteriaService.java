@@ -97,7 +97,8 @@ public class JobCriteriaService {
         AiInvocationMetadata aiMetadata = null;
         try {
             AiInvocationResult<ResumeModels.LlmJobCriteriaOutput> invocation =
-                    ai.generateJsonWithMetadata(prompt.content(), ResumeModels.LlmJobCriteriaOutput.class);
+                    ai.generateJsonWithMetadata(
+                            "resume.criteria-extraction", prompt.content(), ResumeModels.LlmJobCriteriaOutput.class);
             aiMetadata = invocation.metadata();
             if (aiMetadata != null && aiMetadata.modelName() != null) {
                 modelName = aiMetadata.modelName();

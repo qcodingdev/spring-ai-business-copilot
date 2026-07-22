@@ -6,6 +6,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- Added fixed low-cardinality AI call metrics, call IDs, operation tags, and Chinese request-to-model chain logs across all five Copilots.
+- Added bounded AI concurrency, separate Chat/Embedding circuit breakers, explicit provider timeouts, and restricted transient-failure retries.
+- Expanded the five fixed evaluation datasets to 67 cases and added a CI dataset-size gate, including end-to-end Data SQL safety cases.
+- Added authenticated capacity smoke testing, non-overwriting PostgreSQL backups, and disposable-container restore drills.
+
+### Fixed
+
+- Extended Resume protected-attribute detection to reject Chinese gender and marital-status requirements and common English age or gender restrictions.
+
+### Security
+
+- Restricted Actuator metrics to Admin and Reviewer roles and kept user input, Prompt text, and file names out of metric labels and AI operation logs.
+
 ## [2.0.0] - 2026-07-18
 
 ### Added

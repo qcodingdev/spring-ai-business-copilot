@@ -101,7 +101,7 @@ public class ReplyDraftService {
         AiInvocationResult<LlmReplyDraftOutput> invocation;
         try {
             invocation = aiChatService.generateJsonWithMetadata(
-                    prompt.content(), LlmReplyDraftOutput.class);
+                    "support.reply-draft", prompt.content(), LlmReplyDraftOutput.class);
         } catch (Exception ex) {
             log.error("回复草稿模型调用失败：ticketId={}", request.ticketId(), ex);
             throw new BusinessException(ErrorCode.AI_MODEL_ERROR,

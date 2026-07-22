@@ -44,7 +44,7 @@ class ReportGenerationServiceTest {
         ReportRequestPreparationService.ReportRequestPreview preview = preview();
         when(preparationService.prepare(org.mockito.ArgumentMatchers.any())).thenReturn(preview);
         when(aiChatService.modelName()).thenReturn("test-model");
-        when(aiChatService.generateJsonWithMetadata(anyString(), eq(LlmReportOutput.class)))
+        when(aiChatService.generateJsonWithMetadata(anyString(), anyString(), eq(LlmReportOutput.class)))
                 .thenReturn(invocation(validOutput("source-1")));
         when(draftPersistenceService.createDraft(any(), any(), eq("test-model"),
                 any(), any(), anyString(), any()))
@@ -59,6 +59,7 @@ class ReportGenerationServiceTest {
         assertThat(response.confirmationToken()).isEqualTo("confirm-token");
         assertThat(response.content().executiveSummary()).isEqualTo("Orders remained stable.");
         verify(aiChatService).generateJsonWithMetadata(
+                eq("report.generation"),
                 org.mockito.ArgumentMatchers.contains("sourceId=source-1"), eq(LlmReportOutput.class));
     }
 
@@ -66,7 +67,7 @@ class ReportGenerationServiceTest {
     void storesOnlyReviewReasonsWhenOutputCitesAnUnknownSource() {
         when(preparationService.prepare(org.mockito.ArgumentMatchers.any())).thenReturn(preview());
         when(aiChatService.modelName()).thenReturn("test-model");
-        when(aiChatService.generateJsonWithMetadata(anyString(), eq(LlmReportOutput.class)))
+        when(aiChatService.generateJsonWithMetadata(anyString(), anyString(), eq(LlmReportOutput.class)))
                 .thenReturn(invocation(validOutput("invented-source")));
         when(draftPersistenceService.createNeedsReviewDraft(
                 any(), any(), eq("test-model"), any(), any(), anyString(), any()))
@@ -91,7 +92,7 @@ class ReportGenerationServiceTest {
         ReportRequestPreparationService.ReportRequestPreview preview = preview();
         when(preparationService.prepare(org.mockito.ArgumentMatchers.any())).thenReturn(preview);
         when(aiChatService.modelName()).thenReturn("test-model");
-        when(aiChatService.generateJsonWithMetadata(anyString(), eq(LlmReportOutput.class)))
+        when(aiChatService.generateJsonWithMetadata(anyString(), anyString(), eq(LlmReportOutput.class)))
                 .thenThrow(new IllegalStateException("model offline"));
 
         assertThatThrownBy(() -> service.generate(new ReportGenerateRequest(null, null, null, null, null, null)))

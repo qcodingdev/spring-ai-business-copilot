@@ -18,13 +18,16 @@ class KnowledgeCitationEvaluationTest {
         assertThat(resource).isNotNull();
         List<String> lines = new String(resource.readAllBytes(), StandardCharsets.UTF_8)
                 .lines().filter(line -> !line.isBlank() && !line.startsWith("#")).toList();
+        assertThat(lines).as("Knowledge 固定评测集不能缩减到 10 条以下").hasSizeGreaterThanOrEqualTo(10);
         CitationGuardrailService guardrail = new CitationGuardrailService();
 
         for (String line : lines) {
             String[] fields = line.split("\\t", -1);
             boolean expected = Boolean.parseBoolean(fields[0]);
             long retrievedChunkId = Long.parseLong(fields[1]);
-            Long citedChunkId = fields[2].isBlank() ? null : Long.parseLong(fields[2]);
+            // TSV 最后一列允许为空；无尾随制表符时也要稳定表达“模型未返回引用”。
+            String citedChunk = fields.length > 2 ? fields[2] : "";
+            Long citedChunkId = citedChunk.isBlank() ? null : Long.parseLong(citedChunk);
             KnowledgeChunk chunk = new KnowledgeChunk(
                     retrievedChunkId, 1L, "Policy", 0,
                     "虚构制度证据", "虚构制度证据", 10, null);

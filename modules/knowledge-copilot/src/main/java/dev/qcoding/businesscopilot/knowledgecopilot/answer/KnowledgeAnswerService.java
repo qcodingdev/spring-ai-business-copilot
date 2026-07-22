@@ -98,7 +98,8 @@ public class KnowledgeAnswerService {
         LlmAnswerOutput llmOutput;
         try {
             AiInvocationResult<LlmAnswerOutput> invocation =
-                    aiChatService.generateJsonWithMetadata(prompt.content(), LlmAnswerOutput.class);
+                    aiChatService.generateJsonWithMetadata(
+                            "knowledge.answer-generation", prompt.content(), LlmAnswerOutput.class);
             llmOutput = invocation.content();
             aiMetadata = invocation.metadata();
             if (aiMetadata != null && aiMetadata.modelName() != null) {

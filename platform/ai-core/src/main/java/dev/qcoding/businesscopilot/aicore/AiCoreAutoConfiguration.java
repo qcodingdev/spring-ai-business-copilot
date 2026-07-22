@@ -6,6 +6,7 @@ import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+import io.micrometer.core.instrument.MeterRegistry;
 
 /**
  * Auto-configuration for the ai-core boundary.
@@ -23,6 +24,27 @@ public class AiCoreAutoConfiguration {
         return new AiModelProperties(null, null, false, 0);
     }
 
+    @ConfigurationProperties(prefix = "business-copilot.ai-core.resilience")
+    @Bean
+    @ConditionalOnMissingBean
+    public AiResilienceProperties aiResilienceProperties() {
+        return new AiResilienceProperties(0, null, 0, 0, 0, null);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public AiCallMetrics aiCallMetrics(ObjectProvider<MeterRegistry> meterRegistryProvider,
+                                       AiModelProperties properties) {
+        return new AiCallMetrics(meterRegistryProvider.getIfAvailable(), properties);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public AiCallCoordinator aiCallCoordinator(AiResilienceProperties properties,
+                                               AiCallMetrics metrics) {
+        return new AiCallCoordinator(properties, metrics);
+    }
+
     @Bean
     @ConditionalOnMissingBean
     public PromptTemplateService promptTemplateService() {
@@ -32,15 +54,17 @@ public class AiCoreAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public AiChatService aiChatService(ObjectProvider<ChatClient.Builder> chatClientBuilderProvider,
-                                       AiModelProperties properties) {
-        return new AiChatService(chatClientBuilderProvider, properties);
+                                       AiModelProperties properties,
+                                       AiCallCoordinator coordinator) {
+        return new AiChatService(chatClientBuilderProvider, properties, coordinator);
     }
 
     @Bean
     @ConditionalOnMissingBean
     public AiEmbeddingService aiEmbeddingService(
             ObjectProvider<org.springframework.ai.embedding.EmbeddingModel> embeddingModelProvider,
-            AiModelProperties properties) {
-        return new AiEmbeddingService(embeddingModelProvider, properties);
+            AiModelProperties properties,
+            AiCallCoordinator coordinator) {
+        return new AiEmbeddingService(embeddingModelProvider, properties, coordinator);
     }
 }
