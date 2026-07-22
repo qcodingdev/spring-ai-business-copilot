@@ -25,11 +25,19 @@ public class AiEmbeddingService {
 
     private final ObjectProvider<EmbeddingModel> embeddingModelProvider;
     private final AiModelProperties properties;
+    private final AiCallCoordinator coordinator;
 
     public AiEmbeddingService(ObjectProvider<EmbeddingModel> embeddingModelProvider,
                                AiModelProperties properties) {
+        this(embeddingModelProvider, properties, standaloneCoordinator(properties));
+    }
+
+    public AiEmbeddingService(ObjectProvider<EmbeddingModel> embeddingModelProvider,
+                              AiModelProperties properties,
+                              AiCallCoordinator coordinator) {
         this.embeddingModelProvider = embeddingModelProvider;
         this.properties = properties;
+        this.coordinator = coordinator;
     }
 
     /** Whether a usable embedding model is configured. */
@@ -62,9 +70,14 @@ public class AiEmbeddingService {
      * @throws AiModelNotEnabledException if no embedding model is configured
      */
     public float[] embed(String text) {
+        return embed("knowledge.embedding", text);
+    }
+
+    /** 使用固定操作名生成向量，操作名会进入链路日志和低基数指标。 */
+    public float[] embed(String operation, String text) {
         EmbeddingModel model = requireEmbeddingModel();
         try {
-            return model.embed(text);
+            return coordinator.execute("embedding", operation, () -> model.embed(text));
         } catch (BusinessException ex) {
             throw ex;
         } catch (RuntimeException ex) {
@@ -103,5 +116,10 @@ public class AiEmbeddingService {
                     "未配置 AI 向量模型，请设置 spring.ai.model.embedding 并提供模型凭证。");
         }
         return model;
+    }
+
+    private static AiCallCoordinator standaloneCoordinator(AiModelProperties properties) {
+        AiResilienceProperties resilience = new AiResilienceProperties(0, null, 0, 0, 0, null);
+        return new AiCallCoordinator(resilience, new AiCallMetrics(null, properties));
     }
 }

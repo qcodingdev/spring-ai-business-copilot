@@ -126,7 +126,7 @@ SQL 边界要求表名必须按 schema 完整限定（例如 `public.customers`�
 
 启用自定义业务数据库时，必须同时配置 `business-copilot.data-copilot.schema.queryable-tables` 和 `business-copilot.guardrails.queryable-columns`。列配置缺失或与目标库不匹配时会失败关闭，不会退化为读取全部 metadata。
 
-Admin 和 Reviewer 可访问 `/actuator/metrics`。Spring AI 的模型观察指标会记录调用耗时，并在模型供应商返回 usage 时记录 token 使用量；指标不包含 Prompt 或业务正文。
+Admin 和 Reviewer 可访问 `/actuator/metrics`。AI Core 记录低基数的调用量、状态、耗时和供应商 token 指标，不包含 Prompt 或业务正文；固定操作名和 `requestId / aiCallId` 串联中文应用日志。显式模型超时、受限重试、并发隔离以及 Chat/Embedding 独立熔断会统一保护五个业务流程。需要 Prometheus 的部署可单独加入 registry exporter，不需要修改业务代码。
 
 ## 使用方式
 

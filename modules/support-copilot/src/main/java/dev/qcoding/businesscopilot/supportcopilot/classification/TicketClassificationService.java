@@ -99,7 +99,7 @@ public class TicketClassificationService {
         AiInvocationResult<LlmClassificationOutput> invocation;
         try {
             invocation = aiChatService.generateJsonWithMetadata(
-                    prompt.content(), LlmClassificationOutput.class);
+                    "support.ticket-classification", prompt.content(), LlmClassificationOutput.class);
         } catch (BusinessException ex) {
             throw ex;
         } catch (Exception ex) {

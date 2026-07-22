@@ -35,6 +35,9 @@ jobs:
       - name: Check frontend JavaScript syntax
         run: ./scripts/check-frontend-syntax.sh
 
+      - name: Check fixed evaluation dataset gates
+        run: ./scripts/check-evaluation-datasets.sh
+
       - name: Run unit, fixed evaluation, and PostgreSQL integration tests
         run: ./mvnw --batch-mode --no-transfer-progress verify -Psbom
 

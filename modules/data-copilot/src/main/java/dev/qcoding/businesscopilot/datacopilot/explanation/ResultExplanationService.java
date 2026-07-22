@@ -64,7 +64,7 @@ public class ResultExplanationService {
 
         // 4. 调用模型，失败时降级
         try {
-            String explanation = aiChatService.generateText(prompt);
+            String explanation = aiChatService.generateText("data.result-explanation", prompt);
             if (explanation == null || explanation.isBlank()) {
                 log.warn("模型返回空解释，已使用降级说明");
                 return ResultExplanationResponse.degraded(buildDegradedExplanation(request));

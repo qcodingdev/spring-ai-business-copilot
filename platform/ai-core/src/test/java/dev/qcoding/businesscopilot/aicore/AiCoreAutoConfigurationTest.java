@@ -18,6 +18,9 @@ class AiCoreAutoConfigurationTest {
             assertThat(context).hasSingleBean(AiChatService.class);
             assertThat(context).hasSingleBean(AiEmbeddingService.class);
             assertThat(context).hasSingleBean(PromptTemplateService.class);
+            assertThat(context).hasSingleBean(AiResilienceProperties.class);
+            assertThat(context).hasSingleBean(AiCallCoordinator.class);
+            assertThat(context).hasSingleBean(AiCallMetrics.class);
         });
     }
 }

@@ -108,7 +108,8 @@ public class ResumeAssessmentService {
         AiInvocationMetadata aiMetadata = null;
         try {
             AiInvocationResult<ResumeModels.AssessmentContent> invocation =
-                    ai.generateJsonWithMetadata(prompt.content(), ResumeModels.AssessmentContent.class);
+                    ai.generateJsonWithMetadata(
+                            "resume.assessment", prompt.content(), ResumeModels.AssessmentContent.class);
             aiMetadata = invocation.metadata();
             if (aiMetadata != null && aiMetadata.modelName() != null) {
                 modelName = aiMetadata.modelName();

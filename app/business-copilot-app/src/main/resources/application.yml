@@ -11,12 +11,22 @@ spring:
       chat:
         base-url: ${SPRING_AI_OPENAI_CHAT_BASE_URL:${SPRING_AI_OPENAI_BASE_URL:https://api.deepseek.com}}
         api-key: ${SPRING_AI_OPENAI_CHAT_API_KEY:${SPRING_AI_OPENAI_API_KEY:}}
+        timeout: ${SPRING_AI_OPENAI_CHAT_TIMEOUT:45s}
         options:
           model: ${SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL:deepseek-v4-flash}
       embedding:
         base-url: ${SPRING_AI_OPENAI_EMBEDDING_BASE_URL:https://api.openai.com}
         api-key: ${SPRING_AI_OPENAI_EMBEDDING_API_KEY:${SPRING_AI_OPENAI_API_KEY:}}
         model: ${SPRING_AI_OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
+        timeout: ${SPRING_AI_OPENAI_EMBEDDING_TIMEOUT:30s}
+    # 只重试瞬时网络或服务端故障；客户端错误默认不重试，避免无效调用和成本放大。
+    retry:
+      max-attempts: ${SPRING_AI_RETRY_MAX_ATTEMPTS:3}
+      on-client-errors: false
+      backoff:
+        initial-interval: ${SPRING_AI_RETRY_INITIAL_INTERVAL:500ms}
+        max-interval: ${SPRING_AI_RETRY_MAX_INTERVAL:2s}
+        multiplier: 2
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/business_copilot}
     username: ${SPRING_DATASOURCE_USERNAME:copilot}
@@ -34,11 +44,14 @@ management:
     web:
       exposure:
         include: health,info,metrics
+  metrics:
+    tags:
+      application: ${spring.application.name}
 
 logging:
   pattern:
-    # 所有业务日志自动携带 HTTP 请求编号和操作者，后台任务使用明确的兜底标识。
-    level: "%5p [requestId=%X{requestId:-background} actorId=%X{actorId:-system}]"
+    # 业务日志统一携带 HTTP 请求、操作者和 AI 子调用编号，后台任务使用明确兜底标识。
+    level: "%5p [requestId=%X{requestId:-background} actorId=%X{actorId:-system} aiCallId=%X{aiCallId:-none} aiOperation=%X{aiOperation:-none}]"
 
 # ── Data Copilot 配置 ──────────────────────────────────────────
 business-copilot:
@@ -131,6 +144,13 @@ business-copilot:
   ai-core:
     model-name: ${SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL:deepseek-v4-flash}
     provider-name: ${BUSINESS_COPILOT_AI_PROVIDER:openai-compatible}
+    resilience:
+      max-concurrent-calls: ${BUSINESS_COPILOT_AI_MAX_CONCURRENT_CALLS:8}
+      acquire-timeout: ${BUSINESS_COPILOT_AI_ACQUIRE_TIMEOUT:2s}
+      sliding-window-size: ${BUSINESS_COPILOT_AI_CIRCUIT_WINDOW_SIZE:10}
+      minimum-number-of-calls: ${BUSINESS_COPILOT_AI_CIRCUIT_MIN_CALLS:5}
+      failure-rate-threshold: ${BUSINESS_COPILOT_AI_CIRCUIT_FAILURE_RATE:50}
+      open-state-duration: ${BUSINESS_COPILOT_AI_CIRCUIT_OPEN_DURATION:30s}
   # ── Knowledge Copilot 配置 ─────────────────────────────────────
   # embedding-dimension 必须与模型实际输出维度一致。V17 已将数据库列改为可变维度，
   # 切换模型时不再修改历史迁移；已有文档需要在界面点击“重建索引”。

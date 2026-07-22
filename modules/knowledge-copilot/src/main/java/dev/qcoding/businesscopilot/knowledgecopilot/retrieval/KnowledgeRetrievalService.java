@@ -84,7 +84,7 @@ public class KnowledgeRetrievalService {
 
         String embeddingModel = properties.embeddingModelName();
         try {
-            float[] questionVector = aiEmbeddingService.embed(question);
+            float[] questionVector = aiEmbeddingService.embed("knowledge.question-retrieval", question);
             List<KnowledgeEmbeddingRepository.SimilaritySearchResult> vectorResults =
                     embeddingRepository.findSimilarChunks(
                             questionVector, embeddingModel, topK * 2, minSimilarity);

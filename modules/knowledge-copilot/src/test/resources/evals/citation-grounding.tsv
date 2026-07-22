@@ -3,3 +3,11 @@ true	1	1
 true	42	42
 false	1	999
 false	7	
+true	8	8
+true	1024	1024
+true	999999	999999
+false	8	9
+false	1024	2048
+false	999999	1
+false	15	0
+false	15

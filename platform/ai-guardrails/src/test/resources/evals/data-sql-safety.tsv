@@ -1,0 +1,19 @@
+# expected	sql
+true	SELECT id, name FROM public.customers LIMIT 10
+true	SELECT COUNT(*) FROM public.orders
+true	SELECT SUM(total_amount) FROM public.orders
+true	SELECT id, total_amount FROM public.orders WHERE created_at >= DATE '2026-06-01' AND created_at < DATE '2026-07-01' LIMIT 20
+true	SELECT name, price FROM public.products ORDER BY price DESC LIMIT 5
+true	SELECT status, COUNT(*) FROM public.orders GROUP BY status LIMIT 10
+false	SELECT * FROM public.customers LIMIT 10
+false	SELECT password FROM public.customers LIMIT 10
+false	SELECT id FROM private.customers LIMIT 10
+false	SELECT id FROM public.query_audit_logs LIMIT 10
+false	SELECT lower(name) FROM public.customers LIMIT 10
+false	SELECT id FROM public.customers LIMIT 1000
+false	SELECT id FROM public.customers LIMIT ?
+false	SELECT id FROM public.customers; SELECT id FROM public.orders
+false	UPDATE public.customers SET name = 'x' WHERE id = 1
+false	DELETE FROM public.orders WHERE id = 1
+false	DROP TABLE public.orders
+false	SELECT id FROM public.customers

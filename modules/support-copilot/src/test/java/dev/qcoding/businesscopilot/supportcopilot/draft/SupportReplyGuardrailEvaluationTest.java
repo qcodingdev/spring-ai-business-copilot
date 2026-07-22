@@ -19,6 +19,7 @@ class SupportReplyGuardrailEvaluationTest {
         assertThat(resource).isNotNull();
         List<String> lines = new String(resource.readAllBytes(), StandardCharsets.UTF_8)
                 .lines().filter(line -> !line.isBlank() && !line.startsWith("#")).toList();
+        assertThat(lines).as("Support 固定评测集不能缩减到 10 条以下").hasSizeGreaterThanOrEqualTo(10);
         ReplyDraftGuardrailService guardrail = new ReplyDraftGuardrailService(
                 new SupportCopilotProperties(true, 2000, 10,
                         "REFUND,ACCOUNT_SECURITY,INCIDENT", true, 5));
@@ -26,8 +27,10 @@ class SupportReplyGuardrailEvaluationTest {
         for (String line : lines) {
             String[] fields = line.split("\\t", -1);
             boolean expected = Boolean.parseBoolean(fields[0]);
-            List<LlmReplyDraftOutput.LlmCitation> citations = fields[3].isBlank()
-                    ? List.of() : List.of(new LlmReplyDraftOutput.LlmCitation(fields[3], "fixed eval"));
+            // citation_id 是可选末列；文件不保留尾随空白时按空引用处理。
+            String citationId = fields.length > 3 ? fields[3] : "";
+            List<LlmReplyDraftOutput.LlmCitation> citations = citationId.isBlank()
+                    ? List.of() : List.of(new LlmReplyDraftOutput.LlmCitation(citationId, "fixed eval"));
             LlmReplyDraftOutput output = new LlmReplyDraftOutput(
                     fields[1], "MEDIUM", List.of(), citations, false);
             if (expected) {

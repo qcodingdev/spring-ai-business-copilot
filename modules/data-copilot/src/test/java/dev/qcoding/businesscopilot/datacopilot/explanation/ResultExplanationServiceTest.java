@@ -14,6 +14,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -45,7 +46,7 @@ class ResultExplanationServiceTest {
         ResultExplanationRequest request = new ResultExplanationRequest(
                 "What is the total sales?", "SELECT SUM(amount) AS total FROM orders", result);
 
-        when(aiChatService.generateText(contains("total sales")))
+        when(aiChatService.generateText(eq("data.result-explanation"), contains("total sales")))
                 .thenReturn("The total sales amount is 100.");
 
         ResultExplanationResponse response = service.explain(request);
@@ -98,7 +99,8 @@ class ResultExplanationServiceTest {
         ResultExplanationRequest request = new ResultExplanationRequest(
                 "What is the total sales?", "SELECT SUM(amount) AS total FROM orders", result);
 
-        when(aiChatService.generateText(org.mockito.ArgumentMatchers.anyString()))
+        when(aiChatService.generateText(org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString()))
                 .thenThrow(new RuntimeException("model down"));
 
         ResultExplanationResponse response = service.explain(request);
@@ -117,7 +119,8 @@ class ResultExplanationServiceTest {
         ResultExplanationRequest request = new ResultExplanationRequest(
                 "上个月销售额是多少", "SELECT SUM(amount) AS total FROM orders", result);
 
-        when(aiChatService.generateText(org.mockito.ArgumentMatchers.anyString()))
+        when(aiChatService.generateText(org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString()))
                 .thenThrow(new RuntimeException("model down"));
 
         ResultExplanationResponse response = service.explain(request);

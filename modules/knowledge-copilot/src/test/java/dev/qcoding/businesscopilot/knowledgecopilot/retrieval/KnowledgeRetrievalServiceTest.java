@@ -40,7 +40,7 @@ class KnowledgeRetrievalServiceTest {
         when(chunks.findByKeywordSearch(any(), anyInt()))
                 .thenReturn(List.of(new KnowledgeChunkRepository.TextSearchResult(11L, 0.8)));
         when(chunks.findById(11L)).thenReturn(Optional.of(chunk));
-        when(embeddings.embed(anyString()))
+        when(embeddings.embed(anyString(), anyString()))
                 .thenThrow(new AiModelNotEnabledException("disabled"));
 
         List<RetrievedKnowledgeChunk> result = service.retrieve("公司年假政策是什么？");

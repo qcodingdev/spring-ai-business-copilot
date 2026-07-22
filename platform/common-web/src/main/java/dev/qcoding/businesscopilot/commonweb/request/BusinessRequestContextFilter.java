@@ -55,11 +55,14 @@ public class BusinessRequestContextFilter extends OncePerRequestFilter {
         response.setHeader(REQUEST_ID_HEADER, requestId);
         long startNanos = System.nanoTime();
         try {
+            if (request.getRequestURI().startsWith("/api/")) {
+                log.info("业务请求开始：方法={}，路径={}", request.getMethod(), request.getRequestURI());
+            }
             filterChain.doFilter(request, response);
         } finally {
             if (request.getRequestURI().startsWith("/api/")) {
                 long latencyMs = (System.nanoTime() - startNanos) / 1_000_000;
-                log.info("业务请求完成：method={}，uri={}，status={}，latencyMs={}",
+                log.info("业务请求完成：方法={}，路径={}，状态={}，耗时毫秒={}",
                         request.getMethod(), request.getRequestURI(), response.getStatus(), latencyMs);
             }
             MDC.remove(ACTOR_ID_MDC_KEY);

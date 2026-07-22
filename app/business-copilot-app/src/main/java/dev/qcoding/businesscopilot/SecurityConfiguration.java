@@ -26,7 +26,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.Set;
 
-/** v2.0 应用的单组织认证与角色边界配置。 */
+/** 应用的单组织认证与角色边界配置。 */
 @Configuration(proxyBeanMethods = false)
 @EnableWebSecurity
 public class SecurityConfiguration {

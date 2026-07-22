@@ -54,7 +54,7 @@ public class ReportGenerationService {
         AiInvocationMetadata invocationMetadata = null;
         try {
             AiInvocationResult<LlmReportOutput> invocation = aiChatService.generateJsonWithMetadata(
-                    prompt.content(), LlmReportOutput.class);
+                    "report.generation", prompt.content(), LlmReportOutput.class);
             LlmReportOutput output = invocation.content();
             invocationMetadata = invocation.metadata();
             String effectiveModelName = invocationMetadata != null

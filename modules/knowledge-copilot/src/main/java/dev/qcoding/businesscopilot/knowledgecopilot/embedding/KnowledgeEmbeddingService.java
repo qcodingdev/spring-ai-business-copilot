@@ -78,7 +78,7 @@ public class KnowledgeEmbeddingService {
 
         List<KnowledgeChunkEmbedding> embeddings = new ArrayList<>();
         for (KnowledgeChunk chunk : chunks) {
-            float[] vector = aiEmbeddingService.embed(chunk.content());
+            float[] vector = aiEmbeddingService.embed("knowledge.document-index", chunk.content());
 
             // 3. 维度不匹配时给出清晰错误，指导修正方向
             if (vector.length != configuredDimension) {
