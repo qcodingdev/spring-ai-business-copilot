@@ -126,6 +126,17 @@ public class JdbcSupportReplyDraftRepository implements SupportReplyDraftReposit
     }
 
     @Override
+    public boolean replaceConfirmationToken(Long id, SupportDraftStatus expectedStatus,
+                                            String tokenDigest, String reviewerActorId, Instant now) {
+        return jdbcTemplate.update("""
+                UPDATE support_reply_drafts
+                SET confirmation_token_digest = ?, reviewer_actor_id = ?, updated_at = ?
+                WHERE id = ? AND status = ? AND expires_at > ?
+                """, tokenDigest, reviewerActorId, Timestamp.from(now), id,
+                expectedStatus.name(), Timestamp.from(now)) == 1;
+    }
+
+    @Override
     public long count() {
         Long result = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM support_reply_drafts", Long.class);
         return result == null ? 0 : result;

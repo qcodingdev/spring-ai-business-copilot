@@ -12,6 +12,9 @@ public interface KnowledgeDocumentRepository {
     /** 按主键查询文档。 */
     Optional<KnowledgeDocument> findById(Long id);
 
+    /** 查询一个逻辑文档的当前版本。 */
+    Optional<KnowledgeDocument> findCurrent(java.util.UUID logicalDocumentId);
+
     /** 按创建时间倒序列出文档。 */
     List<KnowledgeDocument> findAll();
 

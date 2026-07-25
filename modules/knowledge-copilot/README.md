@@ -2,7 +2,7 @@
 
 English | [简体中文](#简体中文)
 
-Enterprise knowledge assistant with versioned document ingestion, durable indexing jobs, hybrid PostgreSQL text/pgvector retrieval, mandatory citations, refusal, and audit.
+Enterprise knowledge assistant with versioned document ingestion, durable indexing jobs, role/category-filtered hybrid PostgreSQL text/pgvector retrieval, mandatory citations, refusal, and audit.
 
 ```mermaid
 flowchart LR
@@ -18,4 +18,4 @@ Test: `./mvnw -pl modules/knowledge-copilot -am test`
 
 ## 简体中文
 
-企业知识库助手，提供版本化文档、持久索引任务、文本/pgvector 混合检索、强制引用、无依据拒答与审计。TXT、Markdown、PDF、DOCX 统一经过受限解析；答案只能引用本次检索结果，且引用片段必须真实存在于对应 chunk。索引状态、重试和 owner 权限持久化，临时失败恢复后无需重新上传。
+企业知识助手，提供版本化文档、持久索引任务、按业务分类和角色过滤的文本/pgvector 混合检索、强制引用、无依据拒答与审计。资料支持“全员、HR/审核员、仅管理员”三类可见范围。答案只能引用本次有权访问的检索结果，且引用片段必须真实存在于对应 chunk。

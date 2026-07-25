@@ -1,0 +1,7 @@
+spring:
+  config:
+    activate:
+      on-profile: self-hosted
+
+business-copilot:
+  runtime-mode: self-hosted

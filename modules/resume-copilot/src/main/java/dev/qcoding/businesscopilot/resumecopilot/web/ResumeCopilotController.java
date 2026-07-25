@@ -4,6 +4,7 @@ import dev.qcoding.businesscopilot.commonweb.api.ApiResponse;
 import dev.qcoding.businesscopilot.resumecopilot.assessment.ResumeAssessmentService;
 import dev.qcoding.businesscopilot.resumecopilot.ResumeModels;
 import dev.qcoding.businesscopilot.resumecopilot.job.JobCriteriaService;
+import dev.qcoding.businesscopilot.resumecopilot.job.JobDraftService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestPart;
@@ -22,6 +24,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.UUID;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/resume-copilot")
@@ -29,10 +32,20 @@ import java.util.UUID;
 public class ResumeCopilotController {
     private final JobCriteriaService criteriaService;
     private final ResumeAssessmentService assessmentService;
+    private final JobDraftService jobDraftService;
 
-    public ResumeCopilotController(JobCriteriaService criteriaService, ResumeAssessmentService assessmentService) {
+    public ResumeCopilotController(JobCriteriaService criteriaService,
+                                   ResumeAssessmentService assessmentService,
+                                   JobDraftService jobDraftService) {
         this.criteriaService = criteriaService;
         this.assessmentService = assessmentService;
+        this.jobDraftService = jobDraftService;
+    }
+
+    @PostMapping("/jobs/draft")
+    public ResponseEntity<ApiResponse<JobDraftService.JobDraftResponse>> draftJob(
+            @Valid @RequestBody JobDraftRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(jobDraftService.generate(request.title(), request.requirements())));
     }
 
     @PostMapping("/jobs/criteria")
@@ -55,6 +68,18 @@ public class ResumeCopilotController {
     public ResponseEntity<ApiResponse<JobCriteriaService.StatusResponse>> confirmCriteria(
             @PathVariable long jobId, @Valid @RequestBody TokenRequest request) {
         return ResponseEntity.ok(ApiResponse.ok(criteriaService.confirm(jobId, request.token())));
+    }
+
+    /** Current confirmed standards that can be selected for a separate candidate assessment flow. */
+    @GetMapping("/jobs/confirmed")
+    public ResponseEntity<ApiResponse<List<JobCriteriaService.ConfirmedJobSummary>>> confirmedJobs() {
+        return ResponseEntity.ok(ApiResponse.ok(criteriaService.confirmedJobs()));
+    }
+
+    @PutMapping("/jobs/{jobId}/criteria")
+    public ResponseEntity<ApiResponse<JobCriteriaService.CriteriaResponse>> updateCriteria(
+            @PathVariable long jobId, @Valid @RequestBody CriteriaUpdateRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(criteriaService.updateDraft(jobId, request.criteria())));
     }
 
     @PostMapping("/assessments")
@@ -103,6 +128,16 @@ public class ResumeCopilotController {
                                   @NotBlank(message = "职位名称不能为空。") String title,
                                   @NotBlank(message = "职位描述不能为空。") String jobDescription,
                                   UUID logicalJobId) { }
+    public record JobDraftRequest(
+            @NotBlank(message = "职位名称不能为空。")
+            @jakarta.validation.constraints.Size(max = 300, message = "职位名称不能超过 300 个字符。")
+            String title,
+            @NotBlank(message = "岗位需求不能为空。")
+            @jakarta.validation.constraints.Size(max = 2000, message = "岗位需求不能超过 2000 个字符。")
+            String requirements) { }
+    public record CriteriaUpdateRequest(
+            @NotNull(message = "岗位标准不能为空。")
+            List<ResumeModels.JobCriterion> criteria) { }
     public record AssessmentRequest(
             @NotNull(message = "职位编号不能为空。") Long jobId,
             @NotBlank(message = "简历内容不能为空。") String resumeText) { }

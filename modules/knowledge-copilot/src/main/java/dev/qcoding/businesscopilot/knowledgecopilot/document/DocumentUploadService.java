@@ -78,6 +78,67 @@ public class DocumentUploadService {
         return ingest(fileName, contentType, content, category, logicalDocumentId);
     }
 
+    /**
+     * 私有初始化流程导入版本化虚构资料。该入口不接收 HTTP 用户输入，
+     * 只允许应用初始化服务传入固定 classpath 资源。
+     */
+    @Transactional
+    public DocumentUploadResponse ingestSystemDocument(
+            String fileName,
+            String contentType,
+            byte[] content,
+            String category,
+            UUID logicalDocumentId,
+            KnowledgeVisibilityScope visibilityScope) {
+        if (logicalDocumentId == null) {
+            throw new IllegalArgumentException("系统资料必须使用固定 logicalDocumentId");
+        }
+        if (content != null && content.length > properties.maxDocumentSize()) {
+            throw new BusinessException(ErrorCode.DOCUMENT_TOO_LARGE);
+        }
+        ExtractedDocument extracted = documentTextExtractor.extract(fileName, contentType, content);
+        String contentHash = sha256Hex(extracted.text());
+        KnowledgeDocument current = documentRepository.findCurrent(logicalDocumentId).orElse(null);
+        if (current != null && current.contentHash().equals(contentHash)) {
+            int chunks = chunkRepository.findByDocumentId(current.id()).size();
+            KnowledgeIndexJob retryJob = null;
+            if (!"INDEXED".equals(current.indexStatus())
+                    && !"PROCESSING".equals(current.indexStatus())
+                    && indexJobRepository.findActiveByDocumentId(current.id()).isEmpty()) {
+                retryJob = indexingService.enqueue(current.id());
+            }
+            return new DocumentUploadResponse(
+                    current.id(), current.logicalDocumentId(), current.versionNo(), current.title(),
+                    chunks, current.enabled(), "INDEXED".equals(current.indexStatus()),
+                    retryJob == null ? null : retryJob.id(),
+                    retryJob == null ? current.indexStatus() : retryJob.status().name());
+        }
+
+        List<ParsedSection> sections = parse(extracted.format(), extracted.text());
+        if (sections.isEmpty()) {
+            throw new BusinessException(ErrorCode.DOCUMENT_EMPTY);
+        }
+        int version = documentRepository.nextVersion(logicalDocumentId);
+        if (version > 1) {
+            documentRepository.supersedeCurrent(logicalDocumentId);
+        }
+        KnowledgeDocument document = new KnowledgeDocument(
+                null, deriveTitle(fileName), "system-demo", fileName, category,
+                contentHash, false, null, null,
+                logicalDocumentId, version, true, "PENDING", null, contentType,
+                "system-demo", visibilityScope == null ? KnowledgeVisibilityScope.ALL : visibilityScope,
+                true);
+        Long documentId = documentRepository.save(document);
+        List<KnowledgeChunk> chunks = chunkingService.chunk(documentId, sections).stream()
+                .map(this::maskChunk)
+                .toList();
+        chunkRepository.saveAll(chunks);
+        KnowledgeIndexJob job = indexingService.enqueue(documentId);
+        return new DocumentUploadResponse(
+                documentId, logicalDocumentId, version, deriveTitle(fileName),
+                chunks.size(), false, false, job.id(), job.status().name());
+    }
+
     private DocumentUploadResponse ingest(String fileName, String contentType, byte[] bytes,
                                           String category, UUID requestedLogicalId) {
         CurrentActor actor = actorProvider.currentActor();
@@ -170,7 +231,7 @@ public class DocumentUploadService {
 
     private void requireOwner(KnowledgeDocument document) {
         CurrentActor actor = actorProvider.currentActor();
-        if (!actor.authenticated()
+        if (document.systemManaged() || !actor.authenticated()
                 || (!actor.actorId().equals(document.ownerActorId()) && !actor.hasRole(BusinessRole.ADMIN))) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }

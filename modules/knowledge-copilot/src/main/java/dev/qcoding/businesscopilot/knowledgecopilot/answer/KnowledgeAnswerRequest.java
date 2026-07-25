@@ -11,5 +11,10 @@ import jakarta.validation.constraints.NotBlank;
  */
 public record KnowledgeAnswerRequest(
         @NotBlank(message = "问题不能为空")
-        String question) {
+        String question,
+        String category) {
+
+    public KnowledgeAnswerRequest(String question) {
+        this(question, null);
+    }
 }

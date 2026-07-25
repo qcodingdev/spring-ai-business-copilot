@@ -38,7 +38,12 @@ public class KnowledgeCopilotSupportKnowledgeRetriever implements SupportKnowled
         log.debug("开始检索工单知识依据：category={}，queryLength={}",
                 query.category(), searchQuery.length());
 
-        List<RetrievedKnowledgeChunk> chunks = retrievalService.retrieve(searchQuery);
+        String knowledgeCategory = query.category() != null
+                && (query.category().name().equals("PRODUCT_USAGE")
+                || query.category().name().equals("ACCOUNT_ACTIVATION"))
+                ? "PRODUCT" : "SUPPORT";
+        List<RetrievedKnowledgeChunk> chunks =
+                retrievalService.retrieve(searchQuery, knowledgeCategory);
 
         if (chunks.isEmpty()) {
             return SupportKnowledgeResult.noResults("未检索到与工单相关的知识依据，建议转人工处理或补充知识库内容");

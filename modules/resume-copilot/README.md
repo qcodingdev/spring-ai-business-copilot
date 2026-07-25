@@ -1,8 +1,8 @@
-# resume-copilot
+# resume-copilot（用户侧：HR Copilot）
 
 English | [简体中文](#简体中文)
 
-Privacy-first resume review assistant for one versioned, confirmed job description and one retention-bound sanitized resume. It produces criterion-by-criterion evidence, gaps, and interview verification questions for a human reviewer.
+Recruiting capability inside HR Copilot. It drafts a job profile/JD, supports human-edited criteria, and reviews one retention-bound sanitized resume into criterion-by-criterion evidence, gaps, and interview verification questions.
 
 ```mermaid
 flowchart LR
@@ -17,10 +17,10 @@ Hard boundaries: no score, stars, ranking, probability, hire/reject recommendati
 
 Persistence: explicit Spring JDBC repositories for job, assessment, evidence batches, and audit metadata.
 
-API: `POST /api/resume-copilot/jobs/criteria|jobs/criteria/file`, `POST /jobs/{id}/criteria/confirm`, `POST /assessments|assessments/file`, `GET/POST /assessments/{id}/review`, `POST /assessments/{id}/cancel`, `DELETE /submissions/{id}`.
+API: `POST /api/resume-copilot/jobs/draft`, `POST /jobs/criteria|jobs/criteria/file`, `PUT /jobs/{id}/criteria`, `POST /jobs/{id}/criteria/confirm`, `POST /assessments|assessments/file`, `GET/POST /assessments/{id}/review`, `POST /assessments/{id}/cancel`, `DELETE /submissions/{id}`.
 
 Test: `./mvnw -pl modules/resume-copilot -am test`
 
 ## 简体中文
 
-隐私优先的单个版本化 JD、单份简历证据化评估助手。TXT、Markdown、PDF、DOCX 统一受限解析；不保存原始文件，只保存默认 30 天到期、可手动删除的脱敏文本和证据。人工修订与反馈和模型原稿分开保存，并再次经过证据与招聘合规校验。不生成总分、排名、概率、录用或淘汰建议，也不改变招聘流程。
+HR Copilot 中的招聘辅助能力：先从岗位需求生成岗位画像和 JD 草稿，再由人工编辑、确认标准，最后对一份脱敏简历整理证据、缺口和面试核实问题。TXT、Markdown、PDF、DOCX 统一受限解析；不保存原始文件。公网模式只使用预置虚构简历并保留 24 小时临时结果。人工修订会再次经过证据与招聘合规校验，不生成总分、排名、概率、录用或淘汰建议，也不改变招聘流程。

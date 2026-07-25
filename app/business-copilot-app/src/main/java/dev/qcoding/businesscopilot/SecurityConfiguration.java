@@ -2,10 +2,14 @@ package dev.qcoding.businesscopilot;
 
 import dev.qcoding.businesscopilot.commonweb.request.BusinessRequestContextFilter;
 import dev.qcoding.businesscopilot.commonweb.request.BusinessRequestContextHolder;
+import dev.qcoding.businesscopilot.demo.PublicDemoBoundaryFilter;
+import dev.qcoding.businesscopilot.demo.PublicDemoProperties;
+import dev.qcoding.businesscopilot.demo.RuntimeModeProperties;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -29,6 +33,7 @@ import java.util.Set;
 /** 应用的单组织认证与角色边界配置。 */
 @Configuration(proxyBeanMethods = false)
 @EnableWebSecurity
+@EnableConfigurationProperties({RuntimeModeProperties.class, PublicDemoProperties.class})
 public class SecurityConfiguration {
 
     @Bean
@@ -52,18 +57,24 @@ public class SecurityConfiguration {
     }
 
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            RuntimeModeProperties runtimeModeProperties) throws Exception {
         CookieCsrfTokenRepository csrfRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
         CsrfTokenRequestAttributeHandler csrfRequestHandler = new CsrfTokenRequestAttributeHandler();
 
         http.authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/login", "/error", "/favicon.ico", "/css/**", "/js/**", "/images/**").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+                        .requestMatchers("/admin", "/admin/**", "/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/actuator/metrics/**").hasAnyRole("ADMIN", "REVIEWER")
                         .requestMatchers(HttpMethod.GET, "/api/*/audit-logs").hasAnyRole("ADMIN", "REVIEWER")
                         .requestMatchers(HttpMethod.POST,
                                 "/api/support-copilot/reply-drafts/*/confirm",
                                 "/api/support-copilot/reply-drafts/*/edit",
+                                "/api/support-copilot/reply-drafts/*/review-session",
+                                "/api/support-copilot/reply-drafts/*/mark-customer-replied",
+                                "/api/support-copilot/tickets/*/record-manual-reply",
                                 "/api/resume-copilot/assessments/*/review",
                                 "/api/resume-copilot/assessments/*/cancel")
                             .hasAnyRole("ADMIN", "OPERATOR", "REVIEWER")
@@ -76,6 +87,7 @@ public class SecurityConfiguration {
                             .hasAnyRole("ADMIN", "OPERATOR")
                         .requestMatchers(HttpMethod.POST, "/api/**").hasAnyRole("ADMIN", "OPERATOR")
                         .requestMatchers(HttpMethod.PATCH, "/api/**").hasAnyRole("ADMIN", "OPERATOR")
+                        .requestMatchers(HttpMethod.PUT, "/api/**").hasAnyRole("ADMIN", "OPERATOR")
                         .requestMatchers(HttpMethod.DELETE,
                                 "/api/knowledge-copilot/documents/*",
                                 "/api/resume-copilot/submissions/*")
@@ -99,7 +111,9 @@ public class SecurityConfiguration {
                                 response, HttpStatus.FORBIDDEN, "SEC_0403", "当前账号无权执行此操作")))
                 .addFilterAfter(new BusinessRequestContextFilter(
                         request -> request.getUserPrincipal() == null ? null : request.getUserPrincipal().getName(),
-                        SecurityConfiguration::businessRoles), AnonymousAuthenticationFilter.class);
+                        SecurityConfiguration::businessRoles), AnonymousAuthenticationFilter.class)
+                .addFilterAfter(new PublicDemoBoundaryFilter(runtimeModeProperties),
+                        BusinessRequestContextFilter.class);
 
         return http.build();
     }

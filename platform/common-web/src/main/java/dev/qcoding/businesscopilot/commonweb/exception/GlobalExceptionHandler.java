@@ -47,7 +47,9 @@ public class GlobalExceptionHandler {
     private boolean exposesBusinessMessage(ErrorCode errorCode) {
         return switch (errorCode) {
             case BUSINESS_ERROR, VALIDATION_ERROR, DOCUMENT_EMPTY, DOCUMENT_TOO_LARGE,
-                    DOCUMENT_FORMAT_UNSUPPORTED, DOCUMENT_DUPLICATE -> true;
+                    DOCUMENT_FORMAT_UNSUPPORTED, DOCUMENT_DUPLICATE,
+                    PUBLIC_DEMO_INPUT_REJECTED, DEMO_SCENARIO_NOT_AVAILABLE,
+                    PUBLIC_DEMO_LIMIT_REACHED -> true;
             case NOT_FOUND, STATE_CONFLICT, AI_MODEL_ERROR, AI_OUTPUT_PARSE_ERROR,
                     SQL_GUARDRAIL_VIOLATION, SQL_CANDIDATE_NOT_EXECUTABLE,
                     QUERY_EXECUTION_ERROR, EMBEDDING_DIMENSION_MISMATCH, INTERNAL_ERROR -> false;
@@ -100,6 +102,9 @@ public class GlobalExceptionHandler {
             case DOCUMENT_FORMAT_UNSUPPORTED -> HttpStatus.BAD_REQUEST;
             case DOCUMENT_DUPLICATE -> HttpStatus.CONFLICT;
             case EMBEDDING_DIMENSION_MISMATCH -> HttpStatus.INTERNAL_SERVER_ERROR;
+            case PUBLIC_DEMO_INPUT_REJECTED -> HttpStatus.BAD_REQUEST;
+            case DEMO_SCENARIO_NOT_AVAILABLE -> HttpStatus.NOT_FOUND;
+            case PUBLIC_DEMO_LIMIT_REACHED -> HttpStatus.TOO_MANY_REQUESTS;
             case INTERNAL_ERROR -> HttpStatus.INTERNAL_SERVER_ERROR;
         };
     }

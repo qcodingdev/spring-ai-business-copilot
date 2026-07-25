@@ -1,29 +1,29 @@
 // 公开产品预览：不调用业务接口，受保护操作仍必须先登录。
 const modulePreviews = {
   data: {
-    title: 'Data Copilot',
-    kicker: '自然语言转 SQL',
+    title: '数据分析助手',
+    kicker: '安全查询业务数据',
     headline: '从业务问题到安全查询结果',
-    description: '自然语言生成只读 SQL，先展示候选语句与校验结论，确认后再执行。',
-    points: ['Schema、表与字段白名单', '写操作、未知函数和无界结果默认拒绝', 'SQL 候选、执行结果与操作者完整审计'],
+    description: '直接提出销售、客户或商品问题，系统先展示将要执行的只读查询，确认后再返回业务结果。',
+    points: ['只访问获准的虚构业务数据', '写操作和无边界结果默认拒绝', '查询内容、处理结果与操作者均可追溯'],
     input: '“上个月销售额最高的前 5 个客户是谁？”',
     steps: ['理解业务意图', '生成查询候选', '安全校验'],
-    resultTitle: '安全规则校验通过',
+    resultTitle: '内容与安全检查通过',
     resultCopy: '只读查询 · 5 行上限 · 敏感字段脱敏 · 等待人工确认'
   },
   knowledge: {
-    title: 'Knowledge Copilot',
+    title: '企业知识助手',
     kicker: '有依据的企业知识问答',
     headline: '从企业文档到可追溯答案',
     description: '检索企业知识证据，答案必须携带引用；证据不足时明确降级，不编造结论。',
-    points: ['TXT、Markdown、PDF、DOCX 文档索引', '答案与引用片段一一对应', '低相关或证据不足时触发安全降级'],
+    points: ['企业资料按角色和业务范围开放', '答案与原文依据一一对应', '未找到有效依据时拒答或转人工'],
     input: '“员工年假如何计算？请给出制度依据。”',
     steps: ['检索相关文档', '组合引用证据', '引用一致性校验'],
     resultTitle: '发现 3 条有效证据',
     resultCopy: '员工手册 v3 · 3 个引用片段 · 证据覆盖率通过'
   },
   support: {
-    title: 'Support Copilot',
+    title: '客服工作台',
     kicker: '可审计的客服流程',
     headline: '从客服工单到待确认回复',
     description: '识别工单意图与风险，检索知识依据并生成回复草稿，由人工确认后完成处理。',
@@ -34,7 +34,7 @@ const modulePreviews = {
     resultCopy: '支付异常 · 高优先级 · 2 条处置依据 · 未自动发送'
   },
   report: {
-    title: 'Report Copilot',
+    title: '报告生成助手',
     kicker: '基于证据的报告生成',
     headline: '从业务证据到可复核报告',
     description: '组合指标、任务和文本来源生成报告草稿，标注证据新鲜度并保留人工确认。',
@@ -45,15 +45,15 @@ const modulePreviews = {
     resultCopy: '8 项指标 · 4 个重点事件 · 2 个待复核结论'
   },
   resume: {
-    title: 'Resume Copilot',
-    kicker: '基于证据的简历评估',
-    headline: '从岗位标准到证据化评估',
-    description: '先确认岗位评估标准，再分析单份简历；保留证据缺口，不推断敏感属性。',
-    points: ['岗位硬性与加分标准先确认', '个人隐私字段默认脱敏', '输出匹配证据、缺口和面试核验问题'],
-    input: '“依据 Java 后端岗位标准评估这份候选人简历。”',
-    steps: ['确认岗位标准', '提取简历证据', '招聘合规校验'],
-    resultTitle: '评估草稿等待复核',
-    resultCopy: '6 项标准匹配 · 3 个证据缺口 · 隐私字段已脱敏'
+    title: 'HR Copilot',
+    kicker: '招聘与员工服务',
+    headline: '从岗位画像到面试核实问题',
+    description: '先生成并确认岗位标准，再整理虚构候选人材料中的匹配证据、缺口和待核实事项。',
+    points: ['岗位画像和 JD 先由人工编辑确认', '只使用预置虚构简历', '输出证据位置、缺口和面试核实问题'],
+    input: '“分析这份虚构简历与 Java AI 岗位要求的证据对应关系。”',
+    steps: ['确认岗位标准', '整理材料证据', '检查招聘合规'],
+    resultTitle: '招聘辅助结果等待复核',
+    resultCopy: '6 项材料证据 · 3 个待核实问题 · 不输出录用或淘汰建议'
   }
 };
 
@@ -115,7 +115,7 @@ function activatePreview(moduleId, focusTab = false) {
     previewElements.points.appendChild(item);
   });
   previewElements.actionLabel.textContent = preview.title;
-  previewElements.consoleTitle.textContent = `${preview.title} / 安全执行`;
+  previewElements.consoleTitle.textContent = `${preview.title} / 受控处理`;
   previewElements.input.textContent = preview.input;
   previewElements.stepOne.textContent = preview.steps[0];
   previewElements.stepTwo.textContent = preview.steps[1];

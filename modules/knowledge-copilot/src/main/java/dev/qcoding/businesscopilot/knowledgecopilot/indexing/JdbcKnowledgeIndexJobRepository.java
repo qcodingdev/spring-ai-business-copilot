@@ -60,6 +60,19 @@ public class JdbcKnowledgeIndexJobRepository implements KnowledgeIndexJobReposit
     }
 
     @Override
+    public Optional<KnowledgeIndexJob> findActiveByDocumentId(Long documentId) {
+        List<KnowledgeIndexJob> jobs = jdbcTemplate.query("""
+                SELECT %s
+                FROM knowledge_index_jobs
+                WHERE document_id = ?
+                  AND status IN ('PENDING', 'PROCESSING', 'RETRYABLE')
+                ORDER BY created_at DESC, id DESC
+                LIMIT 1
+                """.formatted(SELECT_COLUMNS), ROW_MAPPER, documentId);
+        return jobs.isEmpty() ? Optional.empty() : Optional.of(jobs.getFirst());
+    }
+
+    @Override
     public Optional<KnowledgeIndexJob> claimNext(Instant now) {
         List<KnowledgeIndexJob> jobs = jdbcTemplate.query("""
                 WITH candidate AS (

@@ -70,6 +70,10 @@ public class JdbcKnowledgeEmbeddingRepository implements KnowledgeEmbeddingRepos
             WHERE d.enabled = TRUE
               AND d.current_version = TRUE
               AND d.index_status = 'INDEXED'
+              AND (d.visibility_scope = 'ALL'
+                   OR (d.visibility_scope = 'HR_REVIEWER' AND ?)
+                   OR (d.visibility_scope = 'ADMIN' AND ?))
+              AND (?::text IS NULL OR d.category = ?::text)
               AND s.similarity >= ?
             ORDER BY s.similarity DESC
             LIMIT ?
@@ -134,7 +138,12 @@ public class JdbcKnowledgeEmbeddingRepository implements KnowledgeEmbeddingRepos
     public List<KnowledgeEmbeddingRepository.SimilaritySearchResult> findSimilarChunks(
             float[] embedding, String embeddingModel, int topK, double minSimilarity) {
         return jdbcTemplate.query(SIMILARITY_SEARCH_SQL, SIMILARITY_ROW_MAPPER,
-                formatVector(embedding), embeddingModel, minSimilarity, topK);
+                formatVector(embedding), embeddingModel,
+                dev.qcoding.businesscopilot.knowledgecopilot.retrieval.KnowledgeAccessContext.reviewerAllowed(),
+                dev.qcoding.businesscopilot.knowledgecopilot.retrieval.KnowledgeAccessContext.adminAllowed(),
+                dev.qcoding.businesscopilot.knowledgecopilot.retrieval.KnowledgeAccessContext.category(),
+                dev.qcoding.businesscopilot.knowledgecopilot.retrieval.KnowledgeAccessContext.category(),
+                minSimilarity, topK);
     }
 
     /**

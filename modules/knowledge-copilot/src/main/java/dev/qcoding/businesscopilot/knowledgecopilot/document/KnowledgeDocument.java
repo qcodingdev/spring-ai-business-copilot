@@ -34,13 +34,27 @@ public record KnowledgeDocument(
         String indexStatus,
         String indexErrorCategory,
         String contentType,
-        String ownerActorId) {
+        String ownerActorId,
+        KnowledgeVisibilityScope visibilityScope,
+        boolean systemManaged) {
 
     public KnowledgeDocument(Long id, String title, String sourceType, String sourceName,
                              String category, String contentHash, boolean enabled,
                              Instant createdAt, Instant updatedAt) {
         this(id, title, sourceType, sourceName, category, contentHash, enabled,
                 createdAt, updatedAt, null, 1, true,
-                enabled ? "INDEXED" : "PENDING", null, "text/plain", null);
+                enabled ? "INDEXED" : "PENDING", null, "text/plain", null,
+                KnowledgeVisibilityScope.ALL, false);
+    }
+
+    public KnowledgeDocument(Long id, String title, String sourceType, String sourceName,
+                             String category, String contentHash, boolean enabled,
+                             Instant createdAt, Instant updatedAt, java.util.UUID logicalDocumentId,
+                             int versionNo, boolean currentVersion, String indexStatus,
+                             String indexErrorCategory, String contentType, String ownerActorId) {
+        this(id, title, sourceType, sourceName, category, contentHash, enabled,
+                createdAt, updatedAt, logicalDocumentId, versionNo, currentVersion,
+                indexStatus, indexErrorCategory, contentType, ownerActorId,
+                KnowledgeVisibilityScope.ALL, false);
     }
 }

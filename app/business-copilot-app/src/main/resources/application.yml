@@ -39,6 +39,10 @@ spring:
     locations: classpath:db/migration
     baseline-on-migrate: true
 
+server:
+  port: ${PORT:8080}
+  forward-headers-strategy: framework
+
 management:
   endpoints:
     web:
@@ -55,6 +59,18 @@ logging:
 
 # ── Data Copilot 配置 ──────────────────────────────────────────
 business-copilot:
+  runtime-mode: ${BUSINESS_COPILOT_RUNTIME_MODE:development}
+  public-demo:
+    client-daily-operations: ${BUSINESS_COPILOT_PUBLIC_DEMO_CLIENT_DAILY_OPERATIONS:20}
+    global-daily-model-calls: ${BUSINESS_COPILOT_PUBLIC_DEMO_GLOBAL_DAILY_MODEL_CALLS:500}
+    max-concurrent-executions: ${BUSINESS_COPILOT_PUBLIC_DEMO_MAX_CONCURRENT_EXECUTIONS:4}
+    fingerprint-secret: ${BUSINESS_COPILOT_PUBLIC_DEMO_FINGERPRINT_SECRET:development-only-change-me}
+    timezone: ${BUSINESS_COPILOT_PUBLIC_DEMO_TIMEZONE:Asia/Shanghai}
+    temporary-data-retention: ${BUSINESS_COPILOT_PUBLIC_DEMO_TEMPORARY_RETENTION:24h}
+    operation-log-retention: ${BUSINESS_COPILOT_PUBLIC_DEMO_OPERATION_LOG_RETENTION:7d}
+    usage-retention: ${BUSINESS_COPILOT_PUBLIC_DEMO_USAGE_RETENTION:30d}
+    input-token-price-per-million: ${BUSINESS_COPILOT_INPUT_TOKEN_PRICE_PER_MILLION:}
+    output-token-price-per-million: ${BUSINESS_COPILOT_OUTPUT_TOKEN_PRICE_PER_MILLION:}
   audit:
     retention:
       anonymize-after: ${BUSINESS_COPILOT_AUDIT_ANONYMIZE_AFTER:7d}

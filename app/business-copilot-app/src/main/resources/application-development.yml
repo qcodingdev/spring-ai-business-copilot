@@ -1,0 +1,7 @@
+spring:
+  config:
+    activate:
+      on-profile: development
+
+business-copilot:
+  runtime-mode: development

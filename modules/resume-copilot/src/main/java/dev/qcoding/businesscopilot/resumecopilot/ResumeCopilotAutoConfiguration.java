@@ -11,6 +11,7 @@ import dev.qcoding.businesscopilot.resumecopilot.assessment.ResumeAssessmentServ
 import dev.qcoding.businesscopilot.resumecopilot.evidence.ResumeEvidenceService;
 import dev.qcoding.businesscopilot.resumecopilot.job.JobCriteriaGuardrail;
 import dev.qcoding.businesscopilot.resumecopilot.job.JobCriteriaService;
+import dev.qcoding.businesscopilot.resumecopilot.job.JobDraftService;
 import dev.qcoding.businesscopilot.resumecopilot.persistence.ResumeRepository;
 import dev.qcoding.businesscopilot.resumecopilot.privacy.ResumePrivacySanitizer;
 import dev.qcoding.businesscopilot.resumecopilot.privacy.ResumeRetentionService;
@@ -73,6 +74,12 @@ public class ResumeCopilotAutoConfiguration {
     }
 
     @Bean @ConditionalOnMissingBean
+    public JobDraftService jobDraftService(ResumePrivacySanitizer sanitizer, AiChatService ai,
+                                           PromptTemplateService prompts) {
+        return new JobDraftService(sanitizer, ai, prompts);
+    }
+
+    @Bean @ConditionalOnMissingBean
     public ResumeAssessmentService resumeAssessmentService(ResumePrivacySanitizer sanitizer,
                                                            ResumeEvidenceService evidenceService,
                                                            JobCriteriaService criteriaService,
@@ -92,7 +99,8 @@ public class ResumeCopilotAutoConfiguration {
 
     @Bean @ConditionalOnMissingBean
     public ResumeCopilotController resumeCopilotController(JobCriteriaService criteriaService,
-                                                           ResumeAssessmentService assessmentService) {
-        return new ResumeCopilotController(criteriaService, assessmentService);
+                                                           ResumeAssessmentService assessmentService,
+                                                           JobDraftService jobDraftService) {
+        return new ResumeCopilotController(criteriaService, assessmentService, jobDraftService);
     }
 }

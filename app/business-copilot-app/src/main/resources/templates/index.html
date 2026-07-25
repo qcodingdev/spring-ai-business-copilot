@@ -8,11 +8,13 @@
   <link rel="icon" type="image/png" th:href="@{/images/qcoding-logo.png}"/>
   <meta name="_csrf" th:content="${_csrf.token}"/>
   <meta name="_csrf_header" th:content="${_csrf.headerName}"/>
+  <meta name="runtime-mode" th:content="${runtimeMode}"/>
+  <meta name="admin-user" th:content="${adminUser}"/>
 </head>
-<body class="workbench-page">
+<body class="workbench-page" th:classappend="${publicDemo} ? ' public-demo-mode'">
 <div class="app-shell">
   <aside class="sidebar">
-    <a class="brand brand-home-link" th:href="@{/} + '#data-copilot'"
+    <a class="brand brand-home-link" th:href="${publicDemo} ? '/#overview' : '/#data-copilot'"
        aria-label="返回 QCoding AI Copilot 工作台首页">
       <img class="brand-logo" th:src="@{/images/qcoding-logo.png}" alt="QCoding Logo"/>
       <span class="brand-copy">
@@ -24,47 +26,52 @@
     <div class="sidebar-status">
       <span class="status-dot" aria-hidden="true"></span>
       <span>
-        <strong>安全执行模式</strong>
-        <small>Guardrails 已启用</small>
+        <strong>受控业务模式</strong>
+        <small>内容与合规检查已启用</small>
       </span>
     </div>
 
+    <button th:if="${publicDemo}" id="overview-tab" class="overview-tab" type="button" aria-current="page">
+      <span class="tab-icon" aria-hidden="true">⌂</span>
+      <span class="tab-copy"><strong>工作总览</strong><small>任务、复核与资料状态</small></span>
+    </button>
+
     <!-- 模块切换 -->
     <nav class="tab-bar" role="tablist" aria-label="业务助手模块">
-      <button class="tab active" type="button" role="tab" aria-selected="true"
+      <button class="tab" type="button" role="tab" aria-selected="false"
               data-tab="data-copilot"
-              data-title="Data Copilot"
-              data-description="用自然语言生成、校验并执行只读业务查询">
+              data-title="数据分析助手"
+              data-description="用自然语言生成、检查并执行只读业务查询">
         <span class="tab-icon" aria-hidden="true">D</span>
-        <span class="tab-copy"><strong>数据查询</strong><small>Data Copilot</small></span>
+        <span class="tab-copy"><strong>数据分析</strong><small>只读业务查询</small></span>
       </button>
       <button class="tab" type="button" role="tab" aria-selected="false"
               data-tab="knowledge-copilot"
-              data-title="Knowledge Copilot"
-              data-description="从企业文档中检索证据并生成可追溯答案">
+              data-title="企业知识助手"
+              data-description="基于企业资料回答，并展示可核实的制度依据">
         <span class="tab-icon" aria-hidden="true">K</span>
-        <span class="tab-copy"><strong>知识问答</strong><small>Knowledge Copilot</small></span>
+        <span class="tab-copy"><strong>企业知识</strong><small>基于资料回答</small></span>
       </button>
       <button class="tab" type="button" role="tab" aria-selected="false"
               data-tab="support-copilot"
-              data-title="Support Copilot"
-              data-description="分析客服工单、检索依据并产出待确认回复">
+              data-title="客服工作台"
+              data-description="分析客户问题、查找依据并生成待确认回复">
         <span class="tab-icon" aria-hidden="true">S</span>
-        <span class="tab-copy"><strong>客服处理</strong><small>Support Copilot</small></span>
+        <span class="tab-copy"><strong>客服工作台</strong><small>回复建议与复核</small></span>
       </button>
       <button class="tab" type="button" role="tab" aria-selected="false"
               data-tab="report-copilot"
-              data-title="Report Copilot"
-              data-description="汇总业务证据，生成可复核、可导出的报告草稿">
+              data-title="报告生成助手"
+              data-description="汇总业务资料，生成可复核的报告草稿">
         <span class="tab-icon" aria-hidden="true">R</span>
-        <span class="tab-copy"><strong>报告生成</strong><small>Report Copilot</small></span>
+        <span class="tab-copy"><strong>报告生成</strong><small>摘要、风险与行动</small></span>
       </button>
       <button class="tab" type="button" role="tab" aria-selected="false"
               data-tab="resume-copilot"
-              data-title="Resume Copilot"
-              data-description="依据确认后的职位标准完成单份简历证据化评估">
+              data-title="HR Copilot"
+              data-description="协助岗位梳理、候选人证据分析与员工制度问答">
         <span class="tab-icon" aria-hidden="true">CV</span>
-        <span class="tab-copy"><strong>简历评估</strong><small>Resume Copilot</small></span>
+        <span class="tab-copy"><strong>HR Copilot</strong><small>招聘与员工服务</small></span>
       </button>
     </nav>
 
@@ -78,10 +85,11 @@
     <header class="topbar">
       <div class="module-heading">
         <p class="eyebrow">QCoding AI 应用工作台</p>
-        <h1 id="active-module-title">Data Copilot</h1>
-        <p id="active-module-description" class="subtitle">用自然语言生成、校验并执行只读业务查询</p>
+        <h1 id="active-module-title">工作总览</h1>
+        <p id="active-module-description" class="subtitle">查看可执行范例、近期活动、待人工复核事项与资料准备状态</p>
       </div>
       <div class="user-actions">
+        <a th:if="${adminUser}" th:href="@{/admin}" class="btn-secondary table-action-button">管理与诊断</a>
         <span class="user-avatar" aria-hidden="true" th:text="${#strings.substring(currentUser, 0, 1).toUpperCase()}">U</span>
         <span class="user-name" th:text="${currentUser}">user</span>
         <form th:action="@{/logout}" method="post">
@@ -90,13 +98,41 @@
       </div>
     </header>
 
-    <section class="trust-strip" aria-label="安全执行能力">
-      <div><span class="trust-icon">01</span><span><strong>业务边界</strong><small>模块化 Guardrails</small></span></div>
-      <div><span class="trust-icon">02</span><span><strong>人工确认</strong><small>高风险动作需确认</small></span></div>
-      <div><span class="trust-icon">03</span><span><strong>全链路审计</strong><small>输入、模型与结果可追溯</small></span></div>
+    <section class="trust-strip" aria-label="可信业务能力">
+      <div><span class="trust-icon">01</span><span><strong>虚构资料边界</strong><small>不接触真实企业数据</small></span></div>
+      <div><span class="trust-icon">02</span><span><strong>人工复核</strong><small>重要事项不自动执行</small></span></div>
+      <div><span class="trust-icon">03</span><span><strong>回答依据</strong><small>结论和来源可核实</small></span></div>
     </section>
 
     <div class="workspace-content">
+      <section th:if="${publicDemo}" id="workspace-overview" aria-label="业务总览">
+      <section class="business-overview" aria-label="业务总览">
+        <div>
+          <p class="eyebrow">企业 AI 业务协同平台</p>
+          <h2>从可执行范例开始，十秒进入业务流程</h2>
+          <p>选择范例后可以修改输入，只有点击“确认执行”才会调用模型。所有内容限定在虚构、只读、受控的数据范围内。</p>
+        </div>
+        <div class="overview-metrics">
+          <span><strong id="overview-scenario-count">15</strong><small>可执行范例</small></span>
+          <span><strong id="overview-review-count">—</strong><small>待人工复核</small></span>
+          <span><strong id="overview-quota">—</strong><small>今日剩余额度</small></span>
+        </div>
+      </section>
+      <div class="public-demo-notice" th:if="${publicDemo}">
+        <strong>公网受控体验</strong>
+        <span>请勿输入真实企业资料、客户信息、个人简历、账号凭据或其他敏感信息。</span>
+      </div>
+      <section class="overview-detail-grid" aria-label="企业资料准备状态">
+        <article class="overview-detail-card">
+          <div><span class="section-kicker">企业资料准备状态</span><h2>当前可用数据</h2></div>
+          <div class="overview-readiness">
+            <p><span>知识资料</span><strong id="overview-knowledge-ready">—</strong></p>
+            <p><span>虚构客户数据</span><strong id="overview-data-ready">—</strong></p>
+            <p><span>体验范围</span><strong>仅虚构、只读数据</strong></p>
+          </div>
+        </article>
+      </section>
+      </section>
 
   <!-- ═══════════════════════════════════════════════════════════ -->
   <!-- Data Copilot 面板 -->
@@ -116,9 +152,9 @@
         <label for="question-input">业务问题</label>
         <textarea id="question-input" rows="4" placeholder="例如：上个月销售额最高的前 5 个客户是谁？"></textarea>
         <div class="prompt-suggestions" aria-label="示例业务问题">
-          <button type="button" class="prompt-chip" data-question="本月各产品分类的销售额和订单数分别是多少？">分类销售概览</button>
-          <button type="button" class="prompt-chip" data-question="最近 30 天退款金额最高的 5 个订单是什么？">退款风险</button>
-          <button type="button" class="prompt-chip" data-question="上个月销售额最高的前 5 个客户是谁？">高价值客户</button>
+          <button type="button" class="prompt-chip" data-question="最近 30 天的订单销售明细，展示订单编号、创建时间和金额，按创建时间升序，最多 100 条。">近 30 天订单</button>
+          <button type="button" class="prompt-chip" data-question="销售额最高的五类商品是什么？展示商品分类、销售额和订单明细数量。">分类销售概览</button>
+          <button type="button" class="prompt-chip" data-question="比较本月与上月的新客户数量。">新客户环比</button>
         </div>
         <div class="composer-footer">
           <span class="input-hint">生成后将先展示 SQL 与安全校验，不会自动执行。</span>
@@ -475,7 +511,7 @@
         <input id="sc-draft-edit-reason" type="text" class="text-input"
                maxlength="500" placeholder="例如：调整语气并补充人工处理说明"/>
         <button id="sc-edit-btn" type="button" class="btn-secondary">保存人工修订</button>
-        <p class="field-hint">修订内容仍会脱敏并写入审计；保存后还需要点击“确认草稿”。</p>
+        <p class="field-hint">修订内容仍会脱敏并写入审计；保存后可点击“确认并回复客户”。</p>
       </div>
       <div id="sc-draft-needs-human" hidden>
         <span class="badge badge-warn">建议转人工</span>
@@ -488,8 +524,59 @@
       <div id="sc-draft-actions" class="action-buttons" hidden>
         <input type="hidden" id="sc-draft-id"/>
         <input type="hidden" id="sc-confirmation-token"/>
-        <button id="sc-confirm-btn" type="button" class="btn-primary">确认草稿</button>
+        <button id="sc-confirm-btn" type="button" class="btn-primary">确认并回复客户</button>
         <button id="sc-cancel-btn" type="button" class="btn-secondary">取消草稿</button>
+      </div>
+    </section>
+
+    <!-- 人工复核队列 -->
+    <section class="panel support-queue-panel" id="sc-queue-panel">
+      <div class="panel-heading">
+        <div><span class="section-kicker">客服工作台</span><h2>人工复核队列</h2></div>
+        <span class="panel-note">仅显示预置工单和当前账号创建的脱敏内容</span>
+      </div>
+      <div class="support-queue-filters">
+        <label>状态
+          <select id="sc-queue-status" class="text-input">
+            <option value="">全部状态</option>
+            <option value="NEEDS_HUMAN">待人工复核</option>
+            <option value="DRAFTED">待确认</option>
+            <option value="CONFIRMED">已确认</option>
+            <option value="CANCELED">已取消</option>
+          </select>
+        </label>
+        <label>分类
+          <select id="sc-queue-category" class="text-input">
+            <option value="">全部分类</option>
+            <option value="REFUND">退款</option>
+            <option value="INCIDENT">故障</option>
+            <option value="ACCOUNT_SECURITY">账号安全</option>
+            <option value="BILLING">账单</option>
+            <option value="PRODUCT_USAGE">产品使用</option>
+            <option value="OTHER">其他</option>
+          </select>
+        </label>
+        <label>紧急度
+          <select id="sc-queue-urgency" class="text-input">
+            <option value="">全部紧急度</option>
+            <option value="CRITICAL">紧急</option>
+            <option value="HIGH">高</option>
+            <option value="MEDIUM">中</option>
+            <option value="LOW">低</option>
+          </select>
+        </label>
+        <label>风险
+          <select id="sc-queue-risk" class="text-input">
+            <option value="">全部风险</option>
+            <option value="HIGH">高风险</option>
+            <option value="MEDIUM">中风险</option>
+            <option value="LOW">低风险</option>
+          </select>
+        </label>
+        <button id="sc-queue-refresh" type="button" class="btn-secondary">刷新队列</button>
+      </div>
+      <div id="sc-queue-list" class="support-queue-list">
+        <p class="empty-state">正在读取复核队列…</p>
       </div>
     </section>
 
@@ -682,39 +769,103 @@
   <div id="tab-resume-copilot" class="tab-content" role="tabpanel" hidden>
     <div class="compliance-notice">辅助评估，不代表录用或淘汰决定。系统不提供总分、排名或通过率。</div>
 
-    <div class="process-rail" aria-label="简历评估流程">
-      <span class="active"><b>1</b>确认标准</span>
+    <div class="hr-module-shell">
+      <nav class="hr-tabs" role="tablist" aria-label="HR Copilot 工作入口">
+        <button type="button" id="hr-tab-employee-service" class="active" role="tab" data-hr-view="employee-service"
+                aria-selected="true" aria-controls="rsc-employee-service-panel" tabindex="0">员工服务</button>
+        <button type="button" id="hr-tab-recruitment" role="tab" data-hr-view="recruitment"
+                aria-selected="false" aria-controls="rsc-recruitment-view" tabindex="-1">招聘协同</button>
+      </nav>
+
+      <div class="hr-tab-panels">
+    <section class="panel panel-emphasis hr-tab-panel" role="tabpanel" id="rsc-employee-service-panel"
+             aria-labelledby="hr-tab-employee-service">
+      <div class="panel-heading">
+        <div><span class="section-kicker">员工服务</span><h2>制度与入职流程问答</h2></div>
+        <span class="badge badge-pass">基于 HR 制度资料</span>
+      </div>
+      <label for="rsc-hr-question">员工问题</label>
+      <textarea id="rsc-hr-question" rows="3" maxlength="500" placeholder="例如：试用期如何办理转正？"></textarea>
+      <div class="prompt-suggestions" id="rsc-hr-question-samples" aria-label="HR 制度问答范例">
+        <button type="button" class="prompt-chip" data-hr-question="员工一年有多少天年假？">年假政策</button>
+        <button type="button" class="prompt-chip" data-hr-question="试用期如何办理转正？">试用期转正</button>
+        <button type="button" class="prompt-chip" data-hr-question="出差住宿标准是多少？">出差住宿</button>
+      </div>
+      <div class="composer-footer">
+        <span class="input-hint">回答会展示制度依据；没有依据时会提示转人工。</span>
+        <button id="rsc-hr-ask-btn" type="button">生成制度答复</button>
+      </div>
+      <section id="rsc-hr-answer-panel" class="business-result-section" hidden>
+        <h3>答复与依据</h3>
+        <p id="rsc-hr-answer"></p>
+        <ul id="rsc-hr-citations" class="citation-list"></ul>
+        <p id="rsc-hr-warnings" class="field-hint"></p>
+      </section>
+    </section>
+
+    <section class="hr-tab-panel" role="tabpanel" id="rsc-recruitment-view" hidden
+             aria-labelledby="hr-tab-recruitment">
+      <nav class="recruitment-tabs" role="tablist" aria-label="招聘协同功能">
+        <button type="button" class="active" role="tab" data-recruitment-view="job-standard"
+                aria-selected="true" aria-controls="rsc-job-standard-view">JD 生成</button>
+        <button type="button" role="tab" data-recruitment-view="candidate-assessment"
+                aria-selected="false" aria-controls="rsc-candidate-assessment-view">候选人评估</button>
+      </nav>
+
+    <section id="rsc-job-standard-view">
+    <div class="process-rail" aria-label="JD 生成流程">
+      <span id="rsc-standard-step-1" class="active"><b>1</b>填写岗位需求</span>
       <i></i>
-      <span><b>2</b>分析简历</span>
+      <span id="rsc-standard-step-2"><b>2</b>生成并编辑完整 JD</span>
       <i></i>
-      <span><b>3</b>人工复核</span>
+      <span id="rsc-standard-step-3"><b>3</b>确认为评估标准</span>
     </div>
 
     <section class="panel panel-emphasis">
       <div class="panel-heading">
-        <div><span class="section-kicker">第 1 步</span><h2>确认职位标准</h2></div>
-        <span class="badge badge-info">先标准后评估</span>
+        <div><span class="section-kicker">JD 生成</span><h2>一句话描述，生成岗位 JD</h2></div>
+        <span class="badge badge-info">生成后可编辑</span>
       </div>
+      <p class="field-hint">用一句话描述岗位需求或粘贴已有 JD，系统会整理为一份完整、可编辑的岗位 JD，可直接发布到招聘网站；确认后再提取为评估标准，用于候选人简历分析。</p>
       <div class="field-group">
         <label for="rsc-job-title">职位名称</label>
         <input id="rsc-job-title" class="text-input" value="Java 后端工程师" maxlength="300"/>
       </div>
       <div class="field-group">
-        <label for="rsc-job-description">职位描述</label>
+        <label for="rsc-job-description">岗位需求或已有 JD</label>
         <textarea id="rsc-job-description" rows="7">必选：3 年以上 Java 后端开发经验。
 必选：使用 Spring Boot 构建 REST API 的实践经验。
 必选：具备 PostgreSQL 或其他关系型数据库经验。
 加分：有容器化服务实践。</textarea>
       </div>
-      <div class="field-group">
-        <label for="rsc-job-file">或上传 JD 文件（TXT / Markdown / PDF / DOCX）</label>
-        <input id="rsc-job-file" type="file" class="text-input"
-               accept=".txt,.md,.markdown,.pdf,.docx,text/plain,text/markdown,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"/>
-        <p class="field-hint sample-downloads">
-          <a th:href="@{/samples/resume/java-backend-jd.md}" download>下载虚构 JD 样例</a>
-        </p>
+      <div class="prompt-suggestions" id="rsc-job-samples" aria-label="岗位需求范例">
+        <button type="button" class="prompt-chip" data-job-title="Java AI 应用开发工程师"
+                data-job-requirements="招聘 Java AI 应用开发工程师。主要负责基于 Spring AI 的企业知识问答、RAG 检索链路和业务系统集成；要求 3 年以上 Java 开发经验，熟悉 Spring Boot、REST API 与关系型数据库；有容器化服务或 AI 应用落地经验优先。">Java AI 应用开发</button>
+        <button type="button" class="prompt-chip" data-job-title="客服运营专员"
+                data-job-requirements="招聘客服运营专员。主要负责复杂客户问题分流与升级、客服知识库维护、服务质量复盘和常见问题优化；要求具备 SaaS 客服或运营经验，能够清晰记录问题、协调跨团队处理并跟进客户反馈；有工单系统、知识库运营或服务指标分析经验优先。">客服运营</button>
       </div>
-      <button id="rsc-extract-btn" type="button">解析评估标准</button>
+      <div class="action-buttons">
+        <button id="rsc-draft-job-btn" type="button">生成岗位画像和可编辑 JD</button>
+      </div>
+    </section>
+
+    <section id="rsc-job-draft-panel" class="panel" hidden>
+      <div class="panel-heading">
+        <div><span class="section-kicker">JD 草稿</span><h2>岗位画像与完整 JD</h2></div>
+        <span class="badge badge-info">编辑后继续</span>
+      </div>
+      <p id="rsc-job-profile" class="business-draft"></p>
+      <div class="resume-result-grid">
+        <section><h3>主要职责</h3><ul id="rsc-job-responsibilities"></ul></section>
+        <section><h3>必须条件</h3><ul id="rsc-job-required"></ul></section>
+        <section><h3>加分条件</h3><ul id="rsc-job-preferred"></ul></section>
+      </div>
+      <div class="field-group">
+        <label for="rsc-job-draft">完整虚构 JD（可编辑）</label>
+        <textarea id="rsc-job-draft" rows="12"></textarea>
+        <p id="rsc-job-verification" class="field-hint">可直接修改此份 JD；确认后会基于修改后的文本提取评估标准。</p>
+      </div>
+      <button id="rsc-use-draft-btn" type="button">使用此份 JD，继续提取评估标准</button>
     </section>
 
     <section id="rsc-criteria-panel" class="panel" hidden>
@@ -729,6 +880,21 @@
         </table>
       </div>
       <button id="rsc-confirm-criteria-btn" type="button" class="btn-primary">确认标准</button>
+    </section>
+    </section><!-- /JD 生成 -->
+
+    <section id="rsc-candidate-assessment-view" hidden>
+    <section class="panel panel-emphasis" id="rsc-job-selection-panel">
+      <div class="panel-heading">
+        <div><span class="section-kicker">候选人评估</span><h2>选择已确认的岗位标准</h2></div>
+        <button id="rsc-refresh-jobs-btn" type="button" class="btn-secondary">刷新标准</button>
+      </div>
+      <p class="field-hint">直接选择已有岗位标准，再粘贴或上传候选人简历即可分析；不需要重新生成 JD。</p>
+      <label for="rsc-confirmed-job-select">岗位标准</label>
+      <select id="rsc-confirmed-job-select" class="text-input">
+        <option value="">正在加载可用标准…</option>
+      </select>
+      <p id="rsc-selected-job-summary" class="field-hint">请选择一个已确认的岗位标准。</p>
     </section>
 
     <section id="rsc-resume-panel" class="panel" hidden>
@@ -814,6 +980,10 @@
         <button id="rsc-delete-submission-btn" type="button" class="btn-secondary">删除脱敏简历数据</button>
       </div>
     </section>
+    </section><!-- /候选人评估 -->
+    </section><!-- /招聘协同 -->
+      </div><!-- /.hr-tab-panels -->
+    </div><!-- /.hr-module-shell -->
   </div><!-- /tab-resume-copilot -->
     </div><!-- /workspace-content -->
   </main>
@@ -836,5 +1006,7 @@
 <script th:src="@{/js/support-copilot.js}"></script>
 <script th:src="@{/js/report-copilot.js}"></script>
 <script th:src="@{/js/resume-copilot.js}"></script>
+<script th:src="@{/js/demo-scenarios.js}"></script>
+<script th:src="@{/js/support-queue.js}"></script>
 </body>
 </html>

@@ -60,6 +60,20 @@ public class KnowledgeRetrievalService {
      * @return 按相关度排序的分片列表；没有结果达到阈值时返回空列表
      */
     public List<RetrievedKnowledgeChunk> retrieve(String question) {
+        return retrieve(question, null);
+    }
+
+    /** 按可选业务分类和当前请求角色检索，分类与权限都只能由服务端确定。 */
+    public List<RetrievedKnowledgeChunk> retrieve(String question, String category) {
+        KnowledgeAccessContext.setCategory(category);
+        try {
+            return retrieveWithinAccessContext(question);
+        } finally {
+            KnowledgeAccessContext.clear();
+        }
+    }
+
+    private List<RetrievedKnowledgeChunk> retrieveWithinAccessContext(String question) {
         int topK = properties.topK();
         double minSimilarity = properties.minSimilarity();
 

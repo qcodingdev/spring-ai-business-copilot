@@ -80,6 +80,7 @@
     const draftId = els.draftId.value;
     const token = els.confirmationToken.value;
     if (!draftId || !token) return;
+    if (!window.confirm('是否已通过实际客服渠道回复客户？确定后会确认草稿、标记“已回复客户”并关闭工单。系统不会自动发送消息。')) return;
     confirmDraft(draftId, token);
   });
 
@@ -137,7 +138,7 @@
   }
 
   async function confirmDraft(draftId, token) {
-    showLoading('正在确认...');
+    showLoading('正在确认并记录回复...');
     try {
       const resp = await fetch(API_BASE + '/reply-drafts/' + draftId + '/confirm', {
         method: 'POST',
@@ -152,8 +153,15 @@
 
       const body = await resp.json();
       if (body.success) {
+        const replied = await fetch(API_BASE + '/reply-drafts/' + draftId + '/mark-customer-replied', {
+          method: 'POST'
+        });
+        const repliedBody = await replied.json().catch(() => ({}));
+        if (!replied.ok || !repliedBody.success) {
+          throw new Error(repliedBody.message || '草稿已确认，但未能记录“已回复客户”');
+        }
         els.draftActions.hidden = true;
-        showToast('草稿已确认');
+        showToast('已确认草稿并标记“已回复客户”，工单已关闭');
       } else {
         throw new Error(body.message || '确认失败');
       }
@@ -489,15 +497,10 @@
     const toast = $('#error-toast');
     if (toast) {
       toast.textContent = msg;
+      toast.dataset.variant = 'success';
       toast.hidden = false;
-      toast.style.background = '#d4edda';
-      toast.style.color = '#155724';
-      toast.style.border = '1px solid #c3e6cb';
       setTimeout(() => {
         toast.hidden = true;
-        toast.style.background = '';
-        toast.style.color = '';
-        toast.style.border = '';
       }, 3000);
     }
   }

@@ -34,8 +34,10 @@ public class AiCoreAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public AiCallMetrics aiCallMetrics(ObjectProvider<MeterRegistry> meterRegistryProvider,
+                                       ObjectProvider<AiUsageRecorder> usageRecorderProvider,
                                        AiModelProperties properties) {
-        return new AiCallMetrics(meterRegistryProvider.getIfAvailable(), properties);
+        return new AiCallMetrics(meterRegistryProvider.getIfAvailable(), properties,
+                usageRecorderProvider.getIfAvailable(() -> AiUsageRecorder.NO_OP));
     }
 
     @Bean

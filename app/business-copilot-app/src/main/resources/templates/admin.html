@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>管理与技术诊断 · QCoding AI Copilot</title>
+  <link rel="stylesheet" th:href="@{/css/app.css}"/>
+  <meta name="_csrf" th:content="${_csrf.token}"/>
+  <meta name="_csrf_header" th:content="${_csrf.headerName}"/>
+</head>
+<body class="admin-page">
+<header class="admin-header">
+  <a th:href="@{/}" class="admin-brand">
+    <img class="brand-logo" th:src="@{/images/qcoding-logo.png}" alt="QCoding"/>
+    <span><strong>管理与技术诊断</strong><small>私有 Admin · 不展示密钥和业务正文</small></span>
+  </a>
+  <div>
+    <span class="badge badge-info" th:text="${runtimeMode}">public-demo</span>
+    <span th:text="${currentUser}">admin</span>
+    <a th:href="@{/}" class="btn-secondary">返回业务工作台</a>
+  </div>
+</header>
+
+<main class="admin-main">
+  <section class="admin-hero">
+    <div>
+      <p class="eyebrow">只读诊断为主</p>
+      <h1>平台运行状态与虚构数据维护</h1>
+      <p>这里展示模型、索引、场景、额度、成本、熔断和审计摘要。唯一写操作是初始化与双确认恢复虚构数据。</p>
+    </div>
+    <button id="admin-refresh" type="button" class="btn-secondary">刷新状态</button>
+  </section>
+
+  <section class="admin-grid admin-summary-grid">
+    <article class="admin-card"><span>可用场景</span><strong id="admin-scenarios">—</strong><small>服务端目录</small></article>
+    <article class="admin-card"><span>知识资料</span><strong id="admin-knowledge">—</strong><small>索引状态汇总</small></article>
+    <article class="admin-card"><span>模型调用</span><strong id="admin-ai-calls">—</strong><small>用量聚合</small></article>
+    <article class="admin-card"><span>运行模式</span><strong id="admin-mode">—</strong><small>同一套代码</small></article>
+  </section>
+
+  <section class="admin-grid">
+    <article class="panel">
+      <div class="panel-heading"><div><span class="section-kicker">业务应用</span><h2>五模块健康状态</h2></div></div>
+      <div id="admin-modules" class="admin-list"></div>
+    </article>
+    <article class="panel">
+      <div class="panel-heading"><div><span class="section-kicker">模型与向量</span><h2>当前配置</h2></div></div>
+      <div id="admin-models" class="admin-list"></div>
+    </article>
+    <article class="panel">
+      <div class="panel-heading"><div><span class="section-kicker">限流与熔断</span><h2>保护状态</h2></div></div>
+      <div id="admin-resilience" class="admin-list"></div>
+    </article>
+    <article class="panel">
+      <div class="panel-heading"><div><span class="section-kicker">资料范围</span><h2>知识可见性</h2></div></div>
+      <div id="admin-visibility" class="admin-list"></div>
+    </article>
+  </section>
+
+  <section class="panel">
+    <div class="panel-heading">
+      <div><span class="section-kicker">Token 与估算成本</span><h2>最近模型用量</h2></div>
+      <span class="panel-note">未配置单价时只展示 Token</span>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>日期</th><th>操作</th><th>调用</th><th>成功/失败</th><th>输入/输出 Token</th><th>耗时</th><th>估算成本</th></tr></thead>
+        <tbody id="admin-usage"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-heading">
+      <div><span class="section-kicker">规则可追溯</span><h2>Prompt 与规则资源哈希</h2></div>
+      <span class="panel-note">仅显示名称与哈希，不返回正文</span>
+    </div>
+    <div id="admin-prompts" class="admin-hash-list"></div>
+  </section>
+
+  <section class="panel admin-maintenance">
+    <div class="panel-heading">
+      <div><span class="section-kicker">虚构数据维护</span><h2>初始化与恢复</h2></div>
+      <span class="badge badge-warn">范围受控写操作</span>
+    </div>
+    <div class="admin-maintenance-actions">
+      <div>
+        <h3>幂等初始化</h3>
+        <p>导入并索引固定虚构资料，重复执行不会产生重复场景或文档版本。</p>
+        <button id="admin-initialize" type="button">初始化虚构数据</button>
+      </div>
+      <div>
+        <h3>恢复初始状态</h3>
+        <p>第一步只计算范围并签发一次性凭证；第二步必须输入固定确认文案。</p>
+        <button id="admin-reset-intent" type="button" class="btn-secondary">检查恢复范围</button>
+      </div>
+    </div>
+    <div id="admin-reset-confirm" class="admin-reset-confirm" hidden>
+      <div id="admin-reset-counts"></div>
+      <label for="admin-reset-text">输入确认文案：<strong>恢复公网演示初始数据</strong></label>
+      <input id="admin-reset-text" class="text-input" autocomplete="off"/>
+      <button id="admin-reset-execute" type="button" class="btn-danger">确认恢复虚构数据</button>
+    </div>
+    <p id="admin-maintenance-status" class="inline-status" hidden></p>
+  </section>
+
+  <section class="panel">
+    <div class="panel-heading"><div><span class="section-kicker">执行记录</span><h2>最近初始化与恢复任务</h2></div></div>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>任务</th><th>类型</th><th>状态</th><th>操作者</th><th>开始</th><th>结束</th></tr></thead>
+        <tbody id="admin-jobs"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<div id="error-toast" role="status" aria-live="polite" hidden></div>
+<script th:src="@{/js/admin.js}"></script>
+</body>
+</html>

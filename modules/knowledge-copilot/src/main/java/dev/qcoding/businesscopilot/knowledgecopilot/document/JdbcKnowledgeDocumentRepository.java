@@ -18,15 +18,15 @@ public class JdbcKnowledgeDocumentRepository implements KnowledgeDocumentReposit
             INSERT INTO knowledge_documents (
                 title, source_type, source_name, category, content_hash, enabled, created_at, updated_at,
                 logical_document_id, version_no, current_version, index_status,
-                index_error_category, content_type, owner_actor_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                index_error_category, content_type, owner_actor_id, visibility_scope, system_managed
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             RETURNING id
             """;
 
     private static final String FIND_BY_ID_SQL = """
             SELECT id, title, source_type, source_name, category, content_hash, enabled, created_at, updated_at,
                    logical_document_id, version_no, current_version, index_status,
-                   index_error_category, content_type, owner_actor_id
+                   index_error_category, content_type, owner_actor_id, visibility_scope, system_managed
             FROM knowledge_documents
             WHERE id = ?
             """;
@@ -34,7 +34,7 @@ public class JdbcKnowledgeDocumentRepository implements KnowledgeDocumentReposit
     private static final String FIND_ALL_SQL = """
             SELECT id, title, source_type, source_name, category, content_hash, enabled, created_at, updated_at,
                    logical_document_id, version_no, current_version, index_status,
-                   index_error_category, content_type, owner_actor_id
+                   index_error_category, content_type, owner_actor_id, visibility_scope, system_managed
             FROM knowledge_documents
             ORDER BY created_at DESC, id DESC
             """;
@@ -46,7 +46,7 @@ public class JdbcKnowledgeDocumentRepository implements KnowledgeDocumentReposit
     private static final String UPDATE_ENABLED_SQL = """
             UPDATE knowledge_documents
             SET enabled = ?, index_status = CASE WHEN ? THEN 'INDEXED' ELSE 'DISABLED' END, updated_at = ?
-            WHERE id = ?
+            WHERE id = ? AND system_managed = FALSE
             """;
 
     private static final RowMapper<KnowledgeDocument> ROW_MAPPER = (rs, rowNum) -> new KnowledgeDocument(
@@ -65,7 +65,9 @@ public class JdbcKnowledgeDocumentRepository implements KnowledgeDocumentReposit
             rs.getString("index_status"),
             rs.getString("index_error_category"),
             rs.getString("content_type"),
-            rs.getString("owner_actor_id"));
+            rs.getString("owner_actor_id"),
+            KnowledgeVisibilityScope.valueOf(rs.getString("visibility_scope")),
+            rs.getBoolean("system_managed"));
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -91,7 +93,9 @@ public class JdbcKnowledgeDocumentRepository implements KnowledgeDocumentReposit
                 document.indexStatus(),
                 document.indexErrorCategory(),
                 document.contentType(),
-                document.ownerActorId());
+                document.ownerActorId(),
+                document.visibilityScope().name(),
+                document.systemManaged());
     }
 
     @Override
@@ -101,8 +105,32 @@ public class JdbcKnowledgeDocumentRepository implements KnowledgeDocumentReposit
     }
 
     @Override
+    public Optional<KnowledgeDocument> findCurrent(java.util.UUID logicalDocumentId) {
+        List<KnowledgeDocument> result = jdbcTemplate.query("""
+                SELECT id, title, source_type, source_name, category, content_hash, enabled, created_at, updated_at,
+                       logical_document_id, version_no, current_version, index_status,
+                       index_error_category, content_type, owner_actor_id, visibility_scope, system_managed
+                FROM knowledge_documents
+                WHERE logical_document_id = ? AND current_version = TRUE
+                ORDER BY id DESC
+                LIMIT 1
+                """, ROW_MAPPER, logicalDocumentId);
+        return result.isEmpty() ? Optional.empty() : Optional.of(result.getFirst());
+    }
+
+    @Override
     public List<KnowledgeDocument> findAll() {
-        return jdbcTemplate.query(FIND_ALL_SQL, ROW_MAPPER);
+        String scopedSql = FIND_ALL_SQL.replace(
+                "ORDER BY created_at DESC, id DESC",
+                """
+                WHERE visibility_scope = 'ALL'
+                   OR (visibility_scope = 'HR_REVIEWER' AND ?)
+                   OR (visibility_scope = 'ADMIN' AND ?)
+                ORDER BY created_at DESC, id DESC
+                """);
+        return jdbcTemplate.query(scopedSql, ROW_MAPPER,
+                dev.qcoding.businesscopilot.knowledgecopilot.retrieval.KnowledgeAccessContext.reviewerAllowed(),
+                dev.qcoding.businesscopilot.knowledgecopilot.retrieval.KnowledgeAccessContext.adminAllowed());
     }
 
     @Override
@@ -145,7 +173,7 @@ public class JdbcKnowledgeDocumentRepository implements KnowledgeDocumentReposit
     @Override
     public boolean deleteById(Long id, String ownerActorId) {
         return jdbcTemplate.update(
-                "DELETE FROM knowledge_documents WHERE id = ? AND owner_actor_id = ?",
+                "DELETE FROM knowledge_documents WHERE id = ? AND owner_actor_id = ? AND system_managed = FALSE",
                 id, ownerActorId) == 1;
     }
 

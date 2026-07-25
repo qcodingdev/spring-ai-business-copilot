@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <meta name="description" content="QCoding AI Copilot：基于 Spring AI 的五大企业业务智能助手。"/>
+  <meta name="description" content="面向企业知识、客服、招聘、数据分析和报告工作的可控 AI 业务协同平台。"/>
   <title>QCoding AI Copilot · 企业 AI 应用工作台</title>
   <link rel="stylesheet" th:href="@{/css/app.css}"/>
   <link rel="icon" type="image/png" th:href="@{/images/qcoding-logo.png}"/>
@@ -19,13 +19,13 @@
     <img class="brand-logo" th:src="@{/images/qcoding-logo.png}" alt="QCoding Logo"/>
     <span class="brand-copy">
       <strong>QCoding AI Copilot</strong>
-      <small>AI 应用开发 · Java 技术实践</small>
+      <small>企业 AI 业务协同平台</small>
     </span>
   </a>
   <nav class="public-nav" aria-label="产品导航">
     <a href="#capabilities">五大模块</a>
-    <a href="#trust">可信执行</a>
-    <a href="#technology">技术栈</a>
+    <a href="#trust">安全与人工复核</a>
+    <a href="#technology">技术与安全能力</a>
   </nav>
   <a class="public-header-action" href="#login-form" data-login-trigger aria-expanded="false">登录体验</a>
 </header>
@@ -35,20 +35,20 @@
            th:classappend="${param.error != null} ? ' login-card-open'"
            aria-labelledby="product-title">
     <div class="public-hero-copy">
-      <p class="eyebrow">开源 Spring AI 业务助手套件</p>
-      <h1 id="product-title">把 AI 变成<br/><span>可运行的业务能力</span></h1>
+      <p class="eyebrow">企业 AI 业务协同平台</p>
+      <h1 id="product-title">让企业知识与流程<br/><span>得到可控的 AI 协助</span></h1>
       <p class="public-hero-lead">
-        面向个人开发者、中小团队和企业内部系统，提供可运行、可改造、可交付的 Java AI 业务样板。
-        未登录即可了解全部能力，实际业务操作统一进入安全工作台。
+        面向企业知识、客服、招聘、数据分析和报告工作。选择预置虚构范例即可体验，
+        结果展示资料依据、待核实事项和人工复核要求，不连接真实企业系统。
       </p>
       <div class="public-hero-actions">
         <a class="public-primary-action" href="#capabilities">探索五大模块</a>
         <a class="public-secondary-action" href="#login-form" data-login-trigger aria-expanded="false">登录体验</a>
       </div>
       <div class="public-metrics" aria-label="产品概览">
-        <span><strong>5</strong><small>业务闭环</small></span>
-        <span><strong>3</strong><small>可信执行边界</small></span>
-        <span><strong>100%</strong><small>关键动作可审计</small></span>
+        <span><strong>5</strong><small>业务应用</small></span>
+        <span><strong>15</strong><small>可执行范例</small></span>
+        <span><strong>0</strong><small>真实数据接入</small></span>
       </div>
     </div>
 
@@ -92,8 +92,8 @@
   <section id="capabilities" class="public-section capability-section" aria-labelledby="capability-title">
     <div class="public-section-heading">
       <div>
-        <p class="eyebrow">五个可运行的业务流程</p>
-        <h2 id="capability-title">一个工作台，覆盖五类真实业务</h2>
+        <p class="eyebrow">五个可直接体验的业务应用</p>
+        <h2 id="capability-title">从任务进入，而不是从技术名词开始</h2>
       </div>
       <p>点击模块即可查看未登录预览。预览只展示产品流程，不访问业务数据，也不会触发模型调用。</p>
     </div>
@@ -102,47 +102,47 @@
       <div class="capability-tabs" role="tablist" aria-label="五大业务模块">
         <button class="capability-tab active" type="button" role="tab" aria-selected="true" data-preview-module="data">
           <span class="capability-tab-icon">D</span>
-          <span><strong>数据查询</strong><small>Data Copilot</small></span>
+          <span><strong>数据分析</strong><small>只读业务查询</small></span>
         </button>
         <button class="capability-tab" type="button" role="tab" aria-selected="false" data-preview-module="knowledge">
           <span class="capability-tab-icon">K</span>
-          <span><strong>知识问答</strong><small>Knowledge Copilot</small></span>
+          <span><strong>企业知识</strong><small>基于资料回答</small></span>
         </button>
         <button class="capability-tab" type="button" role="tab" aria-selected="false" data-preview-module="support">
           <span class="capability-tab-icon">S</span>
-          <span><strong>客服处理</strong><small>Support Copilot</small></span>
+          <span><strong>客服工作台</strong><small>建议回复与复核</small></span>
         </button>
         <button class="capability-tab" type="button" role="tab" aria-selected="false" data-preview-module="report">
           <span class="capability-tab-icon">R</span>
-          <span><strong>报告生成</strong><small>Report Copilot</small></span>
+          <span><strong>报告生成</strong><small>摘要、风险与行动</small></span>
         </button>
         <button class="capability-tab" type="button" role="tab" aria-selected="false" data-preview-module="resume">
           <span class="capability-tab-icon">CV</span>
-          <span><strong>简历评估</strong><small>Resume Copilot</small></span>
+          <span><strong>HR Copilot</strong><small>招聘与员工服务</small></span>
         </button>
       </div>
 
       <div class="capability-stage">
         <div class="capability-stage-copy">
           <div class="capability-stage-status"><span class="status-dot"></span>产品能力预览</div>
-          <p id="preview-kicker" class="section-kicker">自然语言转 SQL</p>
+          <p id="preview-kicker" class="section-kicker">安全查询业务数据</p>
           <h3 id="preview-title">从业务问题到安全查询结果</h3>
-          <p id="preview-description">自然语言生成只读 SQL，先展示候选语句与校验结论，确认后再执行。</p>
+          <p id="preview-description">直接提出销售、客户或商品问题，系统先展示将要执行的只读查询，确认后再返回业务结果。</p>
           <ul id="preview-points" class="preview-points">
-            <li>Schema、表与字段白名单</li>
-            <li>写操作、未知函数和无界结果默认拒绝</li>
-            <li>SQL 候选、执行结果与操作者完整审计</li>
+            <li>只访问获准的虚构业务数据</li>
+            <li>写操作和无边界结果默认拒绝</li>
+            <li>查询内容、处理结果与操作者均可追溯</li>
           </ul>
           <a class="capability-login-action" href="#login-form" data-login-trigger
              data-module-target="data" aria-expanded="false">
-            登录后使用 <span id="preview-action-label">Data Copilot</span>
+            登录后使用 <span id="preview-action-label">数据分析助手</span>
           </a>
         </div>
 
         <div class="capability-console" aria-label="能力流程动画">
           <div class="console-toolbar">
             <span class="console-lights" aria-hidden="true"><i></i><i></i><i></i></span>
-            <span id="preview-console-title">Data Copilot / 安全执行</span>
+            <span id="preview-console-title">数据分析助手 / 受控处理</span>
             <span class="console-live">实时预览</span>
           </div>
           <div class="console-request">
@@ -155,7 +155,7 @@
             <span class="pipeline-step active"><b>03</b><i></i><small id="preview-step-three">安全校验</small></span>
           </div>
           <div class="console-result">
-            <div><span class="status-dot"></span><strong id="preview-result-title">Guardrails 校验通过</strong></div>
+            <div><span class="status-dot"></span><strong id="preview-result-title">内容与安全检查通过</strong></div>
             <p id="preview-result-copy">只读查询 · 5 行上限 · 敏感字段脱敏 · 等待人工确认</p>
           </div>
           <div class="console-scan" aria-hidden="true"></div>
@@ -166,37 +166,37 @@
     <div class="module-card-grid">
       <article class="module-card">
         <span class="module-card-icon">D</span>
-        <div><p>Data Copilot</p><h3>安全数据查询</h3></div>
+        <div><p>数据分析助手</p><h3>安全数据查询</h3></div>
         <p>把自然语言问题转成受约束的只读查询，并输出可解释业务结果。</p>
-        <span class="module-boundary">SQL 白名单 · 二次确认</span>
+        <span class="module-boundary">只读边界 · 二次确认</span>
         <button type="button" class="module-preview-link" data-preview-jump="data">查看能力预览 →</button>
       </article>
       <article class="module-card">
         <span class="module-card-icon">K</span>
-        <div><p>Knowledge Copilot</p><h3>有依据的知识问答</h3></div>
+        <div><p>企业知识助手</p><h3>有依据的知识问答</h3></div>
         <p>从企业文档中检索证据，生成带引用、可回溯且能识别证据不足的回答。</p>
         <span class="module-boundary">来源引用 · 证据校验</span>
         <button type="button" class="module-preview-link" data-preview-jump="knowledge">查看能力预览 →</button>
       </article>
       <article class="module-card">
         <span class="module-card-icon">S</span>
-        <div><p>Support Copilot</p><h3>客服工单辅助处理</h3></div>
+        <div><p>客服工作台</p><h3>客户问题辅助处理</h3></div>
         <p>完成工单分类、依据检索与回复草稿生成，由人工确认后进入业务动作。</p>
         <span class="module-boundary">回复草稿 · 人工审核</span>
         <button type="button" class="module-preview-link" data-preview-jump="support">查看能力预览 →</button>
       </article>
       <article class="module-card">
         <span class="module-card-icon">R</span>
-        <div><p>Report Copilot</p><h3>可复核的报告生成</h3></div>
+        <div><p>报告生成助手</p><h3>可复核的报告生成</h3></div>
         <p>汇总结构化指标和文本证据，生成可复核、可确认、可导出的业务报告。</p>
         <span class="module-boundary">来源新鲜度 · 草稿确认</span>
         <button type="button" class="module-preview-link" data-preview-jump="report">查看能力预览 →</button>
       </article>
       <article class="module-card">
         <span class="module-card-icon">CV</span>
-        <div><p>Resume Copilot</p><h3>证据化简历评估</h3></div>
-        <p>依据确认后的岗位标准评估单份简历，保留证据缺口并默认脱敏处理。</p>
-        <span class="module-boundary">隐私脱敏 · 招聘合规</span>
+        <div><p>HR Copilot</p><h3>招聘与员工服务</h3></div>
+        <p>一句话生成岗位 JD 并一键发布，分析候选人简历证据，并基于员工制度回答日常问题。</p>
+        <span class="module-boundary">证据缺口 · 人工复核</span>
         <button type="button" class="module-preview-link" data-preview-jump="resume">查看能力预览 →</button>
       </article>
     </div>
@@ -206,19 +206,19 @@
     <div class="public-section-heading">
       <div>
         <p class="eyebrow">以可信为设计前提</p>
-        <h2 id="trust-title">AI 生成建议，业务规则决定能否执行</h2>
+        <h2 id="trust-title">AI 提供整理和建议，重要决定保留给人</h2>
       </div>
       <p>模型输出不会直接进入真实业务动作。每个模块都遵循边界校验、人工确认和审计追踪。</p>
     </div>
     <div class="trust-card-grid">
-      <article><span>01</span><h3>业务边界</h3><p>模块级 Guardrails 校验输入、模型输出和业务对象，默认拒绝不确定动作。</p></article>
+      <article><span>01</span><h3>业务边界</h3><p>只使用预置虚构资料和只读数据，默认拒绝越界输入与不确定动作。</p></article>
       <article><span>02</span><h3>人工确认</h3><p>高风险动作使用一次性确认凭证，绑定操作者、对象、状态和有效期。</p></article>
-      <article><span>03</span><h3>全链路审计</h3><p>记录准确操作者、模型、Prompt、策略、延迟和业务结果，支持问题诊断。</p></article>
+      <article><span>03</span><h3>结果有依据</h3><p>优先展示业务结论、资料依据、待核实事项和下一步，不把建议伪装成事实。</p></article>
     </div>
   </section>
 
-  <section id="technology" class="technology-strip" aria-label="开源技术栈">
-    <div><p class="eyebrow">为 Java 团队打造</p><h2>熟悉的技术栈，可控的落地路径</h2></div>
+  <section id="technology" class="technology-strip" aria-label="技术与安全能力">
+    <div><p class="eyebrow">技术与安全能力</p><h2>业务用户看产品，实施与开发人员仍可查看底层能力</h2></div>
     <div class="technology-list">
       <span>Java</span><span>Spring Boot</span><span>Spring AI</span><span>PostgreSQL</span>
       <span>pgvector</span><span>Flyway</span><span>Guardrails</span><span>Observability</span>

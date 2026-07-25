@@ -54,9 +54,7 @@ function setLoading(text) {
 
 function showError(message) {
   const toast = $('error-toast');
-  toast.style.background = '';
-  toast.style.color = '';
-  toast.style.border = '';
+  toast.dataset.variant = 'error';
   toast.textContent = message;
   show(toast);
   setTimeout(() => hide(toast), 5000);
@@ -64,17 +62,10 @@ function showError(message) {
 
 function showSuccess(message) {
   const toast = $('error-toast');
-  toast.style.background = '#d4edda';
-  toast.style.color = '#155724';
-  toast.style.border = '1px solid #c3e6cb';
+  toast.dataset.variant = 'success';
   toast.textContent = message;
   show(toast);
-  setTimeout(() => {
-    hide(toast);
-    toast.style.background = '';
-    toast.style.color = '';
-    toast.style.border = '';
-  }, 3000);
+  setTimeout(() => hide(toast), 4000);
 }
 
 function clearError() {
@@ -335,9 +326,18 @@ function resetCandidatePanels() {
 
 // ── 模块切换 ──────────────────────────────────────────────────
 const moduleTabs = Array.from(document.querySelectorAll('.tab-bar .tab'));
+const overviewPanel = $('workspace-overview');
+const overviewTab = $('overview-tab');
+const runtimeMode = document.querySelector('meta[name="runtime-mode"]')?.content || 'development';
 
 function activateModule(tab, updateLocation = true) {
   if (!tab) return;
+
+  if (overviewPanel) overviewPanel.hidden = true;
+  if (overviewTab) {
+    overviewTab.classList.remove('active');
+    overviewTab.removeAttribute('aria-current');
+  }
 
   moduleTabs.forEach((item) => {
     const active = item === tab;
@@ -369,6 +369,29 @@ function activateModule(tab, updateLocation = true) {
   }
 }
 
+function activateOverview(updateLocation = true) {
+  if (!overviewPanel) return;
+  moduleTabs.forEach((item) => {
+    item.classList.remove('active');
+    item.setAttribute('aria-selected', 'false');
+    item.tabIndex = -1;
+  });
+  document.querySelectorAll('.tab-content').forEach((content) => {
+    content.hidden = true;
+  });
+  overviewPanel.hidden = false;
+  if (overviewTab) {
+    overviewTab.classList.add('active');
+    overviewTab.setAttribute('aria-current', 'page');
+  }
+  $('active-module-title').textContent = '工作总览';
+  $('active-module-description').textContent = '查看可执行范例、近期活动、待人工复核事项与资料准备状态';
+  document.title = '工作总览 · QCoding AI Copilot';
+  if (updateLocation) history.replaceState(null, '', '#overview');
+}
+
+overviewTab?.addEventListener('click', () => activateOverview());
+
 moduleTabs.forEach((tab, index) => {
   tab.addEventListener('click', () => activateModule(tab));
   tab.addEventListener('keydown', (event) => {
@@ -398,24 +421,18 @@ document.querySelectorAll('.prompt-chip[data-question]').forEach((chip) => {
   });
 });
 
-// 支持刷新后保留当前模块，同时允许通过 URL hash 直接打开。
-let initialModule = window.location.hash.replace(/^#/, '');
-if (!moduleTabs.some((tab) => tab.dataset.tab === initialModule)) {
-  try {
-    initialModule = localStorage.getItem('business-copilot.active-module') || '';
-  } catch {
-    initialModule = '';
-  }
-}
-activateModule(
-  moduleTabs.find((tab) => tab.dataset.tab === initialModule) || moduleTabs[0],
-  false
-);
+// 公网体验默认展示业务总览；本地与自部署模式直接进入第一个业务助手。
+const initialModule = window.location.hash.replace(/^#/, '');
+const initialTab = moduleTabs.find((tab) => tab.dataset.tab === initialModule);
+if (initialTab) activateModule(initialTab, false);
+else if (runtimeMode === 'public-demo') activateOverview(false);
+else activateModule(moduleTabs[0], false);
 
 window.addEventListener('hashchange', () => {
   const moduleName = window.location.hash.replace(/^#/, '');
   const tab = moduleTabs.find((item) => item.dataset.tab === moduleName);
   if (tab) activateModule(tab, false);
+  else if (moduleName === 'overview' || !moduleName) activateOverview(false);
 });
 
 // 初始加载审计记录

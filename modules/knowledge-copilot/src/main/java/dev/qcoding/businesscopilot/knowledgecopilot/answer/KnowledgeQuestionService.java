@@ -62,7 +62,7 @@ public class KnowledgeQuestionService {
         long startTime = System.currentTimeMillis();
 
         // 1. 检索
-        List<RetrievedKnowledgeChunk> retrievedChunks = retrievalService.retrieve(question);
+        List<RetrievedKnowledgeChunk> retrievedChunks = retrievalService.retrieve(question, request.category());
 
         // 2. 答案生成（含 citation 校验和脱敏）
         KnowledgeAnswerService.AnswerInvocation answerInvocation =

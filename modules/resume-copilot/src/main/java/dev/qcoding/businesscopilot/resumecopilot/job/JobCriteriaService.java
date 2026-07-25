@@ -6,6 +6,7 @@ import dev.qcoding.businesscopilot.aicore.AiInvocationResult;
 import dev.qcoding.businesscopilot.aicore.PromptTemplateService;
 import dev.qcoding.businesscopilot.aicore.RenderedPrompt;
 import dev.qcoding.businesscopilot.commonsecurity.ConfirmationTokenService;
+import dev.qcoding.businesscopilot.commonsecurity.BusinessRole;
 import dev.qcoding.businesscopilot.commonsecurity.CurrentActor;
 import dev.qcoding.businesscopilot.commonsecurity.CurrentActorProvider;
 import dev.qcoding.businesscopilot.commonsecurity.ObjectAccessPolicy;
@@ -177,7 +178,53 @@ public class JobCriteriaService {
         return new StatusResponse(jobId, ResumeModels.Status.CRITERIA_CONFIRMED);
     }
 
+    @Transactional
+    public CriteriaResponse updateDraft(long jobId, List<ResumeModels.JobCriterion> requestedCriteria) {
+        ResumeJobEntity job = repository.findJob(jobId);
+        CurrentActor actor = actorProvider.currentActor();
+        if (job == null || !accessPolicy.allowed(
+                actor, ObjectAction.CREATE, job.getOwnerActorId(), null, false)) {
+            throw new BusinessException(ErrorCode.NOT_FOUND);
+        }
+        if (!ResumeModels.Status.CRITERIA_DRAFTED.name().equals(job.getStatus())) {
+            throw new BusinessException(ErrorCode.STATE_CONFLICT);
+        }
+        List<ResumeModels.JobCriterion> criteria = assignServerIds(
+                requestedCriteria == null ? List.of() : requestedCriteria);
+        var validation = guardrail.validate(criteria, job.getSanitizedJd());
+        if (!validation.valid()) {
+            throw new BusinessException(
+                    ErrorCode.VALIDATION_ERROR, String.join("; ", validation.reasons()));
+        }
+        Instant now = Instant.now();
+        ConfirmationTokenService.IssuedToken token = tokenService.issue();
+        Instant expiresAt = now.plus(properties.reviewTokenTtl());
+        if (!repository.updateDraftCriteria(
+                jobId, write(criteria), token.digest(), expiresAt, now)) {
+            throw new BusinessException(ErrorCode.STATE_CONFLICT);
+        }
+        repository.auditRequired(
+                "CRITERIA_EDITED", jobId, null, null, criteria.size(), 0, null,
+                ResumeModels.Status.CRITERIA_DRAFTED.name(), null,
+                job.getOwnerActorId(), actor.actorId());
+        return new CriteriaResponse(
+                jobId, job.getLogicalJobId(), job.getCriteriaVersion(), job.getTitle(),
+                ResumeModels.Status.CRITERIA_DRAFTED, criteria, token.rawToken(),
+                expiresAt.toString());
+    }
+
     public List<ResumeModels.JobCriterion> criteria(ResumeJobEntity job) { return read(job.getCriteriaJson()); }
+
+    /** Returns only confirmed, current standards that the current actor may use for candidate analysis. */
+    public List<ConfirmedJobSummary> confirmedJobs() {
+        CurrentActor actor = actorProvider.currentActor();
+        if (!actor.authenticated()) return List.of();
+        return repository.findCurrentConfirmedJobs(actor.actorId(), actor.hasRole(BusinessRole.ADMIN)).stream()
+                .map(job -> new ConfirmedJobSummary(
+                        job.getId(), job.getTitle(), job.getCriteriaVersion(),
+                        criteria(job), job.getUpdatedAt()))
+                .toList();
+    }
 
     private List<ResumeModels.JobCriterion> assignServerIds(List<ResumeModels.JobCriterion> criteria) {
         return IntStream.range(0, criteria.size()).mapToObj(index -> {
@@ -203,4 +250,6 @@ public class JobCriteriaService {
                                    String title, ResumeModels.Status status,
                                    List<ResumeModels.JobCriterion> criteria, String confirmationToken, String expiresAt) { }
     public record StatusResponse(Long jobId, ResumeModels.Status status) { }
+    public record ConfirmedJobSummary(Long jobId, String title, int criteriaVersion,
+                                      List<ResumeModels.JobCriterion> criteria, Instant updatedAt) { }
 }

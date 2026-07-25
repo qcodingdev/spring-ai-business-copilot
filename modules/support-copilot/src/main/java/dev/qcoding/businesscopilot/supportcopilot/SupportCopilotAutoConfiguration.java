@@ -23,6 +23,7 @@ import dev.qcoding.businesscopilot.supportcopilot.ticket.JdbcSupportTicketReposi
 import dev.qcoding.businesscopilot.supportcopilot.ticket.SupportTicketRepository;
 import dev.qcoding.businesscopilot.supportcopilot.ticket.TicketAnalysisService;
 import dev.qcoding.businesscopilot.supportcopilot.web.SupportCopilotController;
+import dev.qcoding.businesscopilot.supportcopilot.queue.SupportQueueService;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -159,11 +160,21 @@ public class SupportCopilotAutoConfiguration {
     }
 
     @Bean
+    public SupportQueueService supportQueueService(
+            JdbcTemplate jdbcTemplate,
+            CurrentActorProvider actorProvider,
+            SupportAuditService auditService) {
+        return new SupportQueueService(jdbcTemplate, actorProvider, auditService);
+    }
+
+    @Bean
     @ConditionalOnMissingBean(SupportCopilotController.class)
     public SupportCopilotController supportCopilotController(
             TicketAnalysisService analysisService,
             ReplyDraftConfirmationService confirmationService,
-            SupportAuditService auditService) {
-        return new SupportCopilotController(analysisService, confirmationService, auditService);
+            SupportAuditService auditService,
+            SupportQueueService queueService) {
+        return new SupportCopilotController(
+                analysisService, confirmationService, auditService, queueService);
     }
 }

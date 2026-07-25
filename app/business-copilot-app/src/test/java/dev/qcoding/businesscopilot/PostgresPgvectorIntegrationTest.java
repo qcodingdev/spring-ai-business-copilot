@@ -6,8 +6,13 @@ import dev.qcoding.businesscopilot.audit.AuditStatus;
 import dev.qcoding.businesscopilot.audit.JdbcQueryAuditRepository;
 import dev.qcoding.businesscopilot.commonweb.request.BusinessRequestContext;
 import dev.qcoding.businesscopilot.commonweb.request.BusinessRequestContextHolder;
+import dev.qcoding.businesscopilot.commonsecurity.BusinessRole;
+import dev.qcoding.businesscopilot.commonsecurity.CurrentActor;
+import dev.qcoding.businesscopilot.commonsecurity.CurrentActorProvider;
 import dev.qcoding.businesscopilot.knowledgecopilot.document.JdbcKnowledgeChunkRepository;
 import dev.qcoding.businesscopilot.knowledgecopilot.document.KnowledgeChunkRepository;
+import dev.qcoding.businesscopilot.knowledgecopilot.document.DocumentUploadResponse;
+import dev.qcoding.businesscopilot.knowledgecopilot.document.DocumentUploadService;
 import dev.qcoding.businesscopilot.knowledgecopilot.embedding.JdbcKnowledgeEmbeddingRepository;
 import dev.qcoding.businesscopilot.knowledgecopilot.embedding.KnowledgeChunkEmbedding;
 import dev.qcoding.businesscopilot.knowledgecopilot.embedding.KnowledgeEmbeddingRepository;
@@ -16,22 +21,41 @@ import dev.qcoding.businesscopilot.knowledgecopilot.indexing.KnowledgeIndexJobSt
 import dev.qcoding.businesscopilot.knowledgecopilot.retrieval.KnowledgeQueryTerms;
 import dev.qcoding.businesscopilot.datacopilot.schema.DataCopilotSchemaProperties;
 import dev.qcoding.businesscopilot.datacopilot.schema.JdbcSchemaMetadataRepository;
+import dev.qcoding.businesscopilot.demo.DemoModule;
+import dev.qcoding.businesscopilot.demo.DemoOperation;
+import dev.qcoding.businesscopilot.demo.DemoDataInitializationService;
+import dev.qcoding.businesscopilot.demo.DemoDataJobRepository;
+import dev.qcoding.businesscopilot.demo.DemoScenario;
+import dev.qcoding.businesscopilot.demo.DemoScenarioRepository;
+import dev.qcoding.businesscopilot.demo.PublicDemoInputGuard;
+import dev.qcoding.businesscopilot.demo.PublicDemoProperties;
+import dev.qcoding.businesscopilot.demo.PublicDemoQuotaService;
+import dev.qcoding.businesscopilot.supportcopilot.queue.SupportQueueService;
+import dev.qcoding.businesscopilot.commonweb.api.BusinessException;
+import dev.qcoding.businesscopilot.commonweb.api.ErrorCode;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.dao.DataAccessException;
+import tools.jackson.databind.ObjectMapper;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
 import java.util.List;
+import java.util.Set;
 import java.time.Instant;
+import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 @Testcontainers(disabledWithoutDocker = true)
 class PostgresPgvectorIntegrationTest {
@@ -103,7 +127,7 @@ class PostgresPgvectorIntegrationTest {
         assertThat(extension).isEqualTo("vector");
         assertThat(actorColumns).isEqualTo(5);
         assertThat(httpRequestColumns).isEqualTo(5);
-        assertThat(latestMigration).isEqualTo("18");
+        assertThat(latestMigration).isEqualTo("21");
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT format_type(atttypid, atttypmod) "
                         + "FROM pg_attribute "
@@ -156,13 +180,109 @@ class PostgresPgvectorIntegrationTest {
                 """, Integer.class)).isEqualTo(10);
         assertThat(upgradeJdbcTemplate.queryForObject(
                 "SELECT version FROM flyway_schema_history WHERE success = TRUE ORDER BY installed_rank DESC LIMIT 1",
-                String.class)).isEqualTo("18");
+                String.class)).isEqualTo("21");
         assertThat(upgradeJdbcTemplate.queryForObject(
                 "SELECT format_type(atttypid, atttypmod) "
                         + "FROM pg_attribute "
                         + "WHERE attrelid = 'knowledge_chunk_embeddings'::regclass "
                         + "AND attname = 'embedding'",
                 String.class)).isEqualTo("vector");
+    }
+
+    @Test
+    void scenarioCatalogUpsertIsIdempotentAndRejectsStaleSampleResults() {
+        DemoScenarioRepository repository = new DemoScenarioRepository(jdbcTemplate);
+        DemoScenario scenario = new DemoScenario(
+                "integration-scenario-001",
+                DemoModule.KNOWLEDGE,
+                "集成测试场景",
+                "只用于验证服务端场景目录幂等性",
+                "员工一年有多少天年假？",
+                List.of(DemoOperation.ASK_KNOWLEDGE),
+                "{\"category\":\"HR_POLICY\"}",
+                "系统预置虚构员工手册",
+                2,
+                true,
+                true,
+                true,
+                "a".repeat(64));
+
+        repository.upsert(scenario);
+        repository.upsert(scenario);
+        repository.upsertSampleResult(
+                scenario.scenarioId(), 1, "{\"notice\":\"stale\"}", Instant.now(), "b".repeat(64));
+
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM demo_scenarios WHERE scenario_id = ?",
+                Integer.class, scenario.scenarioId())).isEqualTo(1);
+        assertThat(repository.findSampleResult(scenario.scenarioId())).isEmpty();
+
+        repository.upsertSampleResult(
+                scenario.scenarioId(), 2, "{\"notice\":\"current\"}", Instant.now(), "c".repeat(64));
+        assertThat(repository.findSampleResult(scenario.scenarioId()))
+                .get().extracting(DemoScenarioRepository.SampleResultRecord::scenarioVersion)
+                .isEqualTo(2);
+    }
+
+    @Test
+    void completeDemoSeedCanRunTwiceWithoutDuplicatingBusinessRecords() {
+        DocumentUploadService documentUploadService = mock(DocumentUploadService.class);
+        when(documentUploadService.ingestSystemDocument(
+                anyString(), anyString(), any(), anyString(), any(), any()))
+                .thenReturn(new DocumentUploadResponse(1L, "系统虚构资料", 1, true, true));
+        DemoDataInitializationService service = new DemoDataInitializationService(
+                new DemoDataJobRepository(jdbcTemplate),
+                new DemoScenarioRepository(jdbcTemplate),
+                documentUploadService,
+                new PublicDemoInputGuard(),
+                mock(CurrentActorProvider.class),
+                jdbcTemplate,
+                new ObjectMapper(),
+                Runnable::run);
+
+        DemoDataInitializationService.SeedSummary first = service.seedAll();
+        DemoDataInitializationService.SeedSummary second = service.seedAll();
+
+        assertThat(first).isEqualTo(second);
+        assertThat(first.scenarios()).isEqualTo(15);
+        assertThat(first.sampleResults()).isEqualTo(15);
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM demo_scenarios
+                WHERE scenario_id LIKE 'knowledge-%'
+                   OR scenario_id LIKE 'support-%'
+                   OR scenario_id LIKE 'hr-%'
+                   OR scenario_id LIKE 'data-%'
+                   OR scenario_id LIKE 'report-%'
+                """, Integer.class)).isEqualTo(15);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM support_tickets WHERE id BETWEEN 91001 AND 91003",
+                Integer.class)).isEqualTo(3);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM resume_jobs WHERE id = 92001",
+                Integer.class)).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM report_requests WHERE id BETWEEN 93001 AND 93003",
+                Integer.class)).isEqualTo(3);
+        assertThat(new SupportQueueService(
+                jdbcTemplate,
+                () -> new CurrentActor("operator", Set.of(BusinessRole.OPERATOR)))
+                .find(null, null, null, null, 50)).hasSize(3);
+    }
+
+    @Test
+    void publicDemoQuotaUsesAtomicDailyLimits() {
+        PublicDemoProperties properties = new PublicDemoProperties(
+                2, 2, 1, "integration-fingerprint-secret", "Asia/Shanghai",
+                Duration.ofHours(24), Duration.ofDays(7), Duration.ofDays(30),
+                null, null);
+        PublicDemoQuotaService quota = new PublicDemoQuotaService(jdbcTemplate, properties);
+        String fingerprint = "integration-client-" + System.nanoTime();
+
+        assertThat(quota.consumeBusinessOperation(fingerprint).remaining()).isEqualTo(1);
+        assertThat(quota.consumeBusinessOperation(fingerprint).remaining()).isZero();
+        assertThatThrownBy(() -> quota.consumeBusinessOperation(fingerprint))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        ex -> assertThat(ex.errorCode()).isEqualTo(ErrorCode.PUBLIC_DEMO_LIMIT_REACHED));
     }
 
     @Test
@@ -240,13 +360,14 @@ class PostgresPgvectorIntegrationTest {
     @Test
     void pgvectorSimilaritySearchReturnsTheClosestEnabledChunk() {
         Long documentId = jdbcTemplate.queryForObject("""
-                INSERT INTO knowledge_documents (
-                    title, source_type, source_name, category, content_hash, enabled,
-                    logical_document_id, version_no, current_version, index_status,
-                    content_type, owner_actor_id
-                ) VALUES (?, 'upload', ?, 'integration-test', ?, TRUE,
-                          gen_random_uuid(), 1, TRUE, 'INDEXED', 'text/plain', 'integration-test')
-                RETURNING id
+            INSERT INTO knowledge_documents (
+                title, source_type, source_name, category, content_hash, enabled,
+                logical_document_id, version_no, current_version, index_status,
+                content_type, owner_actor_id, visibility_scope
+            ) VALUES (?, 'upload', ?, 'integration-test', ?, TRUE,
+                      gen_random_uuid(), 1, TRUE, 'INDEXED',
+                      'text/plain', 'integration-test', 'ALL')
+            RETURNING id
                 """, Long.class, "Vector test", "vector-test.txt", "a".repeat(64));
         Long firstChunkId = insertChunk(documentId, 0, "closest chunk");
         Long secondChunkId = insertChunk(documentId, 1, "distant chunk");
@@ -272,13 +393,13 @@ class PostgresPgvectorIntegrationTest {
     @Test
     void chineseKeywordSearchFindsEnabledTextOnlyKnowledgeChunk() {
         Long documentId = jdbcTemplate.queryForObject("""
-                INSERT INTO knowledge_documents (
-                    title, source_type, source_name, category, content_hash, enabled,
-                    logical_document_id, version_no, current_version, index_status,
-                    index_error_category, content_type, owner_actor_id
-                ) VALUES (?, 'upload', ?, 'integration-test', ?, TRUE,
-                          gen_random_uuid(), 1, TRUE, 'INDEXED',
-                          'TEXT_SEARCH_ONLY', 'text/plain', 'integration-test')
+            INSERT INTO knowledge_documents (
+                title, source_type, source_name, category, content_hash, enabled,
+                logical_document_id, version_no, current_version, index_status,
+                index_error_category, content_type, owner_actor_id, visibility_scope
+            ) VALUES (?, 'upload', ?, 'integration-test', ?, TRUE,
+                      gen_random_uuid(), 1, TRUE, 'INDEXED',
+                      'TEXT_SEARCH_ONLY', 'text/plain', 'integration-test', 'ALL')
                 RETURNING id
                 """, Long.class, "员工手册", "employee-handbook.txt", "d".repeat(64));
         Long chunkId = insertChunk(
@@ -297,13 +418,13 @@ class PostgresPgvectorIntegrationTest {
     @Test
     void oldModelDisabledIndexJobIsRecoveredAfterUpgrade() {
         Long documentId = jdbcTemplate.queryForObject("""
-                INSERT INTO knowledge_documents (
-                    title, source_type, source_name, category, content_hash, enabled,
-                    logical_document_id, version_no, current_version, index_status,
-                    index_error_category, content_type, owner_actor_id
-                ) VALUES (?, 'upload', ?, 'integration-test', ?, FALSE,
-                          gen_random_uuid(), 1, TRUE, 'FAILED',
-                          'MODEL_DISABLED', 'text/plain', 'integration-test')
+            INSERT INTO knowledge_documents (
+                title, source_type, source_name, category, content_hash, enabled,
+                logical_document_id, version_no, current_version, index_status,
+                index_error_category, content_type, owner_actor_id, visibility_scope
+            ) VALUES (?, 'upload', ?, 'integration-test', ?, FALSE,
+                      gen_random_uuid(), 1, TRUE, 'FAILED',
+                      'MODEL_DISABLED', 'text/plain', 'integration-test', 'ALL')
                 RETURNING id
                 """, Long.class, "待恢复文档", "recover.txt", "e".repeat(64));
         Long jobId = jdbcTemplate.queryForObject("""
