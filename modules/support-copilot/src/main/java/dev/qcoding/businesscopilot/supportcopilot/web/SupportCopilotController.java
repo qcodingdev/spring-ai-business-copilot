@@ -8,6 +8,7 @@ import dev.qcoding.businesscopilot.supportcopilot.classification.TicketClassific
 import dev.qcoding.businesscopilot.supportcopilot.draft.ReplyDraftConfirmationService;
 import dev.qcoding.businesscopilot.supportcopilot.draft.ReplyDraftResponse;
 import dev.qcoding.businesscopilot.supportcopilot.knowledge.SupportKnowledgeResult;
+import dev.qcoding.businesscopilot.supportcopilot.queue.SupportQueueService;
 import dev.qcoding.businesscopilot.supportcopilot.ticket.TicketAnalysisService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -44,13 +45,16 @@ public class SupportCopilotController {
     private final TicketAnalysisService analysisService;
     private final ReplyDraftConfirmationService confirmationService;
     private final SupportAuditService auditService;
+    private final SupportQueueService queueService;
 
     public SupportCopilotController(TicketAnalysisService analysisService,
                                      ReplyDraftConfirmationService confirmationService,
-                                     SupportAuditService auditService) {
+                                     SupportAuditService auditService,
+                                     SupportQueueService queueService) {
         this.analysisService = analysisService;
         this.confirmationService = confirmationService;
         this.auditService = auditService;
+        this.queueService = queueService;
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -105,6 +109,19 @@ public class SupportCopilotController {
                 new DraftConfirmResponse(result.draftId(), result.status().name())));
     }
 
+    @PostMapping("/reply-drafts/{draftId}/review-session")
+    public ResponseEntity<ApiResponse<ReplyDraftConfirmationService.ReviewSession>> openReviewSession(
+            @PathVariable Long draftId) {
+        return ResponseEntity.ok(ApiResponse.ok(confirmationService.openReviewSession(draftId)));
+    }
+
+    @PostMapping("/reply-drafts/{draftId}/mark-customer-replied")
+    public ResponseEntity<ApiResponse<DraftConfirmResponse>> markCustomerReplied(@PathVariable Long draftId) {
+        var result = confirmationService.markCustomerReplied(draftId);
+        return ResponseEntity.ok(ApiResponse.ok(
+                new DraftConfirmResponse(result.draftId(), "CLOSED")));
+    }
+
     @PostMapping("/reply-drafts/{draftId}/edit")
     public ResponseEntity<ApiResponse<DraftEditResponse>> editDraft(
             @PathVariable Long draftId,
@@ -117,6 +134,25 @@ public class SupportCopilotController {
     // ═══════════════════════════════════════════════════════════════
     // 审计日志
     // ═══════════════════════════════════════════════════════════════
+
+    /** GET /api/support-copilot/tickets — 人工复核队列。 */
+    @GetMapping("/tickets")
+    public ResponseEntity<ApiResponse<List<SupportQueueService.QueueItem>>> queue(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) String urgency,
+            @RequestParam(required = false) String riskLevel,
+            @RequestParam(defaultValue = "30") @Min(1) @Max(100) int limit) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                queueService.find(status, category, urgency, riskLevel, limit)));
+    }
+
+    /** Records a manual external reply for a high-risk queue item that intentionally has no AI draft. */
+    @PostMapping("/tickets/{externalReference}/record-manual-reply")
+    public ResponseEntity<ApiResponse<SupportQueueService.ManualResolutionResult>> recordManualReply(
+            @PathVariable String externalReference) {
+        return ResponseEntity.ok(ApiResponse.ok(queueService.recordManualReply(externalReference)));
+    }
 
     /** GET /api/support-copilot/audit-logs — 审计日志分页 */
     @GetMapping("/audit-logs")

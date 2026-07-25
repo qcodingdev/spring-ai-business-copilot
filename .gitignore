@@ -5,6 +5,7 @@ target/
 *.iml
 .vscode/
 .jdk/
+.mybatis/
 
 # 本地环境变量和密钥文件；只提交脱敏后的 .env.example。
 .env
@@ -18,8 +19,9 @@ AGENTS.md
 .codex/
 .change-evidence.yml
 
-# Internal planning, audit, and implementation documents
-/docs/
+# Internal planning and audit documents. Public deployment guidance is versioned.
+/docs/*
+!/docs/public-demo-deployment.md
 
 # Unpublished screenshot sources; README uses the generated GIF only
 img.png

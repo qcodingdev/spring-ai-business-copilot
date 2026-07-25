@@ -5,32 +5,143 @@
   const $ = (id) => document.getElementById(id);
   let job = null;
   let assessment = null;
+  let jobDraft = null;
+  let confirmedJobs = [];
 
-  $('rsc-extract-btn').addEventListener('click', extractCriteria);
+  document.querySelectorAll('.hr-tabs [data-hr-view]').forEach((button) => {
+    button.addEventListener('click', () => activateHrView(button.dataset.hrView));
+  });
+  document.querySelectorAll('.recruitment-tabs [data-recruitment-view]').forEach((button) => {
+    button.addEventListener('click', () => activateRecruitmentView(button.dataset.recruitmentView));
+  });
+  $('rsc-draft-job-btn').addEventListener('click', draftJob);
+  $('rsc-use-draft-btn').addEventListener('click', useDraftForCriteria);
+  $('rsc-hr-ask-btn').addEventListener('click', askHrPolicy);
   $('rsc-confirm-criteria-btn').addEventListener('click', confirmCriteria);
+  $('rsc-refresh-jobs-btn').addEventListener('click', () => loadConfirmedJobs(job?.jobId));
+  $('rsc-confirmed-job-select').addEventListener('change', selectConfirmedJob);
   $('rsc-assess-btn').addEventListener('click', assessResume);
   $('rsc-review-btn').addEventListener('click', () => updateAssessment('review'));
   $('rsc-cancel-btn').addEventListener('click', () => updateAssessment('cancel'));
   $('rsc-delete-submission-btn').addEventListener('click', deleteSubmission);
+  document.querySelectorAll('#rsc-job-samples [data-job-requirements]').forEach((button) => {
+    button.addEventListener('click', () => {
+      $('rsc-job-title').value = button.dataset.jobTitle || '';
+      $('rsc-job-description').value = button.dataset.jobRequirements || '';
+      $('rsc-job-description').focus();
+    });
+  });
+  document.querySelectorAll('#rsc-hr-question-samples [data-hr-question]').forEach((button) => {
+    button.addEventListener('click', () => {
+      $('rsc-hr-question').value = button.dataset.hrQuestion || '';
+      $('rsc-hr-question').focus();
+    });
+  });
+
+  function activateHrView(view) {
+    const employeeService = view === 'employee-service';
+    const recruitmentPanel = $('rsc-recruitment-view');
+    const employeePanel = $('rsc-employee-service-panel');
+    if (recruitmentPanel) recruitmentPanel.hidden = employeeService;
+    if (employeePanel) employeePanel.hidden = !employeeService;
+    document.querySelectorAll('.hr-tabs [data-hr-view]').forEach((button) => {
+      const active = button.dataset.hrView === view;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-selected', String(active));
+      button.tabIndex = active ? 0 : -1;
+    });
+  }
+
+  function activateRecruitmentView(view) {
+    const candidateAssessment = view === 'candidate-assessment';
+    $('rsc-job-standard-view').hidden = candidateAssessment;
+    $('rsc-candidate-assessment-view').hidden = !candidateAssessment;
+    if (candidateAssessment) loadConfirmedJobs(job?.jobId);
+    document.querySelectorAll('.recruitment-tabs [data-recruitment-view]').forEach((button) => {
+      const active = button.dataset.recruitmentView === view;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-selected', String(active));
+      button.tabIndex = active ? 0 : -1;
+    });
+  }
+
+  async function askHrPolicy() {
+    const question = $('rsc-hr-question').value.trim();
+    if (!question) return showError('请输入员工制度或流程问题');
+    setLoading('正在检索 HR 制度并生成答复…');
+    clearError();
+    try {
+      const response = await fetch('/api/knowledge-copilot/questions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question, category: 'HR_POLICY' })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.success) throw new Error(payload.message || '制度问答请求失败');
+      renderHrPolicyAnswer(payload.data);
+    } catch (error) {
+      showError(error.message || '制度问答请求失败，请稍后重试');
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  function renderHrPolicyAnswer(data) {
+    $('rsc-hr-answer-panel').hidden = false;
+    $('rsc-hr-answer').textContent = data.answer || '未找到足够制度依据，请转人工确认。';
+    const citations = $('rsc-hr-citations');
+    citations.replaceChildren();
+    (data.citations || []).forEach((citation) => {
+      const item = document.createElement('li');
+      item.textContent = citation.excerpt || '制度依据片段';
+      citations.appendChild(item);
+    });
+    $('rsc-hr-warnings').textContent = (data.warnings || []).join('；');
+    scrollResultIntoView($('rsc-hr-answer-panel'));
+  }
+
+  async function draftJob() {
+    const title = $('rsc-job-title').value.trim();
+    const requirements = $('rsc-job-description').value.trim();
+    if (!title) return showError('请先填写职位名称');
+    if (!requirements) return showError('请先填写岗位需求');
+    await post('/jobs/draft', { title, requirements }, '正在生成岗位画像与完整 JD 草稿…', (data) => {
+      jobDraft = data;
+      renderJobDraft(data);
+    });
+  }
+
+  function renderJobDraft(data) {
+    $('rsc-job-draft-panel').hidden = false;
+    if (data.title) $('rsc-job-title').value = data.title;
+    $('rsc-job-profile').textContent = data.jobProfile || '—';
+    renderList($('rsc-job-responsibilities'), data.responsibilities || []);
+    renderList($('rsc-job-required'), data.requiredQualifications || []);
+    renderList($('rsc-job-preferred'), data.preferredQualifications || []);
+    $('rsc-job-draft').value = data.jdDraft || '';
+    $('rsc-job-verification').textContent = (data.verificationNotes || []).join('；')
+      || '请编辑这份完整虚构 JD；确认后即可继续提取评估标准并进入简历分析。';
+    setStandardStep(2);
+    scrollResultIntoView($('rsc-job-draft-panel'));
+  }
+
+  function useDraftForCriteria() {
+    const editableDraft = $('rsc-job-draft').value.trim();
+    if (!editableDraft) return showError('请先生成并保留可编辑 JD 草稿');
+    // 保留招聘负责人最终填写的职位名称，不能被模型返回值覆盖。
+    $('rsc-job-title').value = $('rsc-job-title').value.trim();
+    $('rsc-job-description').value = editableDraft;
+    extractCriteria();
+  }
 
   async function extractCriteria() {
     const title = $('rsc-job-title').value.trim();
     const jobDescription = $('rsc-job-description').value.trim();
-    const file = $('rsc-job-file').files && $('rsc-job-file').files[0];
-    if (!title || (!jobDescription && !file)) return showError('请填写职位名称，并提供职位描述或 JD 文件');
-    if (file && file.size > 2 * 1024 * 1024) return showError('JD 文件不能超过 2 MB');
+    if (!title || !jobDescription) return showError('请填写职位名称和 JD 内容');
     const done = (data) => {
       job = data;
       renderCriteria(data, true);
     };
-    if (file) {
-      const form = new FormData();
-      form.append('title', title);
-      form.append('file', file);
-      if (job && job.logicalJobId) form.append('logicalJobId', job.logicalJobId);
-      await postForm('/jobs/criteria/file', form, '正在解析 JD 文件…', done);
-      return;
-    }
     await post('/jobs/criteria', {
       title,
       jobDescription,
@@ -46,8 +157,8 @@
       $('rsc-criteria-status').textContent = resumeStatusLabel(data.status);
       $('rsc-criteria-status').className = 'badge badge-pass';
       $('rsc-confirm-criteria-btn').hidden = true;
-      $('rsc-resume-panel').hidden = false;
-      scrollResultIntoView($('rsc-resume-panel'));
+      setStandardStep(3);
+      showSuccess('JD 已确认为评估标准。如需评估候选人，请点击”候选人评估”标签页。');
     });
   }
 
@@ -69,6 +180,60 @@
       return;
     }
     await post('/assessments', { jobId: job.jobId, resumeText }, '正在生成证据化评估…', done);
+  }
+
+  async function loadConfirmedJobs(preferredJobId) {
+    const select = $('rsc-confirmed-job-select');
+    if (!select) return;
+    select.disabled = true;
+    try {
+      const response = await fetch(`${API}/jobs/confirmed`);
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.success) throw new Error(payload.message || '岗位标准加载失败');
+      confirmedJobs = payload.data || [];
+      select.replaceChildren(option('', confirmedJobs.length ? '请选择岗位标准' : '暂无已确认的岗位标准'));
+      confirmedJobs.forEach((item) => {
+        const label = `${item.title} · 标准 v${item.criteriaVersion} · ${item.criteria?.length || 0} 项要求`;
+        select.appendChild(option(String(item.jobId), label));
+      });
+      const selectedId = preferredJobId || job?.jobId;
+      if (selectedId && confirmedJobs.some((item) => item.jobId === Number(selectedId))) {
+        select.value = String(selectedId);
+        selectConfirmedJob();
+      } else {
+        $('rsc-resume-panel').hidden = true;
+        $('rsc-selected-job-summary').textContent = confirmedJobs.length
+          ? '请选择一个岗位标准，再提交候选人简历。'
+          : '请先在“岗位标准”中确认一份 JD 标准。';
+      }
+    } catch (error) {
+      select.replaceChildren(option('', '岗位标准加载失败，请刷新重试'));
+      $('rsc-selected-job-summary').textContent = error.message || '岗位标准加载失败。';
+    } finally {
+      select.disabled = false;
+    }
+  }
+
+  function selectConfirmedJob() {
+    const selectedId = Number($('rsc-confirmed-job-select').value);
+    const selected = confirmedJobs.find((item) => item.jobId === selectedId);
+    if (!selected) {
+      job = null;
+      $('rsc-resume-panel').hidden = true;
+      $('rsc-selected-job-summary').textContent = '请选择一个已确认的岗位标准。';
+      return;
+    }
+    job = { ...selected, status: 'CRITERIA_CONFIRMED' };
+    $('rsc-resume-panel').hidden = false;
+    $('rsc-selected-job-summary').textContent =
+      `已选择“${selected.title}”标准（v${selected.criteriaVersion}，${selected.criteria?.length || 0} 项要求）。`;
+  }
+
+  function option(value, label) {
+    const item = document.createElement('option');
+    item.value = value;
+    item.textContent = label;
+    return item;
   }
 
   async function updateAssessment(action) {
@@ -160,7 +325,15 @@
     $('rsc-criteria-panel').hidden = false;
     $('rsc-resume-panel').hidden = true;
     $('rsc-assessment-panel').hidden = true;
+    setStandardStep(3);
     if (scrollToResult) scrollResultIntoView($('rsc-criteria-panel'));
+  }
+
+  function setStandardStep(step) {
+    [1, 2, 3].forEach((number) => {
+      const item = $(`rsc-standard-step-${number}`);
+      if (item) item.classList.toggle('active', number === step);
+    });
   }
 
   function renderAssessment(data, scrollToResult) {
@@ -310,4 +483,6 @@
   function resumeSectionLabel(section) {
     return section && section !== 'GENERAL' ? section : '通用信息';
   }
+
+  activateHrView('employee-service');
 }());

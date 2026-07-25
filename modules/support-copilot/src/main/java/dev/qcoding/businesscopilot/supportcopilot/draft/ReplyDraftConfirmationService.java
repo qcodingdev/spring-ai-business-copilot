@@ -99,6 +99,47 @@ public class ReplyDraftConfirmationService {
         return new ConfirmationResult(draftId, draft.ticketId(), SupportDraftStatus.CANCELED);
     }
 
+    /** 打开队列项时重新签发凭证；数据库只替换摘要，不保存明文 token。 */
+    @Transactional
+    public ReviewSession openReviewSession(Long draftId) {
+        SupportReplyDraft draft = requireDraft(draftId);
+        CurrentActor actor = actorProvider.currentActor();
+        ObjectAction action = draft.reviewQueue() ? ObjectAction.REVIEW : ObjectAction.CONFIRM;
+        requireAccess(draft, actor, action);
+        if (draft.status() != SupportDraftStatus.DRAFTED && draft.status() != SupportDraftStatus.NEEDS_REVIEW
+                || draft.expiresAt() == null || !draft.expiresAt().isAfter(Instant.now())) {
+            throw new BusinessException(ErrorCode.STATE_CONFLICT);
+        }
+        ConfirmationTokenService.IssuedToken token = tokenService.issue();
+        if (!draftRepository.replaceConfirmationToken(
+                draftId, draft.status(), token.digest(), actor.actorId(), Instant.now())) {
+            throw new BusinessException(ErrorCode.STATE_CONFLICT);
+        }
+        String reply = draft.editedDraftText() == null ? draft.originalDraftText() : draft.editedDraftText();
+        return new ReviewSession(draftId, reply, token.rawToken(), draft.status(), draft.expiresAt());
+    }
+
+    /** 记录人工已经通过外部渠道回复客户；不发送任何消息或调用外部系统。 */
+    @Transactional
+    public ConfirmationResult markCustomerReplied(Long draftId) {
+        SupportReplyDraft draft = requireDraft(draftId);
+        CurrentActor actor = actorProvider.currentActor();
+        ObjectAction action = draft.reviewQueue() ? ObjectAction.REVIEW : ObjectAction.CONFIRM;
+        requireAccess(draft, actor, action);
+        if (draft.status() != SupportDraftStatus.CONFIRMED
+                || !ticketRepository.transitionStatus(
+                        draft.ticketId(), SupportTicketStatus.CONFIRMED, SupportTicketStatus.CLOSED)) {
+            throw new BusinessException(ErrorCode.STATE_CONFLICT);
+        }
+        auditService.recordRequired(new SupportAuditLog(
+                null, UUID.randomUUID().toString(), draft.ticketId(), "CUSTOMER_REPLY_RECORDED",
+                null, null, draft.riskLevel().name(), draft.citedChunkIds(), null,
+                null, null, draft.ownerActorId(), actor.actorId(),
+                null, null, null, null, null, null,
+                null, null, null, null, null, null));
+        return new ConfirmationResult(draftId, draft.ticketId(), SupportDraftStatus.CONFIRMED);
+    }
+
     @Transactional
     public EditResult edit(Long draftId, String editedText, String reason) {
         SupportReplyDraft draft = requireDraft(draftId);
@@ -156,6 +197,10 @@ public class ReplyDraftConfirmationService {
     }
 
     public record ConfirmationResult(Long draftId, Long ticketId, SupportDraftStatus status) {
+    }
+
+    public record ReviewSession(Long draftId, String suggestedReply, String confirmationToken,
+                                SupportDraftStatus status, Instant expiresAt) {
     }
 
     public record EditResult(Long draftId, String editedText, SupportDraftStatus status) {

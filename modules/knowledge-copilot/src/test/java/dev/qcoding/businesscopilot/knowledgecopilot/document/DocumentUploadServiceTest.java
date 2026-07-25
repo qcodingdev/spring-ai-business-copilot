@@ -17,6 +17,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -97,6 +101,32 @@ class DocumentUploadServiceTest {
     }
 
     @Test
+    void unchangedSystemDocumentDoesNotDuplicateAnActiveIndexJob() {
+        UUID logicalId = UUID.randomUUID();
+        String content = "# Guide\nBody";
+        KnowledgeDocument current = new KnowledgeDocument(
+                1L, "Guide", "system-demo", "guide.md", "HR_POLICY", sha256(content),
+                false, null, null, logicalId, 1, true, "PENDING", null,
+                "text/markdown", "system-demo", KnowledgeVisibilityScope.ALL, true);
+        when(extractor.extract(any(), any(), any()))
+                .thenReturn(new ExtractedDocument(DocumentFormat.MARKDOWN, content, content.length()));
+        when(documentRepository.findCurrent(logicalId)).thenReturn(Optional.of(current));
+        when(chunkRepository.findByDocumentId(1L)).thenReturn(List.of(
+                new KnowledgeChunk(11L, 1L, "Guide", 0, "Body", "Body", 1, null)));
+        when(indexJobRepository.findActiveByDocumentId(1L))
+                .thenReturn(Optional.of(job(10L, 1L)));
+
+        DocumentUploadResponse response = service.ingestSystemDocument(
+                "guide.md", "text/markdown", content.getBytes(StandardCharsets.UTF_8),
+                "HR_POLICY", logicalId, KnowledgeVisibilityScope.ALL);
+
+        assertThat(response.indexJobId()).isNull();
+        assertThat(response.indexStatus()).isEqualTo("PENDING");
+        verify(indexingService, never()).enqueue(1L);
+        verify(documentRepository, never()).save(any());
+    }
+
+    @Test
     void enablingUnindexedDocumentIsRejected() {
         KnowledgeDocument document = new KnowledgeDocument(
                 1L, "Guide", "upload", "guide.md", null, "hash", false, null, null,
@@ -150,5 +180,14 @@ class DocumentUploadServiceTest {
     private KnowledgeIndexJob job(Long id, Long documentId) {
         return new KnowledgeIndexJob(id, documentId, KnowledgeIndexJobStatus.PENDING,
                 0, null, null, null, null, null, null, null, null, null);
+    }
+
+    private String sha256(String value) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                    .digest(value.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException(ex);
+        }
     }
 }

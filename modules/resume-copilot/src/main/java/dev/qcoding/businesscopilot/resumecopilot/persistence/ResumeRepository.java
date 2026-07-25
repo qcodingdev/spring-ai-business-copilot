@@ -86,6 +86,15 @@ public class ResumeRepository {
         return jobs.isEmpty() ? null : jobs.getFirst();
     }
 
+    /** Current confirmed standards visible to the owner, the administrator, or the system demo. */
+    public List<ResumeJobEntity> findCurrentConfirmedJobs(String actorId, boolean admin) {
+        return jdbcTemplate.query(selectJobSql() + " WHERE current_version = TRUE "
+                        + "AND status = 'CRITERIA_CONFIRMED' "
+                        + "AND (system_managed = TRUE OR owner_actor_id = ? OR ?) "
+                        + "ORDER BY updated_at DESC",
+                this::mapJob, actorId, admin);
+    }
+
     private String selectJobSql() {
         return "SELECT id, title, sanitized_jd, criteria_json, status, criteria_token_digest, owner_actor_id, "
                 + "action_actor_id, expires_at, logical_job_id, criteria_version, current_version, effective_from, "
@@ -119,6 +128,15 @@ public class ResumeRepository {
                         + "WHERE id = ? AND status = ? AND expires_at > ?",
                 ResumeModels.Status.CRITERIA_CONFIRMED.name(), actionActorId, timestamp(now),
                 jobId, expected.name(), timestamp(now)) == 1;
+    }
+
+    public boolean updateDraftCriteria(long jobId, String criteriaJson, String tokenDigest,
+                                       Instant expiresAt, Instant now) {
+        return jdbcTemplate.update("""
+                UPDATE resume_jobs
+                SET criteria_json = ?, criteria_token_digest = ?, expires_at = ?, updated_at = ?
+                WHERE id = ? AND status = 'CRITERIA_DRAFTED' AND current_version = TRUE
+                """, criteriaJson, tokenDigest, timestamp(expiresAt), timestamp(now), jobId) == 1;
     }
 
     public long insertSubmission(long jobId, String sanitizedResume, String fileName,

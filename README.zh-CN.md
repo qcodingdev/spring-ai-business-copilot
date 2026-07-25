@@ -8,7 +8,7 @@
 [![Spring AI 2.0](https://img.shields.io/badge/Spring%20AI-2.0-6DB33F)](https://spring.io/projects/spring-ai)
 [![License](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 
-**一个 Java 应用，五个可以直接运行的 Spring AI 业务闭环：Text-to-SQL、带引用知识问答、智能客服、证据化报告和简历评估。**
+**面向企业知识、客服、招聘、数据分析和报告工作的可控 AI 业务协同平台。开箱即可体验，配置后即可使用，扩展时仍然可开发。**
 
 多数 AI 项目停在聊天框。本项目继续完成后半段：结构化模型输出、确定性 Guardrails、证据、人工确认、状态流转和审计链路。你可以直接运行一套完整流程，再选择其中一个模块接入自己的系统。
 
@@ -44,7 +44,21 @@ cp .env.example .env && docker compose up --build
 | [Knowledge Copilot](modules/knowledge-copilot/README.md) | 上传 TXT/Markdown/PDF/DOCX 后进行带引用问答 | 版本化索引、混合检索、精确引用校验 |
 | [Support Copilot](modules/support-copilot/README.md) | 工单分类、知识检索、可编辑回复草稿 | 低风险场景可建议，退款和故障仍需人工复核 |
 | [Report Copilot](modules/report-copilot/README.md) | 把手工或 CSV/JSON 来源生成可导出报告 | 来源快照不可变、指标严格比对 |
-| [Resume Copilot](modules/resume-copilot/README.md) | 确认 JD 标准，评估单份脱敏简历 | 不评分排名或决策，证据缺口和限制始终可见 |
+| [HR Copilot](modules/resume-copilot/README.md) | 生成岗位画像，逐条分析虚构简历证据并生成面试题 | 不评分排名或决策，证据缺口和人工复核始终可见 |
+
+## 产品化体验与三种运行模式
+
+业务工作台按“业务结论 → 支撑依据 → 待核实事项 → 人工复核与下一步”展示，模型、Prompt、Token、索引和规则哈希下移到私有 `/admin`。
+
+| 模式 | 用途 | 数据边界 |
+|---|---|---|
+| `development` | 本地开发与调试 | 保留完整模块接口 |
+| `self-hosted` | 开源用户自行部署 | 可配置上传、模型和管理能力 |
+| `public-demo` | 长期公网受控体验 | 15 个服务端场景、虚构只读数据、禁止真实上传和真实动作 |
+
+每个模块提供 3 个服务端范例。点击范例只自动填充，用户修改并再次确认后才调用模型；额度不足或模型异常时，可单独查看明确标记为 `PREGENERATED` 的人工检查示例结果。
+
+Railway 的变量、只读账号、初始化、恢复与开放域名顺序见 [长期公网体验部署手册](docs/public-demo-deployment.md)。
 
 ## 为什么它不只是聊天 Demo
 
@@ -134,7 +148,7 @@ Admin 和 Reviewer 可访问 `/actuator/metrics`。AI Core 记录低基数的调
 2. **Knowledge：** 上传 TXT/Markdown/PDF/DOCX，等待持久索引任务完成后进行带引用问答。
 3. **Support：** 粘贴虚构工单，检查分类与版本化知识依据，按需编辑后确认或取消回复草稿。
 4. **Report：** 预览手工或 CSV/JSON 来源，生成报告，确认后导出确定性 Markdown 或 HTML。
-5. **Resume：** 解析文本或文件形式的虚构 JD，确认版本化标准，分析一份虚构简历，记录人工修订，并在结束后删除脱敏提交。
+5. **HR Copilot：** 生成并编辑岗位画像/JD，确认岗位标准，选择虚构简历，检查逐条证据、缺口和面试核实问题，再记录人工复核。
 
 所有样例均为虚构数据。请勿向演示环境粘贴生产凭据、客户数据、内部文档或真实简历。
 
@@ -188,6 +202,8 @@ examples/                       Docker Compose 与环境变量模板
 | `/api/support-copilot` | 工单分析与回复草稿状态 |
 | `/api/report-copilot` | 来源、报告状态与 Markdown 导出 |
 | `/api/resume-copilot` | JD 标准确认与简历证据复核 |
+| `/api/demo` | 服务端场景目录、受控执行、额度和预生成示例结果 |
+| `/api/admin` | 私有诊断、幂等初始化与双确认恢复 |
 
 ## 构建与测试
 

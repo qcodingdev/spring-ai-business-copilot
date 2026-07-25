@@ -21,7 +21,9 @@ class HomeControllerTest {
 
     @org.junit.jupiter.api.BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new HomeController()).build();
+        mockMvc = MockMvcBuilders.standaloneSetup(
+                new HomeController(new dev.qcoding.businesscopilot.demo.RuntimeModeProperties("development")))
+                .build();
     }
 
     @Test

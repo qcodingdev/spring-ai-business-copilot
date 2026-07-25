@@ -1,0 +1,28 @@
+spring:
+  config:
+    activate:
+      on-profile: public-demo
+  datasource:
+    hikari:
+      maximum-pool-size: 8
+      minimum-idle: 1
+
+business-copilot:
+  runtime-mode: public-demo
+  audit:
+    retention:
+      anonymize-after: 1d
+      delete-after: 7d
+  ai-core:
+    resilience:
+      max-concurrent-calls: 4
+  resume-copilot:
+    submission-retention: 24h
+  data-copilot:
+    datasource:
+      enabled: ${BUSINESS_QUERY_DATASOURCE_ENABLED:true}
+      url: ${BUSINESS_QUERY_DATASOURCE_URL:${SPRING_DATASOURCE_URL:}}
+      username: ${BUSINESS_QUERY_DATASOURCE_USERNAME:${SPRING_DATASOURCE_USERNAME:}}
+      password: ${BUSINESS_QUERY_DATASOURCE_PASSWORD:${SPRING_DATASOURCE_PASSWORD:}}
+      dialect: postgresql
+      maximum-pool-size: 3

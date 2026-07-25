@@ -1,0 +1,296 @@
+{
+  "manifestVersion": 1,
+  "generatedAt": "2026-07-24T00:00:00Z",
+  "knowledgeDocuments": [
+    {
+      "logicalDocumentId": "5d1943a3-ef57-4f95-aab7-7319f7835f01",
+      "resource": "sample-knowledge/employee-handbook.md",
+      "category": "HR_POLICY",
+      "visibilityScope": "ALL"
+    },
+    {
+      "logicalDocumentId": "5d1943a3-ef57-4f95-aab7-7319f7835f02",
+      "resource": "sample-knowledge/product-faq.md",
+      "category": "PRODUCT",
+      "visibilityScope": "ALL"
+    },
+    {
+      "logicalDocumentId": "5d1943a3-ef57-4f95-aab7-7319f7835f03",
+      "resource": "sample-knowledge/refund-policy.md",
+      "category": "SUPPORT",
+      "visibilityScope": "ALL"
+    },
+    {
+      "logicalDocumentId": "5d1943a3-ef57-4f95-aab7-7319f7835f04",
+      "resource": "sample-knowledge/incident-response.md",
+      "category": "SUPPORT",
+      "visibilityScope": "ALL"
+    },
+    {
+      "logicalDocumentId": "5d1943a3-ef57-4f95-aab7-7319f7835f05",
+      "resource": "demo/knowledge/hr-review-guide.md",
+      "category": "HR_POLICY",
+      "visibilityScope": "HR_REVIEWER"
+    },
+    {
+      "logicalDocumentId": "5d1943a3-ef57-4f95-aab7-7319f7835f06",
+      "resource": "demo/knowledge/hr-data-governance.md",
+      "category": "HR_POLICY",
+      "visibilityScope": "ADMIN"
+    }
+  ],
+  "scenarios": [
+    {
+      "scenarioId": "knowledge-annual-leave-001",
+      "module": "KNOWLEDGE",
+      "title": "查询年假制度",
+      "description": "基于虚构员工手册说明年假天数与适用条件。",
+      "inputTemplate": "员工一年有多少天年假？不同工龄是否有区别？",
+      "allowedOperations": ["ASK_KNOWLEDGE"],
+      "dataScope": {"category": "HR_POLICY", "resources": ["5d1943a3-ef57-4f95-aab7-7319f7835f01"]},
+      "dataScopeLabel": "虚构员工手册中的休假制度",
+      "version": 1,
+      "sampleResult": {
+        "conclusion": "员工年假按累计工作年限分档，具体天数以员工手册中的虚构制度为准。",
+        "evidence": ["员工手册：休假与考勤章节"],
+        "toVerify": ["需由 HR 核实员工累计工作年限和当年已休天数"],
+        "nextAction": "确认个人适用档位后提交休假申请"
+      }
+    },
+    {
+      "scenarioId": "knowledge-travel-standard-001",
+      "module": "KNOWLEDGE",
+      "title": "查询差旅住宿标准",
+      "description": "从虚构报销和差旅制度中查找住宿标准及报销要求。",
+      "inputTemplate": "出差住宿标准是多少？报销时需要哪些凭证？",
+      "allowedOperations": ["ASK_KNOWLEDGE"],
+      "dataScope": {"category": "HR_POLICY", "resources": ["5d1943a3-ef57-4f95-aab7-7319f7835f01"]},
+      "dataScopeLabel": "虚构员工手册中的差旅与报销制度",
+      "version": 1,
+      "sampleResult": {
+        "conclusion": "住宿标准按城市等级执行，超标部分需事前审批。",
+        "evidence": ["员工手册：差旅与费用报销章节"],
+        "toVerify": ["出差城市等级和审批单是否完整"],
+        "nextAction": "根据城市等级选择标准内酒店"
+      }
+    },
+    {
+      "scenarioId": "knowledge-probation-conversion-001",
+      "module": "KNOWLEDGE",
+      "title": "了解试用期转正",
+      "description": "说明虚构企业的新员工试用期与转正办理步骤。",
+      "inputTemplate": "新员工试用期如何办理转正？需要提前准备什么？",
+      "allowedOperations": ["ASK_KNOWLEDGE"],
+      "dataScope": {"category": "HR_POLICY", "resources": ["5d1943a3-ef57-4f95-aab7-7319f7835f01"]},
+      "dataScopeLabel": "虚构员工手册中的入职与转正制度",
+      "version": 1,
+      "sampleResult": {
+        "conclusion": "转正由员工自评、直属主管评价和 HR 审核组成。",
+        "evidence": ["员工手册：入职与试用期章节"],
+        "toVerify": ["岗位目标完成情况和主管反馈"],
+        "nextAction": "按制度时间点发起转正申请"
+      }
+    },
+    {
+      "scenarioId": "support-refund-expired-001",
+      "module": "SUPPORT",
+      "title": "超过期限的退货诉求",
+      "description": "分析政策边界，生成不承诺退款的客服回复草稿。",
+      "inputTemplate": "客户表示订单已经超过退款期限，但仍强烈要求退货，请给出处理建议和回复草稿。",
+      "allowedOperations": ["ANALYZE_TICKET"],
+      "dataScope": {"category": "SUPPORT", "resources": ["5d1943a3-ef57-4f95-aab7-7319f7835f03"]},
+      "dataScopeLabel": "虚构退款政策与产品服务规则",
+      "version": 1,
+      "sampleResult": {
+        "conclusion": "不直接承诺退款，先核实订单时间和例外条件并转人工复核。",
+        "evidence": ["退款政策：申请时限与例外条款"],
+        "risk": "涉及退款权益，必须人工确认",
+        "suggestedReply": "我们理解您的诉求，将先核实订单信息和是否符合例外处理条件，再由专员回复。"
+      }
+    },
+    {
+      "scenarioId": "support-device-offline-001",
+      "module": "SUPPORT",
+      "title": "设备无法联网",
+      "description": "结合虚构产品 FAQ 和故障流程生成排查建议。",
+      "inputTemplate": "客户反馈设备无法联网，重启后仍然失败，请给出排查步骤和回复建议。",
+      "allowedOperations": ["ANALYZE_TICKET"],
+      "dataScope": {"category": "SUPPORT", "resources": ["5d1943a3-ef57-4f95-aab7-7319f7835f02", "5d1943a3-ef57-4f95-aab7-7319f7835f04"]},
+      "dataScopeLabel": "虚构产品 FAQ 与故障处理流程",
+      "version": 1,
+      "sampleResult": {
+        "conclusion": "先核查网络指示灯、路由连接和设备固件，再决定是否升级故障。",
+        "evidence": ["产品 FAQ：网络排查", "故障流程：升级条件"],
+        "risk": "不得要求客户提供真实账号密码",
+        "suggestedReply": "请先确认网络指示灯状态并重新连接测试网络；若仍失败，我们将按故障流程升级。"
+      }
+    },
+    {
+      "scenarioId": "support-plan-comparison-001",
+      "module": "SUPPORT",
+      "title": "企业版与个人版区别",
+      "description": "基于虚构产品说明生成有依据的版本对比回复。",
+      "inputTemplate": "客户询问企业版与个人版有什么区别，重点关心权限、安全和服务支持。",
+      "allowedOperations": ["ANALYZE_TICKET"],
+      "dataScope": {"category": "PRODUCT", "resources": ["5d1943a3-ef57-4f95-aab7-7319f7835f02"]},
+      "dataScopeLabel": "虚构产品 FAQ 与版本说明",
+      "version": 1,
+      "sampleResult": {
+        "conclusion": "企业版强调团队权限、审计和服务支持，个人版面向单人基础使用。",
+        "evidence": ["产品 FAQ：版本能力对比"],
+        "risk": "价格和合同条款需以正式报价为准",
+        "suggestedReply": "企业版提供团队权限、审计和企业支持能力，具体价格请以正式方案为准。"
+      }
+    },
+    {
+      "scenarioId": "hr-java-ai-job-profile-001",
+      "module": "HR",
+      "title": "生成 Java AI 岗位画像",
+      "description": "把业务需求整理为岗位画像和可编辑 JD 草稿。",
+      "inputTemplate": "需要一名 Java AI 应用开发工程师，负责 Spring AI、RAG 企业知识问答和业务系统集成，要求 3 年以上 Java 经验。",
+      "allowedOperations": ["GENERATE_JOB_DRAFT"],
+      "dataScope": {"jobResource": "sample-resume/java-ai-jd.md"},
+      "dataScopeLabel": "虚构 Java AI 应用开发岗位",
+      "version": 1,
+      "sampleResult": {
+        "jobProfile": "Java AI 应用开发工程师，负责可信 AI 业务应用落地。",
+        "responsibilities": ["Spring AI 应用开发", "企业知识问答与业务系统集成", "安全与可观测性建设"],
+        "required": ["3 年以上 Java 经验", "熟悉 Spring Boot", "理解 RAG 的证据与评测边界"],
+        "nextAction": "由招聘负责人编辑并确认岗位标准"
+      }
+    },
+    {
+      "scenarioId": "hr-java-ai-candidate-001",
+      "module": "HR",
+      "title": "分析虚构候选人证据",
+      "description": "逐条对应岗位标准与虚构简历证据，不输出分数和录用建议。",
+      "inputTemplate": "重点分析候选人在 Spring AI、RAG、PostgreSQL 和企业项目交付方面的证据，并列出缺口。",
+      "allowedOperations": ["ASSESS_RESUME"],
+      "dataScope": {"jobResource": "sample-resume/java-ai-jd.md", "resumeResource": "sample-resume/java-ai-resume.md"},
+      "dataScopeLabel": "虚构 Java AI 岗位和候选人简历",
+      "version": 1,
+      "sampleResult": {
+        "supported": ["有 Spring Boot 企业项目经验", "有知识检索与 PostgreSQL 实践"],
+        "partial": ["Spring AI 项目规模需要进一步核实"],
+        "gaps": ["未发现线上评测体系的明确证据"],
+        "toVerify": ["本人承担的模块边界", "召回与引用准确率的验证方法"],
+        "notice": "仅供面试准备，不能作为录用或淘汰决定"
+      }
+    },
+    {
+      "scenarioId": "hr-java-ai-interview-gap-001",
+      "module": "HR",
+      "title": "生成证据缺口面试题",
+      "description": "根据岗位与虚构简历的证据缺口生成核实问题。",
+      "inputTemplate": "围绕 RAG 效果评测、线上故障处理、数据安全和本人实际贡献生成面试核实问题。",
+      "allowedOperations": ["GENERATE_INTERVIEW_QUESTIONS"],
+      "dataScope": {"jobResource": "sample-resume/java-ai-jd.md", "resumeResource": "sample-resume/java-ai-resume.md"},
+      "dataScopeLabel": "虚构岗位、简历与上一阶段证据缺口",
+      "version": 1,
+      "sampleResult": {
+        "questions": [
+          "请说明你负责的 RAG 链路边界，以及如何验证引用确实支持答案。",
+          "线上检索质量下降时，你会优先检查哪些指标和数据？",
+          "简历中提到的项目如何处理敏感信息和权限过滤？"
+        ],
+        "nextAction": "面试官记录证据并人工确认"
+      }
+    },
+    {
+      "scenarioId": "data-sales-trend-30d-001",
+      "module": "DATA",
+      "title": "最近 30 天订单销售明细",
+      "description": "生成受白名单约束的只读订单查询，执行前展示 SQL。",
+      "inputTemplate": "查询最近 30 天的订单销售明细，展示订单编号、创建时间和金额，按创建时间升序，最多 100 条。",
+      "allowedOperations": ["GENERATE_DATA_QUERY"],
+      "dataScope": {"schemas": ["public"], "tables": ["orders"], "readOnly": true},
+      "dataScopeLabel": "虚构订单数据，只读且受表字段白名单限制",
+      "version": 1,
+      "sampleResult": {
+        "conclusion": "展示最近 30 天每日销售额与订单数趋势。",
+        "sqlPreview": "SELECT ... FROM public.orders ... GROUP BY ... LIMIT 100",
+        "notice": "示例 SQL 仅说明查询结构，实时执行仍会重新生成并经过安全校验"
+      }
+    },
+    {
+      "scenarioId": "data-top-category-sales-001",
+      "module": "DATA",
+      "title": "销售额最高的五类商品",
+      "description": "查询虚构订单和商品表，分析分类销售贡献。",
+      "inputTemplate": "分析销售额最高的五类商品，同时展示销售额和订单数量。",
+      "allowedOperations": ["GENERATE_DATA_QUERY"],
+      "dataScope": {"schemas": ["public"], "tables": ["orders", "order_items", "products"], "readOnly": true},
+      "dataScopeLabel": "虚构订单、订单明细和商品数据，只读白名单",
+      "version": 1,
+      "sampleResult": {
+        "conclusion": "按商品分类汇总销售额和订单数量并取前五名。",
+        "sqlPreview": "SELECT category, SUM(subtotal) ... LIMIT 5",
+        "notice": "实时 SQL 必须通过表、字段、函数和 LIMIT 校验"
+      }
+    },
+    {
+      "scenarioId": "data-new-customer-mom-001",
+      "module": "DATA",
+      "title": "新客户环比",
+      "description": "比较本月与上月虚构客户新增数量。",
+      "inputTemplate": "比较本月与上月的新客户数量，并计算变化数量。",
+      "allowedOperations": ["GENERATE_DATA_QUERY"],
+      "dataScope": {"schemas": ["public"], "tables": ["customers"], "readOnly": true},
+      "dataScopeLabel": "虚构客户数据，只读且敏感字段默认脱敏",
+      "version": 1,
+      "sampleResult": {
+        "conclusion": "统计本月和上月新增客户数并给出变化量。",
+        "sqlPreview": "SELECT COUNT(*) FILTER (...) FROM public.customers LIMIT 1",
+        "notice": "不展示客户邮箱、手机号等字段"
+      }
+    },
+    {
+      "scenarioId": "report-monthly-business-001",
+      "module": "REPORT",
+      "title": "本月经营分析",
+      "description": "基于固定虚构经营指标生成可复核报告草稿。",
+      "inputTemplate": "生成本月经营分析报告，重点关注销售、退款、新增客户和下月行动。",
+      "allowedOperations": ["GENERATE_REPORT"],
+      "dataScope": {"provider": "sample-report-data", "template": "business-monthly-v1"},
+      "dataScopeLabel": "虚构经营指标、任务与会议材料",
+      "version": 1,
+      "sampleResult": {
+        "executiveSummary": "经营指标总体稳定，退款和移动端发布风险需要持续跟进。",
+        "risks": ["退款率变化需复核", "移动端发布验证仍受外部环境影响"],
+        "actions": ["复盘退款原因", "完成移动端验证", "跟踪支付链路稳定性"]
+      }
+    },
+    {
+      "scenarioId": "report-meeting-actions-001",
+      "module": "REPORT",
+      "title": "会议纪要行动项",
+      "description": "从固定虚构会议材料提炼决定、负责人和行动项。",
+      "inputTemplate": "根据会议纪要生成行动项，区分已决定事项、负责人和待确认时间点。",
+      "allowedOperations": ["GENERATE_REPORT"],
+      "dataScope": {"provider": "sample-report-data", "template": "meeting-actions-v1"},
+      "dataScopeLabel": "虚构会议纪要和任务来源",
+      "version": 1,
+      "sampleResult": {
+        "executiveSummary": "灰度比例保持 20%，待支付监控稳定七天后再评估。",
+        "actions": ["下周二复盘灰度指标", "持续观察支付失败监控"],
+        "toVerify": ["移动端沙箱恢复时间"]
+      }
+    },
+    {
+      "scenarioId": "report-customer-issues-weekly-001",
+      "module": "REPORT",
+      "title": "客户问题周报",
+      "description": "使用虚构客服问题和经营资料整理问题趋势与行动。",
+      "inputTemplate": "整理客户问题周报，突出退款、设备联网和版本咨询三类问题及改进建议。",
+      "allowedOperations": ["GENERATE_REPORT"],
+      "dataScope": {"provider": "sample-report-data", "template": "customer-issues-weekly-v1"},
+      "dataScopeLabel": "虚构客户问题、支持任务和产品资料",
+      "version": 1,
+      "sampleResult": {
+        "executiveSummary": "本周问题集中在退款时限、设备联网和版本能力说明。",
+        "risks": ["退款问题需保持人工复核", "故障升级条件需统一"],
+        "actions": ["补充联网排查 FAQ", "统一版本对比话术", "复盘例外退款工单"]
+      }
+    }
+  ]
+}

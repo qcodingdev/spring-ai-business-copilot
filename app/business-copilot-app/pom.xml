@@ -23,6 +23,11 @@
         </dependency>
         <dependency>
             <groupId>dev.qcoding</groupId>
+            <artifactId>ai-guardrails</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>dev.qcoding</groupId>
             <artifactId>data-copilot</artifactId>
             <version>${project.version}</version>
         </dependency>

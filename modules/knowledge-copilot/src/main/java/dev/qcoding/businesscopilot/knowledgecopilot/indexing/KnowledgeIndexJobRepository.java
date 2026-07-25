@@ -10,6 +10,8 @@ public interface KnowledgeIndexJobRepository {
 
     Optional<KnowledgeIndexJob> findById(Long id);
 
+    Optional<KnowledgeIndexJob> findActiveByDocumentId(Long documentId);
+
     Optional<KnowledgeIndexJob> claimNext(Instant now);
 
     void complete(Long id, String model, int dimension, int chunkCount, Instant now);

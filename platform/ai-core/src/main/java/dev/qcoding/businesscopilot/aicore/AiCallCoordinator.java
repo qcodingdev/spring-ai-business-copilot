@@ -58,6 +58,7 @@ public final class AiCallCoordinator {
                 log.warn("AI 调用并发已满，未在等待时间内取得执行许可：类型={}，操作={}", safeType, safeOperation);
                 throw new BusinessException(ErrorCode.AI_MODEL_ERROR, "AI 服务当前繁忙，请稍后重试。");
             }
+            metrics.beforeExternalCall(safeType, safeOperation);
             T result = circuitBreaker(safeType).executeSupplier(supplier);
             long latency = System.nanoTime() - startedAt;
             metrics.record(safeType, safeOperation, "success", latency);
@@ -92,6 +93,17 @@ public final class AiCallCoordinator {
         metrics.recordTokens(normalizeOperation(operation), inputTokens, outputTokens);
     }
 
+    /** 管理台只读诊断，不暴露调用参数或供应商异常正文。 */
+    public Diagnostics diagnostics() {
+        Map<String, String> states = new java.util.TreeMap<>();
+        circuitBreakers.forEach((type, breaker) ->
+                states.put(type, breaker.getState().name()));
+        return new Diagnostics(
+                properties.maxConcurrentCalls(),
+                permits.availablePermits(),
+                Map.copyOf(states));
+    }
+
     CircuitBreaker circuitBreaker(String type) {
         return circuitBreakers.computeIfAbsent(type, this::createCircuitBreaker);
     }
@@ -119,5 +131,11 @@ public final class AiCallCoordinator {
 
     private void restoreMdc(String key, String previousValue) {
         if (previousValue == null) MDC.remove(key); else MDC.put(key, previousValue);
+    }
+
+    public record Diagnostics(
+            int maxConcurrentCalls,
+            int availablePermits,
+            Map<String, String> circuitStates) {
     }
 }

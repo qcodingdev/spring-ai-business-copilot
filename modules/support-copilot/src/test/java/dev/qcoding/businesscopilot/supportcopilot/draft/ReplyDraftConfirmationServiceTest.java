@@ -194,6 +194,23 @@ class ReplyDraftConfirmationServiceTest {
         }
 
         @Override
+        public boolean replaceConfirmationToken(Long id, SupportDraftStatus expectedStatus,
+                                                String tokenDigest, String reviewerActorId, Instant now) {
+            if (draft == null || !draft.id().equals(id) || draft.status() != expectedStatus
+                    || draft.expiresAt() == null || !draft.expiresAt().isAfter(now)) {
+                return false;
+            }
+            draft = new SupportReplyDraft(
+                    draft.id(), draft.ticketId(), draft.draftText(), draft.citedChunkIds(),
+                    draft.knowledgeVersionIds(), draft.riskLevel(), draft.riskReasons(),
+                    null, tokenDigest, draft.status(), draft.ownerActorId(), draft.reviewQueue(),
+                    reviewerActorId, draft.actionActorId(), draft.originalDraftText(),
+                    draft.editedDraftText(), draft.editReason(), draft.editedByActorId(), draft.editedAt(),
+                    draft.decisionOutcome(), draft.expiresAt(), draft.createdAt(), now);
+            return true;
+        }
+
+        @Override
         public long count() {
             return draft == null ? 0 : 1;
         }

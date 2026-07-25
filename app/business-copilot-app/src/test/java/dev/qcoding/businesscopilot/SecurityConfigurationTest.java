@@ -61,7 +61,7 @@ class SecurityConfigurationTest {
     }
 
     @Test
-    void authenticatedBrandLinksBackToDefaultDataHome() throws Exception {
+    void authenticatedBrandLinksBackToDefaultDataWorkbench() throws Exception {
         String body = mockMvc.perform(get("/")
                         .with(user("operator").roles("OPERATOR")))
                 .andExpect(status().isOk())

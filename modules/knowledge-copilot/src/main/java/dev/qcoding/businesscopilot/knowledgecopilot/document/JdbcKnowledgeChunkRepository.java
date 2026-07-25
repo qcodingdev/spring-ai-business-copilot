@@ -47,6 +47,10 @@ public class JdbcKnowledgeChunkRepository implements KnowledgeChunkRepository {
             WHERE d.enabled = TRUE
               AND d.current_version = TRUE
               AND d.index_status = 'INDEXED'
+              AND (d.visibility_scope = 'ALL'
+                   OR (d.visibility_scope = 'HR_REVIEWER' AND ?)
+                   OR (d.visibility_scope = 'ADMIN' AND ?))
+              AND (?::text IS NULL OR d.category = ?::text)
               AND to_tsvector('simple', c.content) @@ websearch_to_tsquery('simple', ?)
             ORDER BY rank DESC, c.id
             LIMIT ?
@@ -72,6 +76,10 @@ public class JdbcKnowledgeChunkRepository implements KnowledgeChunkRepository {
             WHERE d.enabled = TRUE
               AND d.current_version = TRUE
               AND d.index_status = 'INDEXED'
+              AND (d.visibility_scope = 'ALL'
+                   OR (d.visibility_scope = 'HR_REVIEWER' AND ?)
+                   OR (d.visibility_scope = 'ADMIN' AND ?))
+              AND (?::text IS NULL OR d.category = ?::text)
               AND strpos(lower(coalesce(c.section_title, '') || ' ' || c.content), t.term) > 0
             GROUP BY c.id, s.total_weight
             ORDER BY rank DESC, c.id
@@ -133,7 +141,12 @@ public class JdbcKnowledgeChunkRepository implements KnowledgeChunkRepository {
         return jdbcTemplate.query(TEXT_SEARCH_SQL,
                 (rs, rowNum) -> new TextSearchResult(
                         rs.getLong("chunk_id"), rs.getDouble("rank")),
-                query, query, limit);
+                query,
+                dev.qcoding.businesscopilot.knowledgecopilot.retrieval.KnowledgeAccessContext.reviewerAllowed(),
+                dev.qcoding.businesscopilot.knowledgecopilot.retrieval.KnowledgeAccessContext.adminAllowed(),
+                dev.qcoding.businesscopilot.knowledgecopilot.retrieval.KnowledgeAccessContext.category(),
+                dev.qcoding.businesscopilot.knowledgecopilot.retrieval.KnowledgeAccessContext.category(),
+                query, limit);
     }
 
     @Override
@@ -153,6 +166,11 @@ public class JdbcKnowledgeChunkRepository implements KnowledgeChunkRepository {
         return jdbcTemplate.query(KEYWORD_SEARCH_SQL,
                 (rs, rowNum) -> new TextSearchResult(
                         rs.getLong("chunk_id"), rs.getDouble("rank")),
-                encodedTerms, limit);
+                encodedTerms,
+                dev.qcoding.businesscopilot.knowledgecopilot.retrieval.KnowledgeAccessContext.reviewerAllowed(),
+                dev.qcoding.businesscopilot.knowledgecopilot.retrieval.KnowledgeAccessContext.adminAllowed(),
+                dev.qcoding.businesscopilot.knowledgecopilot.retrieval.KnowledgeAccessContext.category(),
+                dev.qcoding.businesscopilot.knowledgecopilot.retrieval.KnowledgeAccessContext.category(),
+                limit);
     }
 }

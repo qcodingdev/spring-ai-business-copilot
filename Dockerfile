@@ -39,6 +39,6 @@ EXPOSE 8080
 USER 10001:10001
 STOPSIGNAL SIGTERM
 HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=6 \
-    CMD curl --fail --silent --show-error http://127.0.0.1:8080/actuator/health || exit 1
+    CMD curl --fail --silent --show-error "http://127.0.0.1:${PORT:-8080}/actuator/health" || exit 1
 
 ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar app.jar"]

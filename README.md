@@ -8,7 +8,7 @@
 [![Spring AI 2.0](https://img.shields.io/badge/Spring%20AI-2.0-6DB33F)](https://spring.io/projects/spring-ai)
 [![License](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 
-**Five runnable Spring AI business workflows in one Java application — Text-to-SQL, cited RAG, customer support, grounded reports, and evidence-based resume review.**
+**A controlled enterprise AI workspace for knowledge, customer support, recruiting, data analysis, and reporting — runnable out of the box and extensible when self-hosted.**
 
 Most AI repositories end at a chat box. This one shows what happens next: typed model output, deterministic guardrails, evidence, human confirmation, lifecycle state, and audit trails. Clone it, run it, and adapt one complete workflow instead of assembling another demo from scratch.
 
@@ -44,7 +44,21 @@ All screenshots above were captured from the runnable Docker Compose application
 | [Knowledge Copilot](modules/knowledge-copilot/README.md) | Upload TXT/Markdown/PDF/DOCX and ask cited questions | Versioned indexing, hybrid retrieval, exact citation validation |
 | [Support Copilot](modules/support-copilot/README.md) | Classify a ticket and review an editable reply draft | Low-risk suggestions; refunds and incidents remain human-reviewed |
 | [Report Copilot](modules/report-copilot/README.md) | Turn typed or CSV/JSON sources into an exportable report | Immutable source snapshots and exact metric checks |
-| [Resume Copilot](modules/resume-copilot/README.md) | Confirm JD criteria and review one sanitized resume | No score/rank/decision; evidence gaps and limitations stay visible |
+| [HR Copilot](modules/resume-copilot/README.md) | Draft a job profile, map fictional resume evidence, and generate interview questions | No score/rank/decision; gaps and human review stay visible |
+
+## Product experience and runtime modes
+
+Business pages lead with the conclusion, supporting evidence, items to verify, and human next steps. Model, prompt, token, index, and rule diagnostics live in the private `/admin` layer.
+
+| Mode | Use | Boundary |
+|---|---|---|
+| `development` | local development | full module APIs |
+| `self-hosted` | open-source deployment | configurable uploads, models, and admin capabilities |
+| `public-demo` | long-running controlled trial | 15 server-owned scenarios, fictional read-only data, no real uploads or actions |
+
+Selecting an example only fills the form. A model call happens after the user edits and confirms. When quota or a provider is unavailable, the UI offers a separately labeled `PREGENERATED` result instead of presenting it as live output.
+
+See the [public-demo Railway deployment guide](docs/public-demo-deployment.md) for variables, least-privilege reader setup, initialization, reset, and domain-opening order.
 
 ## Why this is more than a chat demo
 
@@ -188,6 +202,8 @@ Every Maven module has its own README with architecture, flow, boundaries, API, 
 | `/api/support-copilot` | Ticket analysis and reply-draft lifecycle |
 | `/api/report-copilot` | Source preview, report lifecycle, Markdown export |
 | `/api/resume-copilot` | JD criteria confirmation and evidence review |
+| `/api/demo` | server-owned scenarios, bounded execution, quota, and sample results |
+| `/api/admin` | private diagnostics, idempotent initialization, and double-confirmed reset |
 
 ## Build and Test
 

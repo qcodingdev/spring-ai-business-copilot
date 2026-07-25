@@ -45,6 +45,15 @@ public enum ErrorCode {
     /** 模型返回的向量维度与应用配置不一致。 */
     EMBEDDING_DIMENSION_MISMATCH("BIZ_0404", "向量维度不匹配"),
 
+    /** 公网体验输入包含敏感信息、越界指令或不受支持内容。 */
+    PUBLIC_DEMO_INPUT_REJECTED("BIZ_0500", "输入未通过公网体验安全检查"),
+
+    /** 场景不存在、被停用、跨模块使用或不允许所请求的操作。 */
+    DEMO_SCENARIO_NOT_AVAILABLE("BIZ_0501", "当前体验场景不可用"),
+
+    /** 客户端或全站的公网体验额度已经用尽。 */
+    PUBLIC_DEMO_LIMIT_REACHED("BIZ_0502", "今日体验额度已用尽"),
+
     /** 不得向客户端泄露内部细节的服务器错误。 */
     INTERNAL_ERROR("SYS_5000", "服务器内部错误");
 
