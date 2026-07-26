@@ -7,6 +7,10 @@ spring:
       maximum-pool-size: 8
       minimum-idle: 1
 
+server:
+  # 由 Tomcat RemoteIpValve 从可信代理链解析客户端地址；业务代码不直接信任 X-Forwarded-For。
+  forward-headers-strategy: native
+
 business-copilot:
   runtime-mode: public-demo
   audit:

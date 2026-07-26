@@ -10,6 +10,7 @@
 - Data 只连接固定只读账号，仅允许查询 6 张虚构业务表。
 - 客服回复、报告、招聘评估都只生成草稿或建议，不自动发送、发布或决策。
 - 每客户端每天默认 20 次业务操作，全站每天默认 500 次外部模型调用，最大并发 4。
+- 普通账号只能访问场景目录和四类带一次性 token 的确认动作；原始模块列表、队列、导出和编辑接口默认拒绝。
 
 ## 2. Railway 服务
 
@@ -20,6 +21,11 @@
 3. 先不要生成公网域名。
 
 Railway 的 Postgres 必须安装 pgvector 扩展。应用 Flyway V1 会执行 `CREATE EXTENSION IF NOT EXISTS vector`；所用数据库账号需要具备该权限。
+
+应用只接受 Railway 代理转发的流量。`public-demo` profile 使用 Tomcat 原生可信代理解析，
+额度指纹只读取容器解析后的客户端地址，不直接信任调用方传入的 `X-Forwarded-For`。
+如果部署拓扑不是 Railway 默认私网代理，需要通过
+`SERVER_TOMCAT_REMOTEIP_INTERNAL_PROXIES` 显式配置可信代理范围，不能把应用端口直接暴露到公网。
 
 ## 3. 创建 Data 只读账号
 
@@ -123,7 +129,8 @@ export ADMIN_PASSWORD='Admin 密码'
 ## 7. 上线检查
 
 - 连续初始化两次，场景、文档版本和索引任务不重复。
-- Operator 无法访问 `/admin`，普通页面不返回完整制度、简历、数据库范围、Prompt、Key 或确认 token。
+- Operator 无法访问 `/admin`；普通账号不能读取共享队列、原始模块对象、完整制度、简历、数据库范围、Prompt 或 Key。
+- 一次性确认 token 只随当前场景结果返回，并且只能用于对应对象的查询执行、客服草稿确认、报告确认或招聘复核。
 - 手机号、身份证号、银行卡号、邮箱、API Key、JWT、私钥和提示注入均由服务端阻断。
 - 24 小时临时数据、7 天操作记录、30 天用量聚合按配置清理，`systemManaged=true` 永久保留。
 - Railway 重启后场景、索引、额度和任务状态仍在 PostgreSQL。

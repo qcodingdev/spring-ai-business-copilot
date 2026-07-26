@@ -2,6 +2,9 @@
 (function () {
   'use strict';
 
+  const runtimeMode = document.querySelector('meta[name="runtime-mode"]')?.content || 'development';
+  if (runtimeMode === 'public-demo') return;
+
   const list = document.getElementById('sc-queue-list');
   const refresh = document.getElementById('sc-queue-refresh');
   if (!list || !refresh) return;

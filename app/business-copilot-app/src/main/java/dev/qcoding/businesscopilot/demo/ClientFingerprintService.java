@@ -19,8 +19,11 @@ public class ClientFingerprintService {
     }
 
     public String fingerprint(HttpServletRequest request) {
-        String forwarded = firstHeaderValue(request.getHeader("X-Forwarded-For"));
-        String address = forwarded == null || forwarded.isBlank() ? request.getRemoteAddr() : forwarded;
+        /*
+         * public-demo 使用容器原生的可信代理解析，getRemoteAddr() 已是校验后的客户端地址。
+         * 这里不能再次读取原始 X-Forwarded-For，否则调用方可以伪造首段地址绕过每日额度。
+         */
+        String address = request.getRemoteAddr();
         String userAgent = request.getHeader("User-Agent");
         String material = nullToEmpty(address) + "\n" + nullToEmpty(userAgent);
         try {
@@ -30,12 +33,6 @@ public class ClientFingerprintService {
         } catch (java.security.GeneralSecurityException ex) {
             throw new IllegalStateException("当前运行环境不支持 HmacSHA256", ex);
         }
-    }
-
-    private String firstHeaderValue(String value) {
-        if (value == null) return null;
-        int comma = value.indexOf(',');
-        return (comma >= 0 ? value.substring(0, comma) : value).trim();
     }
 
     private String nullToEmpty(String value) {
