@@ -42,6 +42,7 @@
         <pdfbox.version>3.0.8</pdfbox.version>
         <poi.version>5.5.1</poi.version>
         <postgresql.version>42.7.12</postgresql.version>
+        <netty.version>4.2.16.Final</netty.version>
         <resilience4j.version>2.2.0</resilience4j.version>
         <!-- Keep aligned with the Spring Boot dependency BOM when Boot is upgraded. -->
         <mockito.version>5.23.0</mockito.version>
@@ -59,6 +60,14 @@
 
     <dependencyManagement>
         <dependencies>
+            <!-- Keep the full Netty stack aligned when overriding Spring Boot's managed patch level. -->
+            <dependency>
+                <groupId>io.netty</groupId>
+                <artifactId>netty-bom</artifactId>
+                <version>${netty.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
             <dependency>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-dependencies</artifactId>
