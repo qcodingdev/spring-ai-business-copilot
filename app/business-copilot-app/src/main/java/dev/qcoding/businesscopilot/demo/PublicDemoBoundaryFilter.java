@@ -11,19 +11,21 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.Set;
+import java.util.regex.Pattern;
 
-/** public-demo 禁止绕过场景目录上传资料或直接调用原始 AI 输入端点。 */
+/** public-demo 业务 API 默认拒绝，只开放场景入口、管理员维护和带一次性凭证的确认动作。 */
 public class PublicDemoBoundaryFilter extends OncePerRequestFilter {
 
-    private static final Set<String> DIRECT_AI_POSTS = Set.of(
-            "/api/data-copilot/sql-candidates",
-            "/api/knowledge-copilot/questions",
-            "/api/support-copilot/tickets/analyze",
-            "/api/report-copilot/reports/generate",
-            "/api/resume-copilot/jobs/draft",
-            "/api/resume-copilot/jobs/criteria",
-            "/api/resume-copilot/assessments");
+    private static final Pattern DEMO_SAMPLE_RESULT = Pattern.compile(
+            "/api/demo/scenarios/[^/]+/sample-result");
+    private static final Pattern DATA_EXECUTION = Pattern.compile(
+            "/api/data-copilot/sql-candidates/[^/]+/execute");
+    private static final Pattern SUPPORT_CONFIRMATION = Pattern.compile(
+            "/api/support-copilot/reply-drafts/[^/]+/confirm");
+    private static final Pattern REPORT_CONFIRMATION = Pattern.compile(
+            "/api/report-copilot/reports/[^/]+/confirm");
+    private static final Pattern RESUME_REVIEW = Pattern.compile(
+            "/api/resume-copilot/assessments/[^/]+/review");
     private final RuntimeModeProperties runtimeModeProperties;
 
     public PublicDemoBoundaryFilter(RuntimeModeProperties runtimeModeProperties) {
@@ -36,7 +38,7 @@ public class PublicDemoBoundaryFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain) throws ServletException, IOException {
         if (runtimeModeProperties.mode() != RuntimeMode.PUBLIC_DEMO
-                || !isForbidden(request.getMethod(), request.getRequestURI())) {
+                || isAllowed(request)) {
             filterChain.doFilter(request, response);
             return;
         }
@@ -45,29 +47,30 @@ public class PublicDemoBoundaryFilter extends OncePerRequestFilter {
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.getWriter().write("""
                 {"data":null,"success":false,"errorCode":"BIZ_0501",\
-                "message":"公网体验必须从预置业务范例进入，不能上传或提交真实资料。",\
+                "message":"公网体验只允许使用预置业务范例和当前结果的一次性确认操作。",\
                 "requestId":%s,"timestamp":"%s"}
                 """.formatted(
                 jsonString(BusinessRequestContextHolder.currentRequestId()),
                 Instant.now()).replace("\\\n", ""));
     }
 
-    private boolean isForbidden(String method, String path) {
-        if (path == null || !path.startsWith("/api/")) return false;
-        if ("GET".equals(method) && (path.equals("/api/data-copilot/schema")
-                || path.equals("/api/report-copilot/sample-sources")
-                || path.startsWith("/api/knowledge-copilot/index-jobs/")
-                || path.matches("/api/resume-copilot/assessments/[^/]+/review")
-                || path.endsWith("/audit-logs"))) return true;
-        if ("GET".equals(method) && path.equals("/api/knowledge-copilot/documents")) return true;
-        if (path.startsWith("/api/knowledge-copilot/documents")) return true;
-        if (path.startsWith("/api/report-copilot/source-")
-                || path.equals("/api/report-copilot/reports/generate-from-file")) return true;
-        if (path.endsWith("/file") && path.startsWith("/api/resume-copilot/")) return true;
-        if ("PUT".equals(method) && path.startsWith("/api/resume-copilot/jobs/")
-                && path.endsWith("/criteria")) return true;
-        if ("DELETE".equals(method) && path.startsWith("/api/resume-copilot/submissions/")) return true;
-        return "POST".equals(method) && DIRECT_AI_POSTS.contains(path);
+    private boolean isAllowed(HttpServletRequest request) {
+        String method = request.getMethod();
+        String path = request.getRequestURI();
+        if (path == null || !path.startsWith("/api/")) return true;
+        if (request.isUserInRole("ADMIN") && path.startsWith("/api/admin/")) return true;
+        if ("GET".equals(method)) {
+            return path.equals("/api/demo/scenarios")
+                    || path.equals("/api/demo/usage")
+                    || path.equals("/api/demo/overview")
+                    || DEMO_SAMPLE_RESULT.matcher(path).matches();
+        }
+        if (!"POST".equals(method)) return false;
+        return path.equals("/api/demo/scenarios/execute")
+                || DATA_EXECUTION.matcher(path).matches()
+                || SUPPORT_CONFIRMATION.matcher(path).matches()
+                || REPORT_CONFIRMATION.matcher(path).matches()
+                || RESUME_REVIEW.matcher(path).matches();
     }
 
     private String jsonString(String value) {
