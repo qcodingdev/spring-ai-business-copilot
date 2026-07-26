@@ -41,6 +41,7 @@
         <spring-ai.version>2.0.0</spring-ai.version>
         <pdfbox.version>3.0.8</pdfbox.version>
         <poi.version>5.5.1</poi.version>
+        <postgresql.version>42.7.12</postgresql.version>
         <resilience4j.version>2.2.0</resilience4j.version>
         <!-- Keep aligned with the Spring Boot dependency BOM when Boot is upgraded. -->
         <mockito.version>5.23.0</mockito.version>
