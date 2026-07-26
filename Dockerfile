@@ -13,9 +13,8 @@ COPY modules/ modules/
 COPY app/ app/
 
 # 构建 app 模块的可执行 jar（跳过测试以加速镜像构建）。
-# BuildKit 缓存 Maven 仓库，网络抖动重试和后续构建都可以复用已下载依赖。
-RUN --mount=type=cache,id=maven-repository,target=/root/.m2/repository \
-    mvn -q -B clean package -DskipTests -pl app/business-copilot-app -am
+# 保持标准 Dockerfile 语法，避免依赖特定平台的 cache mount ID 约定。
+RUN mvn -q -B clean package -DskipTests -pl app/business-copilot-app -am
 
 # ---------- 运行阶段 ----------
 FROM eclipse-temurin:21-jre-alpine
