@@ -2,6 +2,7 @@ package dev.qcoding.businesscopilot.knowledgecopilot;
 
 import dev.qcoding.businesscopilot.guardrails.SensitiveTextMasker;
 import dev.qcoding.businesscopilot.commonsecurity.CurrentActorProvider;
+import dev.qcoding.businesscopilot.commonsecurity.ExternalSecretResolver;
 import dev.qcoding.businesscopilot.documentprocessing.DocumentTextExtractor;
 import dev.qcoding.businesscopilot.knowledgecopilot.answer.KnowledgeAnswerService;
 import dev.qcoding.businesscopilot.knowledgecopilot.answer.KnowledgeQuestionService;
@@ -25,7 +26,16 @@ import dev.qcoding.businesscopilot.knowledgecopilot.retrieval.KnowledgeRetrieval
 import dev.qcoding.businesscopilot.knowledgecopilot.indexing.JdbcKnowledgeIndexJobRepository;
 import dev.qcoding.businesscopilot.knowledgecopilot.indexing.KnowledgeIndexJobRepository;
 import dev.qcoding.businesscopilot.knowledgecopilot.indexing.KnowledgeIndexingService;
+import dev.qcoding.businesscopilot.knowledgecopilot.feedback.JdbcKnowledgeFeedbackRepository;
+import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeFeedbackRepository;
+import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeFeedbackService;
 import dev.qcoding.businesscopilot.knowledgecopilot.web.KnowledgeCopilotController;
+import dev.qcoding.businesscopilot.knowledgecopilot.web.KnowledgeSourceController;
+import dev.qcoding.businesscopilot.knowledgecopilot.source.CloudKnowledgeSourceAdapter;
+import dev.qcoding.businesscopilot.knowledgecopilot.source.KnowledgeSourceAdapter;
+import dev.qcoding.businesscopilot.knowledgecopilot.source.KnowledgeSourceSyncService;
+import dev.qcoding.businesscopilot.knowledgecopilot.source.MinioKnowledgeSourceAdapter;
+import dev.qcoding.businesscopilot.knowledgecopilot.source.MountedDriveKnowledgeSourceAdapter;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -34,6 +44,10 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.web.client.RestClient;
+import tools.jackson.databind.ObjectMapper;
+
+import java.util.List;
 
 /**
  * Auto-configuration for the Knowledge Copilot module.
@@ -172,13 +186,62 @@ public class KnowledgeCopilotAutoConfiguration {
     }
 
     @Bean
+    public KnowledgeFeedbackRepository knowledgeFeedbackRepository(JdbcTemplate jdbcTemplate) {
+        return new JdbcKnowledgeFeedbackRepository(jdbcTemplate);
+    }
+
+    @Bean
+    public KnowledgeFeedbackService knowledgeFeedbackService(
+            KnowledgeFeedbackRepository repository,
+            CurrentActorProvider actorProvider,
+            SensitiveTextMasker sensitiveTextMasker) {
+        return new KnowledgeFeedbackService(repository, actorProvider, sensitiveTextMasker);
+    }
+
+    @Bean
+    public MountedDriveKnowledgeSourceAdapter mountedDriveKnowledgeSourceAdapter() {
+        return new MountedDriveKnowledgeSourceAdapter();
+    }
+
+    @Bean
+    public MinioKnowledgeSourceAdapter minioKnowledgeSourceAdapter(
+            ExternalSecretResolver secretResolver, ObjectMapper objectMapper) {
+        return new MinioKnowledgeSourceAdapter(secretResolver, objectMapper);
+    }
+
+    @Bean
+    public CloudKnowledgeSourceAdapter cloudKnowledgeSourceAdapter(
+            ExternalSecretResolver secretResolver) {
+        return new CloudKnowledgeSourceAdapter(RestClient.builder(), secretResolver);
+    }
+
+    @Bean
+    public KnowledgeSourceSyncService knowledgeSourceSyncService(
+            JdbcTemplate jdbcTemplate,
+            List<KnowledgeSourceAdapter> adapters,
+            DocumentUploadService uploadService,
+            CurrentActorProvider actorProvider,
+            ExternalSecretResolver secretResolver,
+            ObjectMapper objectMapper) {
+        return new KnowledgeSourceSyncService(
+                jdbcTemplate, adapters, uploadService, actorProvider, secretResolver, objectMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(KnowledgeSourceController.class)
+    public KnowledgeSourceController knowledgeSourceController(KnowledgeSourceSyncService service) {
+        return new KnowledgeSourceController(service);
+    }
+
+    @Bean
     @ConditionalOnMissingBean(KnowledgeCopilotController.class)
     public KnowledgeCopilotController knowledgeCopilotController(
             DocumentUploadService documentUploadService,
             KnowledgeDocumentRepository documentRepository,
             KnowledgeQuestionService questionService,
-            KnowledgeAuditService auditService) {
+            KnowledgeAuditService auditService,
+            KnowledgeFeedbackService feedbackService) {
         return new KnowledgeCopilotController(
-                documentUploadService, documentRepository, questionService, auditService);
+                documentUploadService, documentRepository, questionService, auditService, feedbackService);
     }
 }

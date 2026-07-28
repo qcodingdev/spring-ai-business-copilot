@@ -13,7 +13,7 @@ flowchart LR
 
 TXT, Markdown, PDF, and DOCX inputs share bounded extraction. Raw files are not persisted; sanitized text/evidence default to 30-day retention and can be deleted manually. Reviewer corrections and feedback are stored separately from the original model draft and must pass evidence and hiring-compliance guardrails again.
 
-Hard boundaries: no score, stars, ranking, probability, hire/reject recommendation, candidate comparison, protected-attribute inference, ATS action, or automated workflow change. `REVIEWED` records human acceptance or edited acceptance only; it is not a hiring decision.
+Enterprise collaboration adds candidate consent/revocation/expiry, a neutral approved interview-question bank, evidence-bound interview sessions, multi-interviewer opinion summaries, consent-scoped read-only ATS import, and approved onboarding checklists. Hard boundaries remain: no score, stars, ranking, probability, hire/reject recommendation, candidate comparison, protected-attribute inference, ATS write action, or automated workflow change.
 
 Persistence: explicit Spring JDBC repositories for job, assessment, evidence batches, and audit metadata.
 
@@ -23,4 +23,4 @@ Test: `./mvnw -pl modules/resume-copilot -am test`
 
 ## 简体中文
 
-HR Copilot 中的招聘辅助能力：先从岗位需求生成岗位画像和 JD 草稿，再由人工编辑、确认标准，最后对一份脱敏简历整理证据、缺口和面试核实问题。TXT、Markdown、PDF、DOCX 统一受限解析；不保存原始文件。公网模式只使用预置虚构简历并保留 24 小时临时结果。人工修订会再次经过证据与招聘合规校验，不生成总分、排名、概率、录用或淘汰建议，也不改变招聘流程。
+HR Copilot 中的招聘辅助能力：先从岗位需求生成岗位画像和 JD 草稿，再由人工编辑、确认标准，最后对一份授权且脱敏的简历整理证据、缺口和面试核实问题。企业协作增加候选人授权/撤回/过期、合规面试题库、证据化面试记录、多人意见汇总、按候选人授权限定的 ATS 只读导入，以及已批准入职清单。不生成总分、排名、概率、录用或淘汰建议，不执行 ATS 写操作，也不改变招聘流程。

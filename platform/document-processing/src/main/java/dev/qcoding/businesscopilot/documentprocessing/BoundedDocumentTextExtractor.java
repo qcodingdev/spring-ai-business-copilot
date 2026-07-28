@@ -8,6 +8,9 @@ import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 import org.apache.poi.xwpf.usermodel.XWPFTable;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.poi.ss.usermodel.DataFormatter;
+import org.jsoup.Jsoup;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -39,6 +42,8 @@ public class BoundedDocumentTextExtractor implements DocumentTextExtractor {
             case TEXT, MARKDOWN -> new String(content, StandardCharsets.UTF_8);
             case PDF -> extractPdf(content);
             case DOCX -> extractDocx(content);
+            case XLSX -> extractXlsx(content);
+            case HTML -> Jsoup.parse(new String(content, StandardCharsets.UTF_8)).text();
         };
         String normalized = normalize(text);
         if (normalized.isBlank()) {
@@ -49,6 +54,38 @@ public class BoundedDocumentTextExtractor implements DocumentTextExtractor {
                     "文档解析后的文本超过配置字符数限制。");
         }
         return new ExtractedDocument(format, normalized, normalized.length());
+    }
+
+    private String extractXlsx(byte[] content) {
+        try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(content))) {
+            DataFormatter formatter = new DataFormatter();
+            StringBuilder text = new StringBuilder();
+            for (var sheet : workbook) {
+                text.append("# ").append(sheet.getSheetName()).append('\n');
+                for (var row : sheet) {
+                    for (var cell : row) {
+                        String value = formatter.formatCellValue(cell);
+                        if (!value.isBlank()) {
+                            if (!text.isEmpty() && text.charAt(text.length() - 1) != '\n') {
+                                text.append('\t');
+                            }
+                            text.append(value);
+                        }
+                    }
+                    text.append('\n');
+                    if (text.length() > properties.maxExtractedCharacters()) {
+                        throw new BusinessException(ErrorCode.DOCUMENT_TOO_LARGE,
+                                "Excel 解析后的文本超过配置字符数限制。");
+                    }
+                }
+            }
+            return text.toString();
+        } catch (BusinessException ex) {
+            throw ex;
+        } catch (IOException | RuntimeException ex) {
+            throw new BusinessException(ErrorCode.DOCUMENT_FORMAT_UNSUPPORTED,
+                    "XLSX 文档解析失败，请确认文件未损坏。");
+        }
     }
 
     private String extractPdf(byte[] content) {

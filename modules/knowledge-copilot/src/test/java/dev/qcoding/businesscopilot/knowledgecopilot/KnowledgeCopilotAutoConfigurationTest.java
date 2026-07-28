@@ -6,6 +6,7 @@ import dev.qcoding.businesscopilot.aicore.PromptTemplateService;
 import dev.qcoding.businesscopilot.guardrails.SensitiveTextMasker;
 import dev.qcoding.businesscopilot.commonsecurity.CurrentActorProvider;
 import dev.qcoding.businesscopilot.commonsecurity.CurrentActor;
+import dev.qcoding.businesscopilot.commonsecurity.CommonSecurityAutoConfiguration;
 import dev.qcoding.businesscopilot.documentprocessing.DocumentTextExtractor;
 import dev.qcoding.businesscopilot.knowledgecopilot.answer.KnowledgeQuestionService;
 import dev.qcoding.businesscopilot.knowledgecopilot.chunking.ChunkingProperties;
@@ -16,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.jdbc.core.JdbcTemplate;
+import tools.jackson.databind.ObjectMapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -28,11 +30,14 @@ import static org.mockito.Mockito.mock;
 class KnowledgeCopilotAutoConfigurationTest {
 
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
-            .withConfiguration(AutoConfigurations.of(KnowledgeCopilotAutoConfiguration.class))
+            .withConfiguration(AutoConfigurations.of(
+                    CommonSecurityAutoConfiguration.class,
+                    KnowledgeCopilotAutoConfiguration.class))
             .withBean(JdbcTemplate.class, () -> mock(JdbcTemplate.class))
             .withBean(AiChatService.class, () -> mock(AiChatService.class))
             .withBean(AiEmbeddingService.class, () -> mock(AiEmbeddingService.class))
             .withBean(PromptTemplateService.class, PromptTemplateService::new)
+            .withBean(ObjectMapper.class, ObjectMapper::new)
             .withBean(SensitiveTextMasker.class, SensitiveTextMasker::new)
             .withBean(DocumentTextExtractor.class, () -> mock(DocumentTextExtractor.class))
             .withBean(CurrentActorProvider.class, () -> () -> new CurrentActor("test", java.util.Set.of()));

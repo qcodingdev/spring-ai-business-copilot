@@ -13,6 +13,13 @@ import dev.qcoding.businesscopilot.knowledgecopilot.document.DocumentUploadServi
 import dev.qcoding.businesscopilot.knowledgecopilot.document.KnowledgeDocument;
 import dev.qcoding.businesscopilot.knowledgecopilot.document.KnowledgeDocumentRepository;
 import dev.qcoding.businesscopilot.knowledgecopilot.indexing.KnowledgeIndexJob;
+import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeAnswerFeedback;
+import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeAnswerFeedbackRequest;
+import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeFeedbackService;
+import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeQualityMetrics;
+import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeQualityQueueItem;
+import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeQualityReview;
+import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeQualityReviewRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -56,15 +63,18 @@ public class KnowledgeCopilotController {
     private final KnowledgeDocumentRepository documentRepository;
     private final KnowledgeQuestionService questionService;
     private final KnowledgeAuditService auditService;
+    private final KnowledgeFeedbackService feedbackService;
 
     public KnowledgeCopilotController(DocumentUploadService documentUploadService,
                                        KnowledgeDocumentRepository documentRepository,
                                        KnowledgeQuestionService questionService,
-                                       KnowledgeAuditService auditService) {
+                                       KnowledgeAuditService auditService,
+                                       KnowledgeFeedbackService feedbackService) {
         this.documentUploadService = documentUploadService;
         this.documentRepository = documentRepository;
         this.questionService = questionService;
         this.auditService = auditService;
+        this.feedbackService = feedbackService;
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -148,9 +158,46 @@ public class KnowledgeCopilotController {
         KnowledgeAnswerResponse response = invocation.response();
 
         // 审计记录（不中断主流程）
-        auditService.record(buildAuditLog(invocation.sanitizedQuestion(), invocation));
+        Long answerId = auditService.record(buildAuditLog(invocation.sanitizedQuestion(), invocation));
+        response = response.withAnswerId(answerId);
 
         return ResponseEntity.ok(ApiResponse.ok(response));
+    }
+
+    /** POST /api/knowledge-copilot/answers/{answerId}/feedback — 提交或更新本人反馈。 */
+    @PostMapping("/answers/{answerId}/feedback")
+    public ResponseEntity<ApiResponse<KnowledgeAnswerFeedback>> submitFeedback(
+            @PathVariable Long answerId,
+            @Valid @RequestBody KnowledgeAnswerFeedbackRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                feedbackService.submit(answerId, request),
+                "反馈已记录，将用于知识质量复核"));
+    }
+
+    /** GET /api/knowledge-copilot/quality-queue — 无依据、拒绝和负反馈复核队列。 */
+    @GetMapping("/quality-queue")
+    public ResponseEntity<ApiResponse<PageResponse<KnowledgeQualityQueueItem>>> getQualityQueue(
+            @RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
+            @RequestParam(name = "size", defaultValue = "20") @Min(1) @Max(100) int size) {
+        List<KnowledgeQualityQueueItem> items = feedbackService.findQualityQueue(page, size);
+        return ResponseEntity.ok(ApiResponse.ok(PageResponse.of(
+                items, page, size, feedbackService.countQualityQueue())));
+    }
+
+    /** POST /api/knowledge-copilot/quality-queue/{answerId}/review — 人工处置质量问题。 */
+    @PostMapping("/quality-queue/{answerId}/review")
+    public ResponseEntity<ApiResponse<KnowledgeQualityReview>> reviewQualityIssue(
+            @PathVariable Long answerId,
+            @Valid @RequestBody KnowledgeQualityReviewRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                feedbackService.review(answerId, request),
+                "质量问题已记录人工处置结果"));
+    }
+
+    /** GET /api/knowledge-copilot/quality-metrics — 低基数质量闭环统计。 */
+    @GetMapping("/quality-metrics")
+    public ResponseEntity<ApiResponse<KnowledgeQualityMetrics>> getQualityMetrics() {
+        return ResponseEntity.ok(ApiResponse.ok(feedbackService.qualityMetrics()));
     }
 
     // ═══════════════════════════════════════════════════════════════

@@ -20,12 +20,16 @@ import java.sql.SQLTimeoutException;
 import java.sql.Statement;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -297,5 +301,45 @@ class JdbcReadOnlyQueryExecutorTest {
         assertThatThrownBy(() -> executor.execute(sql))
                 .isInstanceOf(QueryExecutionException.class)
                 .hasMessageContaining("大小超过安全上限");
+    }
+
+    @Test
+    @DisplayName("active query can be cancelled by execution id")
+    void activeQueryCanBeCancelledByExecutionId() throws Exception {
+        String sql = "SELECT id FROM customers LIMIT 10";
+        when(guardrailService.validate(sql, guardrailsProperties))
+                .thenReturn(SqlValidationResult.pass(sql));
+        CountDownLatch started = new CountDownLatch(1);
+        CountDownLatch cancelled = new CountDownLatch(1);
+        Statement statement = mock(Statement.class);
+        doAnswer(invocation -> {
+            cancelled.countDown();
+            return null;
+        }).when(statement).cancel();
+        when(statement.executeQuery(sql)).thenAnswer(invocation -> {
+            started.countDown();
+            if (!cancelled.await(2, TimeUnit.SECONDS)) {
+                throw new SQLException("query was not cancelled");
+            }
+            throw new SQLTimeoutException("cancelled", "57014", 0);
+        });
+        when(jdbcTemplate.execute(any(StatementCallback.class))).thenAnswer(invocation -> {
+            StatementCallback<QueryResultTable> callback = invocation.getArgument(0);
+            try {
+                return callback.doInStatement(statement);
+            } catch (SQLException ex) {
+                throw new UncategorizedSQLException("execute", sql, ex);
+            }
+        });
+
+        CompletableFuture<Void> running = CompletableFuture.runAsync(() ->
+                assertThatThrownBy(() -> executor.execute("execution-1", sql))
+                        .isInstanceOf(QueryExecutionException.class));
+
+        assertThat(started.await(2, TimeUnit.SECONDS)).isTrue();
+        assertThat(executor.cancel("execution-1")).isTrue();
+        running.get(3, TimeUnit.SECONDS);
+        verify(statement).cancel();
+        assertThat(executor.cancel("execution-1")).isFalse();
     }
 }

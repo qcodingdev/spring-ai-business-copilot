@@ -53,6 +53,7 @@
       '熔断状态': JSON.stringify(data.aiResilience?.circuitStates || {})
     });
     renderPairs('admin-visibility', data.knowledgeVisibility || {});
+    renderPairs('admin-enterprise', data.enterpriseExpansion || {});
     renderUsage(data.usage || []);
     renderPrompts(data.prompts || []);
     renderJobs(data.demoJobs || []);

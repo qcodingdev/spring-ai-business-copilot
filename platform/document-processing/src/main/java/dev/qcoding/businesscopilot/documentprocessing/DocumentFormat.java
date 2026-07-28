@@ -8,7 +8,9 @@ public enum DocumentFormat {
     TEXT,
     MARKDOWN,
     PDF,
-    DOCX;
+    DOCX,
+    XLSX,
+    HTML;
 
     public static Optional<DocumentFormat> detect(String fileName, String contentType) {
         String normalizedName = fileName == null ? "" : fileName.toLowerCase(Locale.ROOT);
@@ -24,6 +26,12 @@ public enum DocumentFormat {
         if (normalizedName.endsWith(".docx")) {
             return Optional.of(DOCX);
         }
+        if (normalizedName.endsWith(".xlsx")) {
+            return Optional.of(XLSX);
+        }
+        if (normalizedName.endsWith(".html") || normalizedName.endsWith(".htm")) {
+            return Optional.of(HTML);
+        }
 
         String normalizedType = contentType == null ? "" : contentType.toLowerCase(Locale.ROOT);
         return switch (normalizedType) {
@@ -32,6 +40,9 @@ public enum DocumentFormat {
             case "application/pdf" -> Optional.of(PDF);
             case "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ->
                     Optional.of(DOCX);
+            case "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ->
+                    Optional.of(XLSX);
+            case "text/html", "application/xhtml+xml" -> Optional.of(HTML);
             default -> Optional.empty();
         };
     }

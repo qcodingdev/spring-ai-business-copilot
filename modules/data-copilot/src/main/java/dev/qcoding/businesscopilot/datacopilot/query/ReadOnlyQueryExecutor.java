@@ -20,4 +20,14 @@ public interface ReadOnlyQueryExecutor {
      * @throws QueryExecutionException if execution fails at the database layer
      */
     QueryResultTable execute(String sql);
+
+    /** 使用稳定执行编号运行查询，便于用户主动取消。 */
+    default QueryResultTable execute(String executionId, String sql) {
+        return execute(sql);
+    }
+
+    /** 取消当前执行中的查询；查询不存在或已经结束时返回 false。 */
+    default boolean cancel(String executionId) {
+        return false;
+    }
 }

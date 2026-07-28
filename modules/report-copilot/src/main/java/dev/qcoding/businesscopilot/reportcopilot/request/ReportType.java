@@ -4,5 +4,7 @@ package dev.qcoding.businesscopilot.reportcopilot.request;
 public enum ReportType {
     TEAM_WEEKLY,
     BUSINESS_WEEKLY,
-    PROJECT_STATUS
+    PROJECT_STATUS,
+    INCIDENT_REVIEW,
+    SALES_REVIEW
 }

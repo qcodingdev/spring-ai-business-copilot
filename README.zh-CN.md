@@ -40,11 +40,11 @@ cp .env.example .env && docker compose up --build
 
 | 模块 | 可以直接体验什么 | 可信边界 |
 |---|---|---|
-| [Data Copilot](modules/data-copilot/README.md) | 提问、检查 SQL、确认只读查询 | 独立只读数据源，校验 schema/表/列/函数/Limit |
-| [Knowledge Copilot](modules/knowledge-copilot/README.md) | 上传 TXT/Markdown/PDF/DOCX 后进行带引用问答 | 版本化索引、混合检索、精确引用校验 |
-| [Support Copilot](modules/support-copilot/README.md) | 工单分类、知识检索、可编辑回复草稿 | 低风险场景可建议，退款和故障仍需人工复核 |
-| [Report Copilot](modules/report-copilot/README.md) | 把手工或 CSV/JSON 来源生成可导出报告 | 来源快照不可变、指标严格比对 |
-| [HR Copilot](modules/resume-copilot/README.md) | 生成岗位画像，逐条分析虚构简历证据并生成面试题 | 不评分排名或决策，证据缺口和人工复核始终可见 |
+| [Data Copilot](modules/data-copilot/README.md) | 治理指标/模板，预检和取消只读查询，导出或交接结果 | 不开放任意 SQL，不写业务库 |
+| [Knowledge Copilot](modules/knowledge-copilot/README.md) | 同步受控来源，带引用问答，复核过期/冲突知识 | ACL 映射失败关闭，不做通用文档管理 |
+| [Support Copilot](modules/support-copilot/README.md) | 导入工单，检查上下文/SLA/相似案例，确认内部备注草稿 | 不自动发客户消息、退款或改账号 |
+| [Report Copilot](modules/report-copilot/README.md) | 聚合受控来源，定时生成待确认草稿并导出办公格式 | 不做 BI/工作流平台，不自动发布 |
+| [HR Copilot](modules/resume-copilot/README.md) | 管理授权、面试证据、ATS 只读导入和入职指引 | 不评分排名、筛退或写入 ATS |
 
 ## 产品化体验与三种运行模式
 
@@ -78,6 +78,12 @@ Railway 的变量、只读账号、初始化、恢复与开放域名顺序见 [�
 - Support 和 Report 显式状态机、版本化证据与人工复核草稿；
 - Resume 统一脱敏、默认中文评估、修订再校验和主动删除控制；
 - PostgreSQL 迁移、固定评测集、SBOM、依赖审查和容器扫描。
+
+## 2.2 企业扩展
+
+`2.2.0-SNAPSHOT` 保持五模块边界，已经实现 Data、Knowledge、Support、Report、HR 的企业接入代码闭环：受控指标/模板与结果交接、增量来源同步和删除/ACL 传播、工单与 ATS 只读导入、一次性确认绑定的内部备注回写、定时报告草稿、办公格式导出、候选人授权、面试证据和入职清单。Flyway V22–V28 及 V1→V28 PostgreSQL 升级路径已有集成测试。依赖客户 SharePoint、Confluence、Notion、S3/MinIO、Jira、Zendesk、ServiceNow、飞书、企微或 ATS 凭证的适配器，仍必须在部署方真实沙箱通过后，才能标记为“生产已验证”。完整边界见 [2.2 升级路线](docs/upgrade-roadmap.md)。
+
+![运行中应用实测的 2.2 企业接入诊断面板](assets/admin-enterprise-status.png)
 
 ## 快速开始
 

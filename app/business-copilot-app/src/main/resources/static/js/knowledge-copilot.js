@@ -4,6 +4,8 @@
 const KC_API_BASE = '/api/knowledge-copilot';
 const KC_MAX_FILE_BYTES = 2 * 1024 * 1024;
 let kcSelectedFile = null;
+let kcCurrentAnswerId = null;
+let kcSelectedFeedbackRating = null;
 
 // ---- DOM helpers (reuse app.js helpers where available) ----
 function kcSetLoading(text) {
@@ -405,6 +407,7 @@ document.getElementById('kc-ask-btn').addEventListener('click', async () => {
   hide(document.getElementById('kc-answer-panel'));
   hide(document.getElementById('kc-citations-panel'));
   hide(document.getElementById('kc-warnings-panel'));
+  kcResetFeedback();
 
   try {
     const res = await fetch(`${KC_API_BASE}/questions`, {
@@ -421,6 +424,7 @@ document.getElementById('kc-ask-btn').addEventListener('click', async () => {
 
     kcRenderAnswer(payload.data);
     kcLoadAuditLogs();
+    kcLoadQualityQueue();
   } catch (e) {
     kcShowError('网络错误，请重试');
   } finally {
@@ -437,6 +441,7 @@ function kcRenderAnswer(data) {
   const citationsList = document.getElementById('kc-citations-list');
   const warningsPanel = document.getElementById('kc-warnings-panel');
   const warningsList = document.getElementById('kc-warnings-list');
+  const feedbackPanel = document.getElementById('kc-feedback-panel');
 
   // 状态徽章
   statusBadge.textContent = kcAnswerStatusText(data.status);
@@ -496,7 +501,89 @@ function kcRenderAnswer(data) {
     hide(warningsPanel);
   }
 
+  kcCurrentAnswerId = data.answerId || null;
+  if (kcCurrentAnswerId) {
+    show(feedbackPanel);
+  } else {
+    hide(feedbackPanel);
+  }
+
   scrollResultIntoView(statusPanel);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 用户反馈与质量闭环
+// ═══════════════════════════════════════════════════════════════
+const kcFeedbackHelpful = document.getElementById('kc-feedback-helpful');
+const kcFeedbackNotHelpful = document.getElementById('kc-feedback-not-helpful');
+const kcFeedbackSubmit = document.getElementById('kc-feedback-submit');
+
+kcFeedbackHelpful.addEventListener('click', () => kcSelectFeedback('HELPFUL'));
+kcFeedbackNotHelpful.addEventListener('click', () => kcSelectFeedback('NOT_HELPFUL'));
+kcFeedbackSubmit.addEventListener('click', kcSubmitFeedback);
+
+function kcSelectFeedback(rating) {
+  kcSelectedFeedbackRating = rating;
+  kcFeedbackHelpful.setAttribute('aria-pressed', String(rating === 'HELPFUL'));
+  kcFeedbackNotHelpful.setAttribute('aria-pressed', String(rating === 'NOT_HELPFUL'));
+  kcFeedbackHelpful.classList.toggle('selected', rating === 'HELPFUL');
+  kcFeedbackNotHelpful.classList.toggle('selected', rating === 'NOT_HELPFUL');
+  document.getElementById('kc-feedback-details').hidden = rating !== 'NOT_HELPFUL';
+  kcFeedbackSubmit.disabled = false;
+  hide(document.getElementById('kc-feedback-status'));
+}
+
+function kcResetFeedback() {
+  kcCurrentAnswerId = null;
+  kcSelectedFeedbackRating = null;
+  if (!kcFeedbackHelpful || !kcFeedbackNotHelpful || !kcFeedbackSubmit) return;
+  [kcFeedbackHelpful, kcFeedbackNotHelpful].forEach((button) => {
+    button.setAttribute('aria-pressed', 'false');
+    button.classList.remove('selected');
+  });
+  document.getElementById('kc-feedback-reason').value = '';
+  document.getElementById('kc-feedback-comment').value = '';
+  hide(document.getElementById('kc-feedback-details'));
+  hide(document.getElementById('kc-feedback-status'));
+  hide(document.getElementById('kc-feedback-panel'));
+  kcFeedbackSubmit.disabled = true;
+}
+
+async function kcSubmitFeedback() {
+  if (!kcCurrentAnswerId || !kcSelectedFeedbackRating) return;
+  const reason = document.getElementById('kc-feedback-reason').value || null;
+  const comment = document.getElementById('kc-feedback-comment').value.trim() || null;
+  if (kcSelectedFeedbackRating === 'NOT_HELPFUL' && !reason) {
+    kcShowError('请选择未解决的主要原因');
+    return;
+  }
+
+  kcFeedbackSubmit.disabled = true;
+  const status = document.getElementById('kc-feedback-status');
+  try {
+    const res = await fetch(`${KC_API_BASE}/answers/${kcCurrentAnswerId}/feedback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        rating: kcSelectedFeedbackRating,
+        reason: kcSelectedFeedbackRating === 'NOT_HELPFUL' ? reason : null,
+        comment
+      })
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok || !payload.success) {
+      kcShowError(payload.message || '反馈提交失败');
+      return;
+    }
+    status.textContent = '反馈已记录，可重新选择并更新。下一步：管理员在待复核问题中处理。';
+    status.className = 'inline-status';
+    show(status);
+    kcLoadQualityQueue();
+  } catch (e) {
+    kcShowError('网络错误，反馈尚未提交');
+  } finally {
+    kcFeedbackSubmit.disabled = false;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -534,6 +621,151 @@ async function kcLoadAuditLogs() {
   }
 }
 
+async function kcLoadQualityQueue() {
+  const tbody = document.getElementById('kc-quality-tbody');
+  try {
+    const res = await fetch(`${KC_API_BASE}/quality-queue?page=0&size=10`);
+    const payload = await res.json().catch(() => ({}));
+    if (res.status === 403) {
+      tbody.innerHTML = '<tr><td colspan="5">质量复核队列仅管理员和审计员可查看</td></tr>';
+      return;
+    }
+    if (!res.ok || !payload.success) {
+      tbody.innerHTML = '<tr><td colspan="5">质量复核队列暂时无法加载</td></tr>';
+      return;
+    }
+    const items = payload.data?.content || [];
+    tbody.innerHTML = '';
+    if (!items.length) {
+      tbody.innerHTML = '<tr><td colspan="5">当前没有待复核问题</td></tr>';
+      return;
+    }
+    items.forEach((item) => {
+      const tr = document.createElement('tr');
+      tr.appendChild(td(formatTime(item.feedbackUpdatedAt || item.answerCreatedAt)));
+      tr.appendChild(td(item.question || '—'));
+      tr.appendChild(td(kcQualityIssueText(item)));
+      tr.appendChild(td(item.comment || kcFeedbackReasonText(item.feedbackReason) || '—'));
+      tr.appendChild(kcQualityReviewActions(item));
+      tbody.appendChild(tr);
+    });
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="5">质量复核队列暂时无法加载</td></tr>';
+  }
+}
+
+function kcQualityReviewActions(item) {
+  const cell = document.createElement('td');
+  cell.className = 'knowledge-quality-actions';
+  const note = document.createElement('textarea');
+  note.rows = 2;
+  note.maxLength = 1000;
+  note.setAttribute('aria-label', `问题 ${item.answerId} 的复核说明`);
+  note.placeholder = '填写处置依据或需要补充的知识内容';
+  const buttons = document.createElement('div');
+  buttons.className = 'knowledge-quality-action-buttons';
+  [
+    ['RESOLVED', '已处理'],
+    ['DISMISSED', '忽略'],
+    ['KNOWLEDGE_UPDATE_REQUIRED', '转知识维护']
+  ].forEach(([decision, label]) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = decision === 'DISMISSED'
+      ? 'btn-secondary table-action-button'
+      : 'table-action-button';
+    button.textContent = label;
+    button.addEventListener('click', () =>
+      kcReviewQualityIssue(item, decision, note, buttons));
+    buttons.appendChild(button);
+  });
+  cell.append(note, buttons);
+  return cell;
+}
+
+async function kcReviewQualityIssue(item, decision, note, buttons) {
+  const reviewNote = note.value.trim();
+  if (!reviewNote) {
+    kcShowError('请先填写人工处置说明');
+    note.focus();
+    return;
+  }
+  const actionButtons = Array.from(buttons.querySelectorAll('button'));
+  actionButtons.forEach((button) => { button.disabled = true; });
+  try {
+    const res = await fetch(`${KC_API_BASE}/quality-queue/${item.answerId}/review`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        decision,
+        reviewNote,
+        expectedIssueVersion: item.issueVersion,
+        expectedIssueUpdatedAt: item.issueUpdatedAt
+      })
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok || !payload.success) {
+      kcShowError(payload.message || '人工处置记录失败，请刷新后重试');
+      return;
+    }
+    kcShowSuccess('人工处置已记录；如问题内容再次更新，将自动重新进入队列。');
+    await Promise.all([kcLoadQualityQueue(), kcLoadQualityMetrics()]);
+  } catch (e) {
+    kcShowError('网络错误，人工处置尚未记录');
+  } finally {
+    actionButtons.forEach((button) => { button.disabled = false; });
+  }
+}
+
+async function kcLoadQualityMetrics() {
+  const summary = document.getElementById('kc-quality-review-summary');
+  try {
+    const res = await fetch(`${KC_API_BASE}/quality-metrics`);
+    const payload = await res.json().catch(() => ({}));
+    if (res.status === 403) {
+      summary.textContent = '质量统计仅管理员和审计员可查看';
+      return;
+    }
+    if (!res.ok || !payload.success || !payload.data) {
+      summary.textContent = '质量统计暂时无法加载';
+      return;
+    }
+    const metrics = payload.data;
+    document.getElementById('kc-quality-pending-count').textContent =
+      String(metrics.pendingReviewCount ?? 0);
+    document.getElementById('kc-quality-feedback-count').textContent =
+      String(metrics.feedbackCount ?? 0);
+    document.getElementById('kc-quality-helpful-count').textContent =
+      String(metrics.helpfulCount ?? 0);
+    document.getElementById('kc-quality-not-helpful-count').textContent =
+      String(metrics.notHelpfulCount ?? 0);
+    summary.textContent =
+      `累计人工处置：已处理 ${metrics.resolvedCount ?? 0}，` +
+      `忽略 ${metrics.dismissedCount ?? 0}，` +
+      `转知识维护 ${metrics.knowledgeUpdateRequiredCount ?? 0}`;
+  } catch (e) {
+    summary.textContent = '质量统计暂时无法加载';
+  }
+}
+
+function kcQualityIssueText(item) {
+  if (item.rating === 'NOT_HELPFUL') return '用户反馈未解决';
+  if (item.answerStatus === 'NO_EVIDENCE') return '证据不足';
+  if (item.answerStatus === 'REJECTED') return '生成被拒绝';
+  return kcAnswerStatusText(item.answerStatus);
+}
+
+function kcFeedbackReasonText(reason) {
+  const labels = {
+    MISSING_EVIDENCE: '缺少关键依据',
+    INCORRECT: '结论不正确',
+    OUTDATED: '资料已经过期',
+    UNCLEAR: '表达不清楚',
+    OTHER: '其他问题'
+  };
+  return labels[reason] || '';
+}
+
 function kcAnswerStatusText(status) {
   const labels = {
     ANSWERED: '已回答',
@@ -546,3 +778,5 @@ function kcAnswerStatusText(status) {
 // 初始加载
 kcLoadDocuments();
 kcLoadAuditLogs();
+kcLoadQualityQueue();
+kcLoadQualityMetrics();

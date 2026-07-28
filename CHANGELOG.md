@@ -8,6 +8,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Started the `2.2.0-SNAPSHOT` enterprise quality loop with stable Knowledge answer IDs, owner-bound idempotent helpful/not-helpful feedback, and an Admin/Reviewer quality review queue.
+- Added Flyway V22 for constrained Knowledge answer feedback and workbench controls that keep users in the current answer flow with an explicit reviewer next step.
+- Added Flyway V23, concurrency-safe Knowledge quality dispositions, automatic re-queue after newer feedback, and low-cardinality quality metrics.
+- Added Flyway V24-V28 and enterprise APIs for Data governance/export/Report handoff, Knowledge source sync, Support ticket/SLA/writeback integration, Report schedules/office exports, and HR consent/interview/ATS/onboarding collaboration.
+- Added bounded XLSX/HTML extraction, mounted-drive and S3/MinIO sources, and REST adapters for SharePoint, Confluence, Notion, Jira Service Management, Zendesk, ServiceNow, Feishu, WeCom, and common ATS providers.
+- Added environment-reference-only external credentials, configurable Data query-plan row budgets, active JDBC cancellation, and private Admin enterprise status counts.
 - Added fixed low-cardinality AI call metrics, call IDs, operation tags, and Chinese request-to-model chain logs across all five Copilots.
 - Added bounded AI concurrency, separate Chat/Embedding circuit breakers, explicit provider timeouts, and restricted transient-failure retries.
 - Expanded the five fixed evaluation datasets to 67 cases and added a CI dataset-size gate, including end-to-end Data SQL safety cases.
@@ -16,9 +22,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Fixed
 
 - Extended Resume protected-attribute detection to reject Chinese gender and marital-status requirements and common English age or gender restrictions.
+- Masked external Support ticket messages before persistence and made Data query-cost previews fail closed when database estimates cannot be recognized.
+
+### Changed
+
+- Updated both README files, the six-frame workbench GIF, the social preview, and the 2.2 enterprise diagnostics screenshot from a running local application.
+- Added five-module enterprise scenario tests plus real PostgreSQL constraint coverage for Data, Knowledge, Support, Report, and HR boundaries.
 
 ### Security
 
+- Bound Knowledge feedback to the authenticated creator of the persisted answer audit and restricted the cross-user quality queue to Admin/Reviewer roles.
+- Masked phone numbers, email addresses, ID cards, and credential assignments in feedback comments and reviewer notes before persistence.
 - Restricted Actuator metrics to Admin and Reviewer roles and kept user input, Prompt text, and file names out of metric labels and AI operation logs.
 
 ## [2.0.0] - 2026-07-18

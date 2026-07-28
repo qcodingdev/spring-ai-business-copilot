@@ -363,6 +363,38 @@
       <div id="kc-answer-no-evidence" class="empty-state" hidden>
         <p>知识库中没有足够的信息来回答此问题。</p>
       </div>
+      <div id="kc-feedback-panel" class="knowledge-feedback" hidden>
+        <div class="knowledge-feedback-heading">
+          <div>
+            <strong>这次结果是否解决了问题？</strong>
+            <small>反馈会进入质量复核队列，不会自动修改知识库。</small>
+          </div>
+          <div class="knowledge-feedback-rating" role="group" aria-label="答案反馈">
+            <button id="kc-feedback-helpful" type="button" class="btn-secondary"
+                    aria-pressed="false">有帮助</button>
+            <button id="kc-feedback-not-helpful" type="button" class="btn-secondary"
+                    aria-pressed="false">未解决</button>
+          </div>
+        </div>
+        <div id="kc-feedback-details" class="knowledge-feedback-details" hidden>
+          <label for="kc-feedback-reason">主要问题</label>
+          <select id="kc-feedback-reason">
+            <option value="">请选择</option>
+            <option value="MISSING_EVIDENCE">缺少关键依据</option>
+            <option value="INCORRECT">结论不正确</option>
+            <option value="OUTDATED">资料已经过期</option>
+            <option value="UNCLEAR">表达不清楚</option>
+            <option value="OTHER">其他问题</option>
+          </select>
+          <label for="kc-feedback-comment">补充说明（可选）</label>
+          <textarea id="kc-feedback-comment" rows="2" maxlength="1000"
+                    placeholder="说明缺少什么或哪里需要修正，方便管理员复核。"></textarea>
+        </div>
+        <div class="composer-footer">
+          <span id="kc-feedback-status" class="inline-status" hidden></span>
+          <button id="kc-feedback-submit" type="button" disabled>提交反馈</button>
+        </div>
+      </div>
     </section>
 
     <!-- 引用区 -->
@@ -393,6 +425,31 @@
             <tr><th>时间</th><th>问题</th><th>状态</th><th>模型</th></tr>
           </thead>
           <tbody id="kc-audit-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 知识质量复核队列 -->
+    <section class="panel" id="kc-quality-panel">
+      <div class="panel-heading">
+        <div><span class="section-kicker">质量闭环</span><h2>待复核问题</h2></div>
+        <span class="panel-note">证据不足、生成拒绝与用户负反馈</span>
+      </div>
+      <div class="knowledge-quality-metrics" aria-label="知识质量统计">
+        <span><strong id="kc-quality-pending-count">—</strong><small>待复核</small></span>
+        <span><strong id="kc-quality-feedback-count">—</strong><small>反馈总数</small></span>
+        <span><strong id="kc-quality-helpful-count">—</strong><small>有帮助</small></span>
+        <span><strong id="kc-quality-not-helpful-count">—</strong><small>未解决</small></span>
+      </div>
+      <p id="kc-quality-review-summary" class="panel-note knowledge-quality-summary">
+        人工处置统计正在加载…
+      </p>
+      <div class="table-scroll">
+        <table id="kc-quality-table">
+          <thead>
+            <tr><th>时间</th><th>问题</th><th>问题类型</th><th>反馈说明</th><th>人工处置</th></tr>
+          </thead>
+          <tbody id="kc-quality-tbody"></tbody>
         </table>
       </div>
     </section>

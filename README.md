@@ -40,11 +40,11 @@ All screenshots above were captured from the runnable Docker Compose application
 
 | Module | What you can run | Trust boundary |
 |---|---|---|
-| [Data Copilot](modules/data-copilot/README.md) | Ask a business question, inspect SQL, confirm a query | Read-only datasource; schema/table/column/function/limit checks |
-| [Knowledge Copilot](modules/knowledge-copilot/README.md) | Upload TXT/Markdown/PDF/DOCX and ask cited questions | Versioned indexing, hybrid retrieval, exact citation validation |
-| [Support Copilot](modules/support-copilot/README.md) | Classify a ticket and review an editable reply draft | Low-risk suggestions; refunds and incidents remain human-reviewed |
-| [Report Copilot](modules/report-copilot/README.md) | Turn typed or CSV/JSON sources into an exportable report | Immutable source snapshots and exact metric checks |
-| [HR Copilot](modules/resume-copilot/README.md) | Draft a job profile, map fictional resume evidence, and generate interview questions | No score/rank/decision; gaps and human review stay visible |
+| [Data Copilot](modules/data-copilot/README.md) | Govern metrics/templates, preflight and cancel read-only queries, export or hand off results | No arbitrary SQL or database writes |
+| [Knowledge Copilot](modules/knowledge-copilot/README.md) | Sync governed sources, ask cited questions, review stale/conflicting knowledge | Source ACL mapping is fail-closed; no generic document management |
+| [Support Copilot](modules/support-copilot/README.md) | Import tickets, inspect context/SLA/similar cases, confirm an internal-note draft | No automatic customer send, refund, or account change |
+| [Report Copilot](modules/report-copilot/README.md) | Aggregate governed sources into scheduled review drafts and office exports | No BI/workflow platform and no automatic publishing |
+| [HR Copilot](modules/resume-copilot/README.md) | Manage consent, interview evidence, ATS read-only import, and onboarding guides | No score, rank, screening decision, or ATS write action |
 
 ## Product experience and runtime modes
 
@@ -78,6 +78,12 @@ See the [public-demo Railway deployment guide](docs/public-demo-deployment.md) f
 - Support and Report state machines with versioned evidence and human-reviewed drafts;
 - sanitized Resume ingestion, Chinese-by-default assessments, revalidated corrections, and deletion controls;
 - PostgreSQL migrations, fixed evaluation sets, SBOM generation, dependency review, and container scanning.
+
+## 2.2 enterprise expansion
+
+`2.2.0-SNAPSHOT` keeps the five-module boundary and implements the enterprise-facing code paths across Data, Knowledge, Support, Report, and HR: governed definitions and handoffs, incremental source sync with deletion/ACL propagation, read-only ticket/ATS imports, confirmation-bound writeback drafts, scheduled report drafts, office exports, consent, interview evidence, and onboarding guides. Flyway V22–V28 and the V1→V28 PostgreSQL upgrade path are covered by integration tests. Provider adapters that depend on customer-owned SharePoint, Confluence, Notion, S3/MinIO, Jira, Zendesk, ServiceNow, Feishu, WeCom, or ATS credentials must still pass that deployment's real sandbox before being described as production-verified. See the [2.2 upgrade roadmap](docs/upgrade-roadmap.md).
+
+![2.2 enterprise integration diagnostics verified in the running application](assets/admin-enterprise-status.png)
 
 ## Quick Start
 

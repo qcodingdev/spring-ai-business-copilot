@@ -5,6 +5,7 @@ import dev.qcoding.businesscopilot.aicore.PromptTemplateService;
 import dev.qcoding.businesscopilot.commonsecurity.ConfirmationTokenService;
 import dev.qcoding.businesscopilot.commonsecurity.CurrentActorProvider;
 import dev.qcoding.businesscopilot.commonsecurity.ObjectAccessPolicy;
+import dev.qcoding.businesscopilot.commonsecurity.ExternalSecretResolver;
 import dev.qcoding.businesscopilot.documentprocessing.DocumentTextExtractor;
 import dev.qcoding.businesscopilot.resumecopilot.assessment.ResumeAssessmentGuardrail;
 import dev.qcoding.businesscopilot.resumecopilot.assessment.ResumeAssessmentService;
@@ -16,6 +17,9 @@ import dev.qcoding.businesscopilot.resumecopilot.persistence.ResumeRepository;
 import dev.qcoding.businesscopilot.resumecopilot.privacy.ResumePrivacySanitizer;
 import dev.qcoding.businesscopilot.resumecopilot.privacy.ResumeRetentionService;
 import dev.qcoding.businesscopilot.resumecopilot.web.ResumeCopilotController;
+import dev.qcoding.businesscopilot.resumecopilot.web.HrEnterpriseController;
+import dev.qcoding.businesscopilot.resumecopilot.enterprise.HrEnterpriseService;
+import dev.qcoding.businesscopilot.guardrails.SensitiveTextMasker;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -24,6 +28,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.jdbc.core.JdbcTemplate;
 import tools.jackson.databind.ObjectMapper;
+import org.springframework.web.client.RestClient;
 
 @AutoConfiguration
 @ConditionalOnProperty(prefix = "business-copilot.resume-copilot", name = "enabled", havingValue = "true")
@@ -102,5 +107,23 @@ public class ResumeCopilotAutoConfiguration {
                                                            ResumeAssessmentService assessmentService,
                                                            JobDraftService jobDraftService) {
         return new ResumeCopilotController(criteriaService, assessmentService, jobDraftService);
+    }
+
+    @Bean @ConditionalOnMissingBean
+    public HrEnterpriseService hrEnterpriseService(
+            JdbcTemplate jdbcTemplate,
+            ResumeAssessmentService assessmentService,
+            CurrentActorProvider actorProvider,
+            ExternalSecretResolver secretResolver,
+            SensitiveTextMasker sensitiveTextMasker,
+            ObjectMapper objectMapper) {
+        return new HrEnterpriseService(
+                jdbcTemplate, assessmentService, actorProvider, secretResolver,
+                sensitiveTextMasker, objectMapper, RestClient.builder());
+    }
+
+    @Bean @ConditionalOnMissingBean(HrEnterpriseController.class)
+    public HrEnterpriseController hrEnterpriseController(HrEnterpriseService service) {
+        return new HrEnterpriseController(service);
     }
 }

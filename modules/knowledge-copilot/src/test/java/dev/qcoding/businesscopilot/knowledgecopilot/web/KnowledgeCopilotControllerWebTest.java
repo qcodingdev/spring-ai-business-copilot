@@ -8,6 +8,7 @@ import dev.qcoding.businesscopilot.knowledgecopilot.answer.KnowledgeQuestionServ
 import dev.qcoding.businesscopilot.knowledgecopilot.audit.KnowledgeAuditService;
 import dev.qcoding.businesscopilot.knowledgecopilot.document.DocumentUploadService;
 import dev.qcoding.businesscopilot.knowledgecopilot.document.KnowledgeDocumentRepository;
+import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeFeedbackService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -41,7 +42,8 @@ class KnowledgeCopilotControllerWebTest {
                 mock(DocumentUploadService.class),
                 mock(KnowledgeDocumentRepository.class),
                 mock(KnowledgeQuestionService.class),
-                mock(KnowledgeAuditService.class));
+                mock(KnowledgeAuditService.class),
+                mock(KnowledgeFeedbackService.class));
 
         LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();
@@ -112,6 +114,81 @@ class KnowledgeCopilotControllerWebTest {
                         .content(body))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.data.fieldErrors[0].field").value("question"));
+    }
+
+    @Test
+    @DisplayName("POST /answers/{answerId}/feedback requires rating")
+    void feedbackWithoutRatingReturnsValidationError() throws Exception {
+        mockMvc.perform(post("/api/knowledge-copilot/answers/17/feedback")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"comment\":\"缺少依据\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.data.fieldErrors[0].field").value("rating"));
+    }
+
+    @Test
+    @DisplayName("POST /answers/{answerId}/feedback limits comment length")
+    void feedbackCommentLengthIsBounded() throws Exception {
+        String body = """
+                {"rating":"NOT_HELPFUL","reason":"OTHER","comment":"%s"}
+                """.formatted("x".repeat(1001));
+
+        mockMvc.perform(post("/api/knowledge-copilot/answers/17/feedback")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.data.fieldErrors[0].field").value("comment"));
+    }
+
+    @Test
+    @DisplayName("POST /quality-queue/{answerId}/review requires a disposition note")
+    void qualityReviewRequiresNote() throws Exception {
+        String body = """
+                {
+                  "decision":"RESOLVED",
+                  "reviewNote":" ",
+                  "expectedIssueVersion":1,
+                  "expectedIssueUpdatedAt":"2026-07-28T11:30:00Z"
+                }
+                """;
+
+        mockMvc.perform(post("/api/knowledge-copilot/quality-queue/17/review")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.data.fieldErrors[0].field").value("reviewNote"));
+    }
+
+    @Test
+    @DisplayName("POST /quality-queue/{answerId}/review requires issue version")
+    void qualityReviewRequiresExpectedIssueTime() throws Exception {
+        String body = """
+                {"decision":"DISMISSED","reviewNote":"确认无需处理","expectedIssueVersion":1}
+                """;
+
+        mockMvc.perform(post("/api/knowledge-copilot/quality-queue/17/review")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.data.fieldErrors[0].field").value("expectedIssueUpdatedAt"));
+    }
+
+    @Test
+    @DisplayName("POST /quality-queue/{answerId}/review requires issue version")
+    void qualityReviewRequiresExpectedIssueVersion() throws Exception {
+        String body = """
+                {
+                  "decision":"DISMISSED",
+                  "reviewNote":"确认无需处理",
+                  "expectedIssueUpdatedAt":"2026-07-28T11:30:00Z"
+                }
+                """;
+
+        mockMvc.perform(post("/api/knowledge-copilot/quality-queue/17/review")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.data.fieldErrors[0].field").value("expectedIssueVersion"));
     }
 
     // ═══════════════════════════════════════════════════════════════

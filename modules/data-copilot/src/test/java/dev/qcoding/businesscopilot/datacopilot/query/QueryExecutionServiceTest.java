@@ -75,7 +75,7 @@ class QueryExecutionServiceTest {
                 List.of(new QueryRow(java.util.Map.of("id", 1)),
                         new QueryRow(java.util.Map.of("id", 2))),
                 2, false);
-        when(queryExecutor.execute(sql)).thenReturn(table);
+        when(queryExecutor.execute("cand-1", sql)).thenReturn(table);
         when(explanationService.explain(any())).thenReturn(ResultExplanationResponse.success("ok"));
 
         service.execute("cand-1", "token-1");
@@ -105,7 +105,7 @@ class QueryExecutionServiceTest {
         SqlCandidate candidate = candidateWithAuditContext(sql);
         when(confirmationService.confirmAndConsume("cand-1", "token-1")).thenReturn(candidate);
 
-        when(queryExecutor.execute(sql)).thenThrow(
+        when(queryExecutor.execute("cand-1", sql)).thenThrow(
                 new QueryExecutionException("查询执行失败"));
 
         assertThatThrownBy(() -> service.execute("cand-1", "token-1"))
@@ -132,7 +132,7 @@ class QueryExecutionServiceTest {
         SqlCandidate candidate = candidateWithAuditContext(sql);
         when(confirmationService.confirmAndConsume("cand-1", "token-1")).thenReturn(candidate);
 
-        when(queryExecutor.execute(sql)).thenThrow(
+        when(queryExecutor.execute("cand-1", sql)).thenThrow(
                 new BusinessException(ErrorCode.SQL_GUARDRAIL_VIOLATION, "rejected by guardrails"));
 
         assertThatThrownBy(() -> service.execute("cand-1", "token-1"))
@@ -167,7 +167,7 @@ class QueryExecutionServiceTest {
         assertThat(event.status()).isEqualTo(AuditStatus.NOT_CONFIRMED);
         assertThat(event.confirmed()).isFalse();
         // 确认失败时不执行查询
-        verify(queryExecutor, never()).execute(any());
+        verify(queryExecutor, never()).execute(any(), any());
     }
 
     // ---- 执行成功返回 table + explanation ----
@@ -182,7 +182,7 @@ class QueryExecutionServiceTest {
         QueryResultTable table = new QueryResultTable(
                 List.of(new QueryColumn("id", "integer")),
                 List.of(new QueryRow(java.util.Map.of("id", 1))), 1, false);
-        when(queryExecutor.execute(sql)).thenReturn(table);
+        when(queryExecutor.execute("cand-1", sql)).thenReturn(table);
         when(explanationService.explain(any())).thenReturn(ResultExplanationResponse.success("found 1 row"));
 
         var response = service.execute("cand-1", "token-1");
@@ -204,7 +204,7 @@ class QueryExecutionServiceTest {
         QueryResultTable table = new QueryResultTable(
                 List.of(new QueryColumn("id", "integer")),
                 List.of(new QueryRow(java.util.Map.of("id", 1))), 1, false);
-        when(queryExecutor.execute(sql)).thenReturn(table);
+        when(queryExecutor.execute("cand-1", sql)).thenReturn(table);
         when(explanationService.explain(any())).thenReturn(ResultExplanationResponse.success("ok"));
 
         service.execute("cand-1", "token-1");

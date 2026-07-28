@@ -418,6 +418,106 @@
   margin: 8px 0 0;
 }
 
+.knowledge-feedback {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.knowledge-feedback-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+}
+
+.knowledge-feedback-heading strong,
+.knowledge-feedback-heading small {
+  display: block;
+}
+
+.knowledge-feedback-heading small {
+  margin-top: 4px;
+  color: var(--text-muted);
+}
+
+.knowledge-feedback-rating {
+  display: flex;
+  gap: 8px;
+}
+
+.knowledge-feedback-rating button.selected {
+  color: var(--primary);
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.knowledge-feedback-details {
+  display: grid;
+  grid-template-columns: minmax(160px, 220px) minmax(260px, 1fr);
+  gap: 8px 14px;
+  margin-top: 16px;
+}
+
+.knowledge-feedback-details label {
+  align-self: center;
+}
+
+.knowledge-feedback-details select,
+.knowledge-feedback-details textarea {
+  width: 100%;
+}
+
+.knowledge-quality-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 6px 0 10px;
+}
+
+.knowledge-quality-metrics span {
+  padding: 13px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-soft);
+}
+
+.knowledge-quality-metrics strong,
+.knowledge-quality-metrics small {
+  display: block;
+}
+
+.knowledge-quality-metrics strong {
+  color: var(--primary);
+  font-size: 20px;
+}
+
+.knowledge-quality-metrics small {
+  margin-top: 2px;
+  color: var(--text-muted);
+}
+
+.knowledge-quality-summary {
+  margin: 0 0 14px;
+}
+
+.knowledge-quality-actions {
+  min-width: 260px;
+}
+
+.knowledge-quality-actions textarea {
+  min-height: 64px;
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+.knowledge-quality-action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 /* 公网体验只展示业务产品层；原始上传与开发者输入仍保留在自部署模式。 */
 .public-demo-mode #question-panel,
 .public-demo-mode #candidate-panel,
@@ -431,6 +531,7 @@
 .public-demo-mode #kc-citations-panel,
 .public-demo-mode #kc-warnings-panel,
 .public-demo-mode #kc-audit-panel,
+.public-demo-mode #kc-quality-panel,
 .public-demo-mode #sc-ticket-panel,
 .public-demo-mode #sc-samples-panel,
 .public-demo-mode #sc-classification-panel,
@@ -462,6 +563,16 @@
 
   .support-queue-filters {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .knowledge-feedback-heading,
+  .knowledge-feedback-details,
+  .knowledge-quality-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .knowledge-feedback-heading {
+    display: grid;
   }
 }
 

@@ -13,6 +13,16 @@ import dev.qcoding.businesscopilot.knowledgecopilot.document.KnowledgeDocument;
 import dev.qcoding.businesscopilot.knowledgecopilot.document.KnowledgeDocumentRepository;
 import dev.qcoding.businesscopilot.knowledgecopilot.indexing.KnowledgeIndexJob;
 import dev.qcoding.businesscopilot.knowledgecopilot.indexing.KnowledgeIndexJobStatus;
+import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeAnswerFeedback;
+import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeAnswerFeedbackRequest;
+import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeFeedbackRating;
+import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeFeedbackReason;
+import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeFeedbackService;
+import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeQualityMetrics;
+import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeQualityQueueItem;
+import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeQualityReview;
+import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeQualityReviewDecision;
+import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeQualityReviewRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -32,6 +42,7 @@ class KnowledgeCopilotControllerTest {
     private KnowledgeDocumentRepository documentRepository;
     private KnowledgeQuestionService questionService;
     private KnowledgeAuditService auditService;
+    private KnowledgeFeedbackService feedbackService;
     private KnowledgeCopilotController controller;
 
     @BeforeEach
@@ -40,9 +51,10 @@ class KnowledgeCopilotControllerTest {
         documentRepository = mock(KnowledgeDocumentRepository.class);
         questionService = mock(KnowledgeQuestionService.class);
         auditService = mock(KnowledgeAuditService.class);
+        feedbackService = mock(KnowledgeFeedbackService.class);
         controller = new KnowledgeCopilotController(
                 documentUploadService, documentRepository,
-                questionService, auditService);
+                questionService, auditService, feedbackService);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -175,6 +187,7 @@ class KnowledgeCopilotControllerTest {
         assertThat(data.status()).isEqualTo(KnowledgeAnswerStatus.ANSWERED);
         assertThat(data.answer()).contains("年假");
         assertThat(data.citations()).hasSize(1);
+        assertThat(data.answerId()).isEqualTo(1L);
         verify(auditService).record(any());
     }
 
@@ -202,7 +215,83 @@ class KnowledgeCopilotControllerTest {
 
         assertThat(response.getBody().data().status()).isEqualTo(KnowledgeAnswerStatus.NO_EVIDENCE);
         assertThat(response.getBody().data().answer()).isNull();
+        assertThat(response.getBody().data().answerId()).isEqualTo(1L);
         verify(auditService).record(any());
+    }
+
+    @Test
+    @DisplayName("POST /answers/{answerId}/feedback records current actor feedback")
+    void submitFeedbackReturnsSavedFeedback() {
+        var request = new KnowledgeAnswerFeedbackRequest(
+                KnowledgeFeedbackRating.NOT_HELPFUL,
+                KnowledgeFeedbackReason.MISSING_EVIDENCE,
+                "缺少报销上限");
+        var saved = new KnowledgeAnswerFeedback(
+                3L, 17L, "operator",
+                KnowledgeFeedbackRating.NOT_HELPFUL,
+                KnowledgeFeedbackReason.MISSING_EVIDENCE,
+                "缺少报销上限", Instant.now(), Instant.now());
+        when(feedbackService.submit(17L, request)).thenReturn(saved);
+
+        var response = controller.submitFeedback(17L, request);
+
+        assertThat(response.getBody().data()).isEqualTo(saved);
+        assertThat(response.getBody().message()).contains("质量复核");
+    }
+
+    @Test
+    @DisplayName("GET /quality-queue returns paginated unresolved answers")
+    void getQualityQueueReturnsPagination() {
+        Instant issueUpdatedAt = Instant.now();
+        var item = new KnowledgeQualityQueueItem(
+                17L, "req-17", "报销上限是多少？", "ANSWERED", null,
+                KnowledgeFeedbackRating.NOT_HELPFUL,
+                KnowledgeFeedbackReason.MISSING_EVIDENCE,
+                "缺少上限", Instant.now(), issueUpdatedAt, 1L, issueUpdatedAt);
+        when(feedbackService.findQualityQueue(0, 20)).thenReturn(List.of(item));
+        when(feedbackService.countQualityQueue()).thenReturn(1L);
+
+        var response = controller.getQualityQueue(0, 20);
+
+        assertThat(response.getBody().data().content()).containsExactly(item);
+        assertThat(response.getBody().data().totalElements()).isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("POST /quality-queue/{answerId}/review records disposition")
+    void reviewQualityIssueReturnsDisposition() {
+        Instant issueUpdatedAt = Instant.now();
+        var request = new KnowledgeQualityReviewRequest(
+                KnowledgeQualityReviewDecision.KNOWLEDGE_UPDATE_REQUIRED,
+                "需要补充最新报销制度",
+                1L,
+                issueUpdatedAt);
+        var review = new KnowledgeQualityReview(
+                8L, 17L,
+                KnowledgeQualityReviewDecision.KNOWLEDGE_UPDATE_REQUIRED,
+                "需要补充最新报销制度",
+                "reviewer",
+                1L,
+                issueUpdatedAt,
+                Instant.now(),
+                Instant.now());
+        when(feedbackService.review(17L, request)).thenReturn(review);
+
+        var response = controller.reviewQualityIssue(17L, request);
+
+        assertThat(response.getBody().data()).isEqualTo(review);
+        assertThat(response.getBody().message()).contains("人工处置");
+    }
+
+    @Test
+    @DisplayName("GET /quality-metrics returns low-cardinality counts")
+    void getQualityMetricsReturnsCounts() {
+        var metrics = new KnowledgeQualityMetrics(8, 5, 3, 2, 1, 1, 2);
+        when(feedbackService.qualityMetrics()).thenReturn(metrics);
+
+        var response = controller.getQualityMetrics();
+
+        assertThat(response.getBody().data()).isEqualTo(metrics);
     }
 
     // ═══════════════════════════════════════════════════════════════

@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * JDBC-based read-only query executor with defensive guardrails and result masking.
@@ -46,6 +47,7 @@ public class JdbcReadOnlyQueryExecutor implements ReadOnlyQueryExecutor {
     private final GuardrailsProperties guardrailsProperties;
     private final SensitiveDataMasker masker;
     private final QueryExecutionProperties queryProperties;
+    private final Map<String, Statement> activeStatements = new ConcurrentHashMap<>();
 
     public JdbcReadOnlyQueryExecutor(JdbcTemplate jdbcTemplate,
                                       SqlGuardrailService guardrailService,
@@ -61,6 +63,11 @@ public class JdbcReadOnlyQueryExecutor implements ReadOnlyQueryExecutor {
 
     @Override
     public QueryResultTable execute(String sql) {
+        return execute(null, sql);
+    }
+
+    @Override
+    public QueryResultTable execute(String executionId, String sql) {
         // 1. 防御式二次 guardrails 校验
         SqlValidationResult validationResult = guardrailService.validate(sql, guardrailsProperties);
         if (!validationResult.passed()) {
@@ -81,9 +88,15 @@ public class JdbcReadOnlyQueryExecutor implements ReadOnlyQueryExecutor {
                     stmt.setQueryTimeout(queryProperties.queryTimeoutSeconds());
                     stmt.setMaxRows(jdbcMaxRows());
                     stmt.setFetchSize(Math.min(queryProperties.fetchSize(), jdbcMaxRows()));
-
+                    if (executionId != null) {
+                        activeStatements.put(executionId, stmt);
+                    }
                     try (ResultSet rs = stmt.executeQuery(sql)) {
                         return mapResultSet(rs);
+                    } finally {
+                        if (executionId != null) {
+                            activeStatements.remove(executionId, stmt);
+                        }
                     }
                 }
             });
@@ -93,6 +106,21 @@ public class JdbcReadOnlyQueryExecutor implements ReadOnlyQueryExecutor {
             String userMessage = sqlEx != null ? translateSQLException(sqlEx) : "查询执行失败";
             log.error("查询执行失败：{}", userMessage, ex);
             throw new QueryExecutionException(userMessage, ex);
+        }
+    }
+
+    @Override
+    public boolean cancel(String executionId) {
+        Statement statement = activeStatements.get(executionId);
+        if (statement == null) {
+            return false;
+        }
+        try {
+            statement.cancel();
+            return true;
+        } catch (SQLException ex) {
+            log.warn("取消查询失败：executionId={}", executionId);
+            return false;
         }
     }
 

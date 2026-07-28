@@ -19,9 +19,9 @@ AGENTS.md
 .codex/
 .change-evidence.yml
 
-# Internal planning and audit documents. Public deployment guidance is versioned.
+# 正式规划、模块说明和运维文档属于交付物；临时草稿仍需使用其它目录。
 /docs/*
-!/docs/public-demo-deployment.md
+!/docs/**
 
 # Unpublished screenshot sources; README uses the generated GIF only
 img.png
