@@ -2,7 +2,7 @@
 
 English | [简体中文](#简体中文)
 
-Enterprise knowledge assistant with versioned document ingestion, durable indexing jobs, role/category-filtered hybrid PostgreSQL text/pgvector retrieval, mandatory citations, refusal, and audit.
+Enterprise knowledge assistant with versioned document ingestion, durable indexing jobs, role/category-filtered hybrid PostgreSQL text/pgvector retrieval, mandatory citations, refusal, audit, owner-bound answer feedback, and a concurrency-safe reviewer quality loop.
 
 ```mermaid
 flowchart LR
@@ -10,12 +10,12 @@ flowchart LR
     Question --> HybridRetrieval --> StructuredAnswer --> ExactCitationGuardrail
 ```
 
-TXT, Markdown, PDF, and DOCX inputs share bounded extraction. Answers without current retrieved evidence are rejected or returned as `NO_EVIDENCE`, and every citation excerpt must occur in the referenced current chunk. Document versions, index status, retries, and owner access are persisted; transient indexing failures can resume without re-uploading the source.
+TXT, Markdown, PDF, DOCX, XLSX, and HTML inputs share bounded extraction. Mounted drives, S3/MinIO, SharePoint, Confluence, and Notion use incremental source cursors, content hashes, source deletion propagation, fixed ACL-group mapping, expiry/conflict checks, and a review queue. Answers without current retrieved evidence are rejected or returned as `NO_EVIDENCE`, and every citation excerpt must occur in the referenced current chunk. External REST adapters still require a deployment-owned sandbox and credentials before a provider can be claimed as production-verified.
 
-API: `POST/GET /api/knowledge-copilot/documents`, `POST /api/knowledge-copilot/documents/{id}/reindex`, `PATCH /api/knowledge-copilot/documents/{id}/enabled`, `POST /api/knowledge-copilot/questions`.
+API: `POST/GET /api/knowledge-copilot/documents`, `POST /api/knowledge-copilot/documents/{id}/reindex`, `PATCH /api/knowledge-copilot/documents/{id}/enabled`, `POST /api/knowledge-copilot/questions`, `POST /api/knowledge-copilot/answers/{answerId}/feedback`, `GET /api/knowledge-copilot/quality-queue`, `POST /api/knowledge-copilot/quality-queue/{answerId}/review`, and `GET /api/knowledge-copilot/quality-metrics`.
 
 Test: `./mvnw -pl modules/knowledge-copilot -am test`
 
 ## 简体中文
 
-企业知识助手，提供版本化文档、持久索引任务、按业务分类和角色过滤的文本/pgvector 混合检索、强制引用、无依据拒答与审计。资料支持“全员、HR/审核员、仅管理员”三类可见范围。答案只能引用本次有权访问的检索结果，且引用片段必须真实存在于对应 chunk。
+企业知识助手，提供版本化文档、持久索引任务、按业务分类和角色过滤的文本/pgvector 混合检索、强制引用、无依据拒答、审计和回答质量反馈。受限解析已覆盖 TXT、Markdown、PDF、DOCX、XLSX 和 HTML；本地挂载目录、S3/MinIO、SharePoint、Confluence、Notion 接入具备增量游标、内容哈希、源端删除传播、固定用户组映射、过期/冲突提示。资料支持“全员、HR/审核员、仅管理员”三类可见范围；外部 REST 来源仍需部署方凭证和真实沙箱验收后才能标记为生产已验证。

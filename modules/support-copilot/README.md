@@ -11,7 +11,7 @@ flowchart LR
 
 Tickets and drafts use explicit persisted state transitions. Every edit is revalidated; feedback and the final decision outcome are recorded. It never sends messages or performs refunds/account changes. High-risk categories, forbidden commitments, and missing or stale evidence trigger human handoff.
 
-The business workbench also provides a review queue filtered by status, category, urgency, and risk. It shows the reply suggestion first, followed by evidence versions, handoff reasons, edit differences, and the human outcome.
+Enterprise adapters cover Jira Service Management, Zendesk, ServiceNow, Feishu, and WeCom ticket reads; sanitized customer/order/service snapshots, similar historical tickets, SLA risk, adoption/edit/handoff metrics, and confirmation-token-bound internal-note writeback are persisted. Adapters never send a customer message or perform refunds/account changes and require provider sandbox verification before production use.
 
 API: `GET /api/support-copilot/tickets`, `POST /api/support-copilot/tickets/analyze`, `POST /api/support-copilot/reply-drafts/{id}/edit|confirm|cancel`.
 
@@ -19,4 +19,4 @@ Test: `./mvnw -pl modules/support-copilot -am test`
 
 ## 简体中文
 
-客服工作台完成工单分类、风险识别、版本化知识检索和可编辑回复草稿，并提供按状态、分类、紧急度和风险筛选的人工复核队列。页面优先显示回复建议，再展示依据版本、转人工原因、人工修订差异和处理结果。不会自动发送或执行退款/账号操作，高风险或依据失效时必须转人工。
+客服工作台完成工单分类、风险识别、版本化知识检索和可编辑回复草稿。企业接入覆盖 Jira Service Management、Zendesk、ServiceNow、飞书和企微的只读工单导入，保存脱敏客户/订单/服务快照，提供相似历史工单、SLA 风险、采纳/修改/转人工统计，并只允许凭一次性确认 token 回写内部备注。不会自动发送客户消息或执行退款/账号操作；各厂商仍需真实沙箱验收后再用于生产。

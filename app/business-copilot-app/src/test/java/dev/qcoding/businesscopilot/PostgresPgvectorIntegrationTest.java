@@ -19,6 +19,10 @@ import dev.qcoding.businesscopilot.knowledgecopilot.embedding.KnowledgeEmbedding
 import dev.qcoding.businesscopilot.knowledgecopilot.indexing.JdbcKnowledgeIndexJobRepository;
 import dev.qcoding.businesscopilot.knowledgecopilot.indexing.KnowledgeIndexJobStatus;
 import dev.qcoding.businesscopilot.knowledgecopilot.retrieval.KnowledgeQueryTerms;
+import dev.qcoding.businesscopilot.knowledgecopilot.feedback.JdbcKnowledgeFeedbackRepository;
+import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeFeedbackRating;
+import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeFeedbackReason;
+import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeQualityReviewDecision;
 import dev.qcoding.businesscopilot.datacopilot.schema.DataCopilotSchemaProperties;
 import dev.qcoding.businesscopilot.datacopilot.schema.JdbcSchemaMetadataRepository;
 import dev.qcoding.businesscopilot.demo.DemoModule;
@@ -127,7 +131,7 @@ class PostgresPgvectorIntegrationTest {
         assertThat(extension).isEqualTo("vector");
         assertThat(actorColumns).isEqualTo(5);
         assertThat(httpRequestColumns).isEqualTo(5);
-        assertThat(latestMigration).isEqualTo("21");
+        assertThat(latestMigration).isEqualTo("28");
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT format_type(atttypid, atttypmod) "
                         + "FROM pg_attribute "
@@ -180,13 +184,139 @@ class PostgresPgvectorIntegrationTest {
                 """, Integer.class)).isEqualTo(10);
         assertThat(upgradeJdbcTemplate.queryForObject(
                 "SELECT version FROM flyway_schema_history WHERE success = TRUE ORDER BY installed_rank DESC LIMIT 1",
-                String.class)).isEqualTo("21");
+                String.class)).isEqualTo("28");
         assertThat(upgradeJdbcTemplate.queryForObject(
                 "SELECT format_type(atttypid, atttypmod) "
                         + "FROM pg_attribute "
                         + "WHERE attrelid = 'knowledge_chunk_embeddings'::regclass "
                         + "AND attname = 'embedding'",
                 String.class)).isEqualTo("vector");
+    }
+
+    @Test
+    void enterpriseExpansionMigrationsCreateAllFiveModuleBoundaries() {
+        List<String> expected = List.of(
+                "data_metric_definitions",
+                "data_query_templates",
+                "data_schema_snapshots",
+                "data_query_results",
+                "data_report_handoffs",
+                "knowledge_source_connections",
+                "knowledge_sync_runs",
+                "knowledge_source_items",
+                "support_external_connections",
+                "support_ticket_context_snapshots",
+                "support_draft_writebacks",
+                "report_external_connections",
+                "report_schedules",
+                "report_schedule_runs",
+                "report_export_audit",
+                "hr_candidate_consents",
+                "hr_interview_question_bank",
+                "hr_interview_sessions",
+                "hr_interview_opinions",
+                "hr_ats_connections",
+                "hr_ats_imports",
+                "hr_onboarding_checklists");
+
+        List<String> actual = jdbcTemplate.queryForList("""
+                SELECT table_name
+                FROM information_schema.tables
+                WHERE table_schema = 'public'
+                ORDER BY table_name
+                """, String.class).stream().filter(expected::contains).toList();
+
+        assertThat(actual).containsExactlyInAnyOrderElementsOf(expected);
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'knowledge_documents'
+                  AND column_name IN (
+                    'source_item_ref', 'source_updated_at',
+                    'expires_at', 'conflict_status'
+                  )
+                """, Integer.class)).isEqualTo(4);
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'resume_submissions'
+                  AND column_name IN ('consent_id', 'candidate_reference')
+                """, Integer.class)).isEqualTo(2);
+    }
+
+    @Test
+    void enterpriseGovernanceObjectsPersistAndDatabaseConstraintsFailClosed() {
+        jdbcTemplate.update("""
+                INSERT INTO data_metric_definitions (
+                    metric_key, display_name, description, expression_sql, owner_actor_id
+                ) VALUES ('paid-order-rate', '支付订单率', '已支付订单占全部订单的比例',
+                          'SUM(paid_orders) / NULLIF(SUM(total_orders), 0)', 'operator-1')
+                """);
+        Long knowledgeConnectionId = jdbcTemplate.queryForObject("""
+                INSERT INTO knowledge_source_connections (
+                    connection_key, display_name, provider, base_url, secret_ref,
+                    default_visibility, enabled, owner_actor_id
+                ) VALUES ('sharepoint-ops', '运营知识库', 'SHAREPOINT',
+                          'https://sharepoint.example.test', 'SHAREPOINT_TOKEN',
+                          'ADMIN', TRUE, 'admin')
+                RETURNING id
+                """, Long.class);
+        jdbcTemplate.update("""
+                INSERT INTO knowledge_source_items (
+                    connection_id, source_item_id, acl_snapshot,
+                    visibility_scope, sync_status
+                ) VALUES (?, 'refund-policy', '["unknown-group"]'::jsonb, 'ADMIN', 'CURRENT')
+                """, knowledgeConnectionId);
+        jdbcTemplate.update("""
+                INSERT INTO support_external_connections (
+                    connection_key, display_name, provider, base_url,
+                    secret_ref, enabled, owner_actor_id
+                ) VALUES ('jsm-prod', 'JSM 工单', 'JIRA_SERVICE_MANAGEMENT',
+                          'https://jira.example.test', 'JSM_TOKEN', TRUE, 'operator-1')
+                """);
+        jdbcTemplate.update("""
+                INSERT INTO report_schedules (
+                    schedule_key, report_type, title_template, cron_expression, zone_id,
+                    template_id, template_version, source_config, enabled,
+                    owner_actor_id, next_run_at
+                ) VALUES ('weekly-ops', 'BUSINESS_WEEKLY', '经营周报 {date}', '0 0 9 * * MON',
+                          'Asia/Shanghai', 'weekly-ops', 'v1',
+                          '{"includeSupportMetrics":true}'::jsonb, TRUE,
+                          'operator-1', now() + interval '1 day')
+                """);
+        jdbcTemplate.update("""
+                INSERT INTO hr_candidate_consents (
+                    consent_reference, candidate_reference, purpose,
+                    granted_at, expires_at, recorded_by
+                ) VALUES ('consent-001', 'candidate-001', '面试评估',
+                          now(), now() + interval '7 days', 'hr-reviewer-1')
+                """);
+
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM data_metric_definitions WHERE metric_key = 'paid-order-rate'",
+                Integer.class)).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT visibility_scope FROM knowledge_source_items WHERE source_item_id = 'refund-policy'",
+                String.class)).isEqualTo("ADMIN");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM report_schedules WHERE enabled = TRUE",
+                Integer.class)).isGreaterThanOrEqualTo(1);
+        assertThatThrownBy(() -> jdbcTemplate.update("""
+                INSERT INTO hr_candidate_consents (
+                    consent_reference, candidate_reference, purpose,
+                    granted_at, expires_at, recorded_by
+                ) VALUES ('invalid-consent', 'candidate-002', '面试评估',
+                          now(), now() - interval '1 minute', 'hr-reviewer-1')
+                """)).isInstanceOf(DataAccessException.class);
+        assertThatThrownBy(() -> jdbcTemplate.update("""
+                INSERT INTO support_external_connections (
+                    connection_key, display_name, provider, base_url,
+                    secret_ref, enabled, owner_actor_id
+                ) VALUES ('unsafe-provider', '未知系统', 'ARBITRARY_HTTP',
+                          'https://unsafe.example.test', 'TOKEN', TRUE, 'operator-1')
+                """)).isInstanceOf(DataAccessException.class);
     }
 
     @Test
@@ -283,6 +413,102 @@ class PostgresPgvectorIntegrationTest {
         assertThatThrownBy(() -> quota.consumeBusinessOperation(fingerprint))
                 .isInstanceOfSatisfying(BusinessException.class,
                         ex -> assertThat(ex.errorCode()).isEqualTo(ErrorCode.PUBLIC_DEMO_LIMIT_REACHED));
+    }
+
+    @Test
+    void knowledgeFeedbackAndHumanDispositionFormAConcurrencySafeQualityLoop() {
+        Long answerId = jdbcTemplate.queryForObject("""
+                INSERT INTO knowledge_qa_audit_logs (
+                    request_id, actor_id, creator_actor_id, question, answer_status
+                ) VALUES (?, ?, ?, ?, 'ANSWERED')
+                RETURNING id
+                """, Long.class,
+                "knowledge-feedback-" + System.nanoTime(),
+                "operator-feedback",
+                "operator-feedback",
+                "差旅报销上限是多少？");
+        JdbcKnowledgeFeedbackRepository repository =
+                new JdbcKnowledgeFeedbackRepository(jdbcTemplate);
+
+        assertThatThrownBy(() -> jdbcTemplate.update("""
+                INSERT INTO knowledge_answer_feedback (
+                    audit_log_id, actor_id, rating, reason
+                ) VALUES (?, ?, 'HELPFUL', 'OTHER')
+                """, answerId, "operator-feedback"))
+                .isInstanceOf(DataAccessException.class);
+
+        assertThat(repository.upsert(
+                answerId,
+                "another-operator",
+                KnowledgeFeedbackRating.NOT_HELPFUL,
+                KnowledgeFeedbackReason.INCORRECT,
+                "不应成功")).isEmpty();
+
+        var negative = repository.upsert(
+                answerId,
+                "operator-feedback",
+                KnowledgeFeedbackRating.NOT_HELPFUL,
+                KnowledgeFeedbackReason.MISSING_EVIDENCE,
+                "缺少报销金额依据").orElseThrow();
+        assertThat(negative.answerId()).isEqualTo(answerId);
+        var pendingIssue = repository.findQualityQueue(0, 100).stream()
+                .filter(item -> item.answerId().equals(answerId))
+                .findFirst()
+                .orElseThrow();
+        assertThat(repository.findQualityQueue(0, 100))
+                .extracting(item -> item.answerId())
+                .contains(answerId);
+
+        assertThatThrownBy(() -> jdbcTemplate.update("""
+                INSERT INTO knowledge_quality_reviews (
+                    audit_log_id, decision, review_note,
+                    reviewer_actor_id, reviewed_issue_version, reviewed_issue_at
+                ) VALUES (?, 'RESOLVED', ' ', ?, ?, ?)
+                """, answerId, "reviewer-1",
+                pendingIssue.issueVersion(),
+                java.sql.Timestamp.from(pendingIssue.issueUpdatedAt())))
+                .isInstanceOf(DataAccessException.class);
+
+        var review = repository.review(
+                answerId,
+                KnowledgeQualityReviewDecision.KNOWLEDGE_UPDATE_REQUIRED,
+                "需要补充最新报销制度",
+                "reviewer-1",
+                pendingIssue.issueVersion(),
+                pendingIssue.issueUpdatedAt()).orElseThrow();
+        assertThat(review.answerId()).isEqualTo(answerId);
+        assertThat(repository.findQualityQueue(0, 100))
+                .extracting(item -> item.answerId())
+                .doesNotContain(answerId);
+        assertThat(repository.review(
+                answerId,
+                KnowledgeQualityReviewDecision.DISMISSED,
+                "并发旧页面不应覆盖",
+                "reviewer-2",
+                pendingIssue.issueVersion(),
+                pendingIssue.issueUpdatedAt())).isEmpty();
+
+        repository.upsert(
+                answerId,
+                "operator-feedback",
+                KnowledgeFeedbackRating.NOT_HELPFUL,
+                KnowledgeFeedbackReason.OUTDATED,
+                "用户补充了新的过期问题").orElseThrow();
+        assertThat(repository.findQualityQueue(0, 100))
+                .extracting(item -> item.answerId())
+                .contains(answerId);
+        assertThat(repository.qualityMetrics().knowledgeUpdateRequiredCount()).isPositive();
+
+        var helpful = repository.upsert(
+                answerId,
+                "operator-feedback",
+                KnowledgeFeedbackRating.HELPFUL,
+                null,
+                "补充资料后已解决").orElseThrow();
+        assertThat(helpful.id()).isEqualTo(negative.id());
+        assertThat(repository.findQualityQueue(0, 100))
+                .extracting(item -> item.answerId())
+                .doesNotContain(answerId);
     }
 
     @Test

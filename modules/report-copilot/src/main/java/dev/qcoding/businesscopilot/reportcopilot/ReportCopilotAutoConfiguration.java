@@ -20,18 +20,24 @@ import dev.qcoding.businesscopilot.reportcopilot.draft.ReportDraftConfirmationSe
 import dev.qcoding.businesscopilot.reportcopilot.audit.ReportAuditService;
 import dev.qcoding.businesscopilot.reportcopilot.export.ReportMarkdownExportService;
 import dev.qcoding.businesscopilot.reportcopilot.export.ReportHtmlExportService;
+import dev.qcoding.businesscopilot.reportcopilot.export.ReportOfficeExportService;
+import dev.qcoding.businesscopilot.reportcopilot.enterprise.ReportEnterpriseService;
 import dev.qcoding.businesscopilot.aicore.AiChatService;
 import dev.qcoding.businesscopilot.aicore.PromptTemplateService;
 import dev.qcoding.businesscopilot.commonsecurity.ConfirmationTokenService;
 import dev.qcoding.businesscopilot.commonsecurity.CurrentActorProvider;
 import dev.qcoding.businesscopilot.commonsecurity.ObjectAccessPolicy;
+import dev.qcoding.businesscopilot.commonsecurity.ExternalSecretResolver;
 import dev.qcoding.businesscopilot.reportcopilot.web.ReportCopilotController;
+import dev.qcoding.businesscopilot.reportcopilot.web.ReportEnterpriseController;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.web.client.RestClient;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -43,6 +49,7 @@ import tools.jackson.databind.ObjectMapper;
 @AutoConfiguration
 @ConditionalOnProperty(prefix = "business-copilot.report-copilot", name = "enabled", havingValue = "true")
 @EnableConfigurationProperties(ReportCopilotProperties.class)
+@EnableScheduling
 public class ReportCopilotAutoConfiguration {
 
     @Bean
@@ -179,6 +186,38 @@ public class ReportCopilotAutoConfiguration {
                                                            ReportDraftPersistenceService draftPersistenceService) {
         return new ReportGenerationService(preparationService, aiChatService, promptTemplateService,
                 promptContextFactory, outputValidator, outputSanitizer, draftPersistenceService);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public ReportOfficeExportService reportOfficeExportService(
+            ReportDraftRepository draftRepository,
+            CurrentActorProvider actorProvider,
+            ObjectAccessPolicy accessPolicy,
+            JdbcTemplate jdbcTemplate) {
+        return new ReportOfficeExportService(
+                draftRepository, actorProvider, accessPolicy, jdbcTemplate);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public ReportEnterpriseService reportEnterpriseService(
+            JdbcTemplate jdbcTemplate,
+            ReportGenerationService generationService,
+            CurrentActorProvider actorProvider,
+            ExternalSecretResolver secretResolver,
+            ObjectMapper objectMapper) {
+        return new ReportEnterpriseService(
+                jdbcTemplate, generationService, actorProvider, secretResolver,
+                objectMapper, RestClient.builder());
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(ReportEnterpriseController.class)
+    public ReportEnterpriseController reportEnterpriseController(
+            ReportEnterpriseService service,
+            ReportOfficeExportService exportService) {
+        return new ReportEnterpriseController(service, exportService);
     }
 
     @Bean

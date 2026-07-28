@@ -69,7 +69,7 @@ public record ReportCopilotProperties(
         }
         if (allowedReportTypes == null || allowedReportTypes.isEmpty()) {
             allowedReportTypes = Set.of(ReportType.TEAM_WEEKLY, ReportType.BUSINESS_WEEKLY,
-                    ReportType.PROJECT_STATUS);
+                    ReportType.PROJECT_STATUS, ReportType.INCIDENT_REVIEW, ReportType.SALES_REVIEW);
         } else {
             allowedReportTypes = Set.copyOf(allowedReportTypes);
         }

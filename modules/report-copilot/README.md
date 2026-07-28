@@ -11,7 +11,7 @@ flowchart LR
     EvidenceGuardrail -->|invalid| NEEDS_REVIEW
 ```
 
-Every source snapshot records provider/version, observed time, timezone, unit, freshness, and a content hash; snapshots cannot be updated in place. Metric values must exactly match current evidence. `NEEDS_REVIEW` stores deterministic reasons but never exposes untrusted model content. Confirmation does not publish externally.
+Every source snapshot records provider/version, observed time, timezone, unit, freshness, and a content hash; snapshots cannot be updated in place. Enterprise generation can collect Jira issues, meeting notes, confirmed Data handoffs, and Support metrics; weekly, operating brief, project status, incident review, and sales review drafts support period comparison, source anomalies, schedules, and deterministic DOCX/PDF/PPTX export. Schedules only create reviewable drafts and confirmation does not publish externally.
 
 API: `POST /api/report-copilot/source-previews`, `POST /source-imports/preview`, `POST /reports/generate|generate-from-file`, `POST /reports/{id}/confirm|cancel`, `GET /reports/{id}/markdown|html`.
 
@@ -19,4 +19,4 @@ Test: `./mvnw -pl modules/report-copilot -am test`
 
 ## 简体中文
 
-基于手工指标/任务/会议纪要或受限 CSV/JSON 的有来源报告助手。来源保存为包含版本、观察时间、时区、单位、新鲜度和哈希的不可变快照；指标严格比对来源，无效模型正文不会回显。只有人工确认后的草稿可由服务端导出确定性 Markdown 或转义 HTML。
+基于手工指标/任务/会议纪要或受限 CSV/JSON 的有来源报告助手。企业生成可汇总 Jira、会议纪要、Data 已确认结果交接和 Support 质量统计，覆盖周报、经营简报、项目状态、事故复盘和销售复盘；支持环比、来源异常、定时生成待确认草稿及确定性 DOCX/PDF/PPTX 导出。定时任务不会自动发布。

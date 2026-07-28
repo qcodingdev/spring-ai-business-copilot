@@ -13,6 +13,7 @@ import dev.qcoding.businesscopilot.datacopilot.confirmation.SqlConfirmationServi
 import dev.qcoding.businesscopilot.datacopilot.explanation.ResultExplanationRequest;
 import dev.qcoding.businesscopilot.datacopilot.explanation.ResultExplanationResponse;
 import dev.qcoding.businesscopilot.datacopilot.explanation.ResultExplanationService;
+import dev.qcoding.businesscopilot.datacopilot.enterprise.DataQueryResultService;
 import dev.qcoding.businesscopilot.datacopilot.web.SqlExecutionResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,15 +42,25 @@ public class QueryExecutionService {
     private final ReadOnlyQueryExecutor queryExecutor;
     private final ResultExplanationService explanationService;
     private final AuditService auditService;
+    private final DataQueryResultService resultService;
 
     public QueryExecutionService(SqlConfirmationService confirmationService,
                                   ReadOnlyQueryExecutor queryExecutor,
                                   ResultExplanationService explanationService,
                                   AuditService auditService) {
+        this(confirmationService, queryExecutor, explanationService, auditService, null);
+    }
+
+    public QueryExecutionService(SqlConfirmationService confirmationService,
+                                  ReadOnlyQueryExecutor queryExecutor,
+                                  ResultExplanationService explanationService,
+                                  AuditService auditService,
+                                  DataQueryResultService resultService) {
         this.confirmationService = confirmationService;
         this.queryExecutor = queryExecutor;
         this.explanationService = explanationService;
         this.auditService = auditService;
+        this.resultService = resultService;
     }
 
     /**
@@ -101,7 +112,7 @@ public class QueryExecutionService {
         // 2. 执行 SQL（内部包含二次 guardrails 校验、超时、max rows、脱敏）
         QueryResultTable table;
         try {
-            table = queryExecutor.execute(sql);
+            table = queryExecutor.execute(candidateId, sql);
         } catch (BusinessException ex) {
             // 二次 guardrails 失败或执行失败：区分场景写审计
             if (ex.errorCode() == ErrorCode.SQL_GUARDRAIL_VIOLATION) {
@@ -160,7 +171,14 @@ public class QueryExecutionService {
         ResultExplanationResponse explanation = explanationService.explain(
                 new ResultExplanationRequest(userQuestion, sql, table));
 
-        return new SqlExecutionResponse(table, explanation);
+        Long resultId = resultService == null
+                ? null : resultService.save(candidateId, table, explanation);
+        return new SqlExecutionResponse(table, explanation, resultId, candidateId);
+    }
+
+    /** 取消仍在 JDBC 驱动中执行的查询；不会改变已经消费的一次性确认状态。 */
+    public boolean cancel(String executionId) {
+        return queryExecutor.cancel(executionId);
     }
 
     /** Record audit when the user fails to confirm the candidate (cancelled/expired). */

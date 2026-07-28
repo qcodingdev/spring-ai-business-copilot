@@ -17,6 +17,7 @@ SCREENSHOTS = [
     ASSETS / "support-copilot-result.png",
     ASSETS / "report-copilot-result.png",
     ASSETS / "resume-copilot-result.png",
+    ASSETS / "admin-enterprise-status.png",
 ]
 LANCZOS = getattr(Image, "Resampling", Image).LANCZOS
 
@@ -83,10 +84,11 @@ def create_social_preview() -> None:
         fill=(178, 197, 228),
     )
 
-    pills = ["Text-to-SQL", "Cited RAG", "Support", "Reports", "Resume"]
+    pills = ["Text-to-SQL", "Cited RAG", "Support", "Reports", "HR", "Enterprise"]
     x, y = 58, 370
     for label in pills:
-        label_width, _ = draw.textsize(label, font=font(16))
+        label_box = draw.textbbox((0, 0), label, font=font(16))
+        label_width = label_box[2] - label_box[0]
         pill_width = label_width + 30
         if x + pill_width > 535:
             x, y = 58, y + 48
@@ -116,8 +118,8 @@ def create_social_preview() -> None:
     second_draw = ImageDraw.Draw(second_shadow)
     round_rect(second_draw, (870, 398, 1236, 611), 22, (0, 0, 0, 125))
     image = Image.alpha_composite(image, second_shadow.filter(ImageFilter.GaussianBlur(18)))
-    resume_card = rounded_crop(Image.open(SCREENSHOTS[-1]), small_size, 18)
-    image.alpha_composite(resume_card, (884, 404))
+    enterprise_card = rounded_crop(Image.open(SCREENSHOTS[-1]), small_size, 18)
+    image.alpha_composite(enterprise_card, (884, 404))
 
     image.convert("RGB").save(ASSETS / "social-preview.png", optimize=True)
 

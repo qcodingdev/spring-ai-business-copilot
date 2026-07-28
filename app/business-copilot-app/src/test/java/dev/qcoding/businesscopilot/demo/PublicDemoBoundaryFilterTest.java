@@ -16,6 +16,10 @@ class PublicDemoBoundaryFilterTest {
     void blocksRawModuleApisAndCrossVisitorQueueActions() throws Exception {
         assertBlocked("POST", "/api/data-copilot/sql-candidates");
         assertBlocked("POST", "/api/knowledge-copilot/documents");
+        assertBlocked("POST", "/api/knowledge-copilot/answers/17/feedback");
+        assertBlocked("GET", "/api/knowledge-copilot/quality-queue");
+        assertBlocked("GET", "/api/knowledge-copilot/quality-metrics");
+        assertBlocked("POST", "/api/knowledge-copilot/quality-queue/17/review");
         assertBlocked("POST", "/api/resume-copilot/assessments/file");
         assertBlocked("PUT", "/api/resume-copilot/jobs/42/criteria");
         assertBlocked("GET", "/api/data-copilot/schema");

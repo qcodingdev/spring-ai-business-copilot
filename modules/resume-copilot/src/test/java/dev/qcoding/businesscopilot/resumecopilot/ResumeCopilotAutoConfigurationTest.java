@@ -4,6 +4,7 @@ import dev.qcoding.businesscopilot.aicore.AiChatService;
 import dev.qcoding.businesscopilot.aicore.PromptTemplateService;
 import dev.qcoding.businesscopilot.commonsecurity.CommonSecurityAutoConfiguration;
 import dev.qcoding.businesscopilot.documentprocessing.DocumentTextExtractor;
+import dev.qcoding.businesscopilot.guardrails.GuardrailsAutoConfiguration;
 import dev.qcoding.businesscopilot.resumecopilot.privacy.ResumePrivacySanitizer;
 import dev.qcoding.businesscopilot.resumecopilot.web.ResumeCopilotController;
 import org.junit.jupiter.api.Test;
@@ -19,6 +20,7 @@ class ResumeCopilotAutoConfigurationTest {
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(
                     CommonSecurityAutoConfiguration.class,
+                    GuardrailsAutoConfiguration.class,
                     ResumeCopilotAutoConfiguration.class))
             .withBean(AiChatService.class, () -> mock(AiChatService.class))
             .withBean(PromptTemplateService.class, PromptTemplateService::new)

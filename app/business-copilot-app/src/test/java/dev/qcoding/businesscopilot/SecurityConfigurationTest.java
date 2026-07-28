@@ -33,7 +33,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         SecurityConfigurationTest.ConfirmationProbeController.class,
         SecurityConfigurationTest.ReviewerActionProbeController.class,
         SecurityConfigurationTest.ResumeDeleteProbeController.class,
-        SecurityConfigurationTest.KnowledgeDeleteProbeController.class
+        SecurityConfigurationTest.KnowledgeDeleteProbeController.class,
+        SecurityConfigurationTest.EnterpriseProbeController.class
 })
 class SecurityConfigurationTest {
 
@@ -263,6 +264,97 @@ class SecurityConfigurationTest {
                 .andExpect(jsonPath("$.errorCode").value("SEC_0403"));
     }
 
+    @Test
+    void reviewerCanSubmitKnowledgeAnswerFeedback() throws Exception {
+        mockMvc.perform(post("/api/knowledge-copilot/answers/17/feedback")
+                        .with(user("reviewer").roles("REVIEWER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("recorded"));
+    }
+
+    @Test
+    void reviewerCanViewKnowledgeQualityQueue() throws Exception {
+        mockMvc.perform(get("/api/knowledge-copilot/quality-queue")
+                        .with(user("reviewer").roles("REVIEWER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ok"));
+    }
+
+    @Test
+    void operatorCannotViewKnowledgeQualityQueue() throws Exception {
+        mockMvc.perform(get("/api/knowledge-copilot/quality-queue")
+                        .with(user("operator").roles("OPERATOR")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("SEC_0403"));
+    }
+
+    @Test
+    void reviewerCanViewKnowledgeQualityMetricsAndRecordDisposition() throws Exception {
+        mockMvc.perform(get("/api/knowledge-copilot/quality-metrics")
+                        .with(user("reviewer").roles("REVIEWER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ok"));
+
+        mockMvc.perform(post("/api/knowledge-copilot/quality-queue/17/review")
+                        .with(user("reviewer").roles("REVIEWER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("reviewed"));
+    }
+
+    @Test
+    void operatorCannotViewMetricsOrRecordQualityDisposition() throws Exception {
+        mockMvc.perform(get("/api/knowledge-copilot/quality-metrics")
+                        .with(user("operator").roles("OPERATOR")))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/knowledge-copilot/quality-queue/17/review")
+                        .with(user("operator").roles("OPERATOR"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void enterpriseConnectionConfigurationIsAdminOnly() throws Exception {
+        mockMvc.perform(post("/api/knowledge-copilot/sources")
+                        .with(user("operator").roles("OPERATOR"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/knowledge-copilot/sources")
+                        .with(user("admin").roles("ADMIN"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void enterpriseReviewMetricsAreReviewerOnlyButReportGenerationIsOperatorAction()
+            throws Exception {
+        mockMvc.perform(get("/api/support-copilot/enterprise/quality-metrics")
+                        .with(user("operator").roles("OPERATOR")))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/support-copilot/enterprise/quality-metrics")
+                        .with(user("reviewer").roles("REVIEWER")))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/report-copilot/enterprise/reports/generate")
+                        .with(user("operator").roles("OPERATOR"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk());
+    }
+
     private String loginFormTag(String body) {
         java.util.regex.Matcher matcher = java.util.regex.Pattern
                 .compile("<aside[^>]*id=\"login-form\"[^>]*>")
@@ -342,6 +434,46 @@ class SecurityConfigurationTest {
         @DeleteMapping("/documents/{documentId}")
         java.util.Map<String, String> deleteKnowledgeDocument(@PathVariable("documentId") String documentId) {
             return java.util.Map.of("status", "deleted", "documentId", documentId);
+        }
+
+        @PostMapping("/answers/{answerId}/feedback")
+        java.util.Map<String, String> recordKnowledgeFeedback(@PathVariable("answerId") String answerId) {
+            return java.util.Map.of("status", "recorded", "answerId", answerId);
+        }
+
+        @GetMapping("/quality-queue")
+        java.util.Map<String, String> knowledgeQualityQueue() {
+            return java.util.Map.of("status", "ok");
+        }
+
+        @GetMapping("/quality-metrics")
+        java.util.Map<String, String> knowledgeQualityMetrics() {
+            return java.util.Map.of("status", "ok");
+        }
+
+        @PostMapping("/quality-queue/{answerId}/review")
+        java.util.Map<String, String> reviewKnowledgeQuality(@PathVariable("answerId") String answerId) {
+            return java.util.Map.of("status", "reviewed", "answerId", answerId);
+        }
+    }
+
+    /** 仅用于验证 2.2 企业端点的角色边界，不替代各模块控制器测试。 */
+    @RestController
+    static class EnterpriseProbeController {
+
+        @PostMapping("/api/knowledge-copilot/sources")
+        java.util.Map<String, String> saveKnowledgeSource() {
+            return java.util.Map.of("status", "saved");
+        }
+
+        @GetMapping("/api/support-copilot/enterprise/quality-metrics")
+        java.util.Map<String, String> supportQualityMetrics() {
+            return java.util.Map.of("status", "ok");
+        }
+
+        @PostMapping("/api/report-copilot/enterprise/reports/generate")
+        java.util.Map<String, String> generateReport() {
+            return java.util.Map.of("status", "generated");
         }
     }
 }

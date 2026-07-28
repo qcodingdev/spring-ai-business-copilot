@@ -12,6 +12,7 @@ import java.util.List;
  * @param citations citations backing the answer; empty or null when status is not ANSWERED
  * @param warnings  optional warnings about the answer quality or process
  * @param modelName name of the chat model used to generate the answer
+ * @param answerId  stable persisted answer identifier used for feedback; null only when audit persistence failed
  */
 public record KnowledgeAnswerResponse(
         KnowledgeAnswerStatus status,
@@ -19,11 +20,23 @@ public record KnowledgeAnswerResponse(
         List<KnowledgeCitation> citations,
         List<String> warnings,
         String modelName,
-        KnowledgeAnswerMetrics metrics) {
+        KnowledgeAnswerMetrics metrics,
+        Long answerId) {
 
     public KnowledgeAnswerResponse(KnowledgeAnswerStatus status, String answer,
                                    List<KnowledgeCitation> citations, List<String> warnings,
                                    String modelName) {
-        this(status, answer, citations, warnings, modelName, null);
+        this(status, answer, citations, warnings, modelName, null, null);
+    }
+
+    public KnowledgeAnswerResponse(KnowledgeAnswerStatus status, String answer,
+                                   List<KnowledgeCitation> citations, List<String> warnings,
+                                   String modelName, KnowledgeAnswerMetrics metrics) {
+        this(status, answer, citations, warnings, modelName, metrics, null);
+    }
+
+    public KnowledgeAnswerResponse withAnswerId(Long answerId) {
+        return new KnowledgeAnswerResponse(
+                status, answer, citations, warnings, modelName, metrics, answerId);
     }
 }

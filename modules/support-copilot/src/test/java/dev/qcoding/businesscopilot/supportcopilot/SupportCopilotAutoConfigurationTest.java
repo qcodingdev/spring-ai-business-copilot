@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.jdbc.core.JdbcTemplate;
+import tools.jackson.databind.ObjectMapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -30,6 +31,7 @@ class SupportCopilotAutoConfigurationTest {
             .withBean(JdbcTemplate.class, () -> mock(JdbcTemplate.class))
             .withBean(AiChatService.class, () -> mock(AiChatService.class))
             .withBean(PromptTemplateService.class, PromptTemplateService::new)
+            .withBean(ObjectMapper.class, ObjectMapper::new)
             .withBean(SensitiveTextMasker.class, SensitiveTextMasker::new);
 
     @Test
@@ -65,6 +67,7 @@ class SupportCopilotAutoConfigurationTest {
                 .withBean(AiChatService.class, () -> mock(AiChatService.class))
                 .withBean(AiEmbeddingService.class, () -> mock(AiEmbeddingService.class))
                 .withBean(PromptTemplateService.class, PromptTemplateService::new)
+                .withBean(ObjectMapper.class, ObjectMapper::new)
                 .withBean(SensitiveTextMasker.class, SensitiveTextMasker::new)
                 .withBean(DocumentTextExtractor.class, () -> mock(DocumentTextExtractor.class))
                 .withBean(CurrentActorProvider.class,

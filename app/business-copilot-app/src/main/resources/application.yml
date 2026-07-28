@@ -114,6 +114,9 @@ business-copilot:
       fetch-size: 50
       max-columns: 50
       max-result-bytes: 1048576
+    enterprise:
+      max-estimated-rows: ${DATA_QUERY_MAX_ESTIMATED_ROWS:100000}
+      block-high-risk-plan: ${DATA_QUERY_BLOCK_HIGH_RISK_PLAN:true}
   guardrails:
     queryable-columns:
       - public.customers.id
@@ -206,7 +209,7 @@ business-copilot:
     max-task-sources: 20
     max-meeting-note-sources: 10
     draft-ttl: 30m
-    allowed-report-types: TEAM_WEEKLY,BUSINESS_WEEKLY,PROJECT_STATUS
+    allowed-report-types: TEAM_WEEKLY,BUSINESS_WEEKLY,PROJECT_STATUS,INCIDENT_REVIEW,SALES_REVIEW
     markdown-export-enabled: true
     html-export-enabled: true
     max-import-bytes: 1048576

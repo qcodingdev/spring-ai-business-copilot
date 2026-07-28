@@ -71,6 +71,7 @@ public class AdminDiagnosticsService {
                         publicDemoProperties.clientDailyOperations(),
                         publicDemoProperties.globalDailyModelCalls(),
                         publicDemoProperties.maxConcurrentExecutions()),
+                enterpriseExpansion(),
                 recentDemoJobs(),
                 auditSummary());
     }
@@ -139,6 +140,46 @@ public class AdminDiagnosticsService {
                 """);
     }
 
+    private Map<String, Long> enterpriseExpansion() {
+        Map<String, Long> counts = new LinkedHashMap<>();
+        counts.put("Data · 已批准指标", scalar(
+                "SELECT COUNT(*) FROM data_metric_definitions WHERE active = TRUE"));
+        counts.put("Data · 已批准查询模板", scalar(
+                "SELECT COUNT(*) FROM data_query_templates WHERE active = TRUE"));
+        counts.put("Knowledge · 已启用来源", scalar(
+                "SELECT COUNT(*) FROM knowledge_source_connections WHERE enabled = TRUE"));
+        counts.put("Knowledge · 过期或冲突资料", scalar("""
+                SELECT COUNT(*) FROM knowledge_documents
+                WHERE current_version = TRUE
+                  AND (expires_at < now() OR conflict_status <> 'NONE')
+                """));
+        counts.put("Support · 已启用外部工单连接", scalar(
+                "SELECT COUNT(*) FROM support_external_connections WHERE enabled = TRUE"));
+        counts.put("Support · SLA 风险或违约", scalar("""
+                SELECT COUNT(*) FROM support_tickets
+                WHERE sla_status IN ('AT_RISK', 'BREACHED')
+                """));
+        counts.put("Support · 待确认回写", scalar("""
+                SELECT COUNT(*) FROM support_draft_writebacks
+                WHERE status = 'PENDING_CONFIRMATION'
+                """));
+        counts.put("Report · 已启用来源", scalar(
+                "SELECT COUNT(*) FROM report_external_connections WHERE enabled = TRUE"));
+        counts.put("Report · 已启用定时草稿", scalar(
+                "SELECT COUNT(*) FROM report_schedules WHERE enabled = TRUE"));
+        counts.put("HR · 有效候选人授权", scalar("""
+                SELECT COUNT(*) FROM hr_candidate_consents
+                WHERE revoked_at IS NULL AND expires_at > now()
+                """));
+        counts.put("HR · 已批准面试题", scalar(
+                "SELECT COUNT(*) FROM hr_interview_question_bank WHERE active = TRUE"));
+        counts.put("HR · 已启用 ATS 连接", scalar(
+                "SELECT COUNT(*) FROM hr_ats_connections WHERE enabled = TRUE"));
+        counts.put("HR · 已批准入职清单", scalar(
+                "SELECT COUNT(*) FROM hr_onboarding_checklists WHERE active = TRUE"));
+        return counts;
+    }
+
     private Map<String, Object> auditSummary() {
         Map<String, Object> summary = new LinkedHashMap<>();
         summary.put("adminActions", scalar(
@@ -186,6 +227,7 @@ public class AdminDiagnosticsService {
             List<Map<String, Object>> usage,
             AiCallCoordinator.Diagnostics aiResilience,
             LimitView limits,
+            Map<String, Long> enterpriseExpansion,
             List<Map<String, Object>> demoJobs,
             Map<String, Object> audit) {
     }

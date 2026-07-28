@@ -4,6 +4,7 @@ import dev.qcoding.businesscopilot.guardrails.SensitiveTextMasker;
 import dev.qcoding.businesscopilot.commonsecurity.ConfirmationTokenService;
 import dev.qcoding.businesscopilot.commonsecurity.CurrentActorProvider;
 import dev.qcoding.businesscopilot.commonsecurity.ObjectAccessPolicy;
+import dev.qcoding.businesscopilot.commonsecurity.ExternalSecretResolver;
 import dev.qcoding.businesscopilot.knowledgecopilot.KnowledgeCopilotAutoConfiguration;
 import dev.qcoding.businesscopilot.knowledgecopilot.document.KnowledgeDocumentRepository;
 import dev.qcoding.businesscopilot.knowledgecopilot.retrieval.KnowledgeRetrievalService;
@@ -23,6 +24,10 @@ import dev.qcoding.businesscopilot.supportcopilot.ticket.JdbcSupportTicketReposi
 import dev.qcoding.businesscopilot.supportcopilot.ticket.SupportTicketRepository;
 import dev.qcoding.businesscopilot.supportcopilot.ticket.TicketAnalysisService;
 import dev.qcoding.businesscopilot.supportcopilot.web.SupportCopilotController;
+import dev.qcoding.businesscopilot.supportcopilot.web.SupportEnterpriseController;
+import dev.qcoding.businesscopilot.supportcopilot.integration.RestSupportExternalAdapter;
+import dev.qcoding.businesscopilot.supportcopilot.integration.SupportEnterpriseService;
+import dev.qcoding.businesscopilot.supportcopilot.integration.SupportExternalAdapter;
 import dev.qcoding.businesscopilot.supportcopilot.queue.SupportQueueService;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -32,6 +37,10 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.web.client.RestClient;
+import tools.jackson.databind.ObjectMapper;
+
+import java.util.List;
 
 /**
  * Auto-configuration for the Support Copilot module.
@@ -165,6 +174,33 @@ public class SupportCopilotAutoConfiguration {
             CurrentActorProvider actorProvider,
             SupportAuditService auditService) {
         return new SupportQueueService(jdbcTemplate, actorProvider, auditService);
+    }
+
+    @Bean
+    public RestSupportExternalAdapter restSupportExternalAdapter(
+            ExternalSecretResolver secretResolver) {
+        return new RestSupportExternalAdapter(RestClient.builder(), secretResolver);
+    }
+
+    @Bean
+    public SupportEnterpriseService supportEnterpriseService(
+            JdbcTemplate jdbcTemplate,
+            SupportTicketRepository ticketRepository,
+            List<SupportExternalAdapter> adapters,
+            CurrentActorProvider actorProvider,
+            ConfirmationTokenService tokenService,
+            ExternalSecretResolver secretResolver,
+            SensitiveTextMasker sensitiveTextMasker,
+            ObjectMapper objectMapper) {
+        return new SupportEnterpriseService(
+                jdbcTemplate, ticketRepository, adapters, actorProvider, tokenService,
+                secretResolver, sensitiveTextMasker, objectMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(SupportEnterpriseController.class)
+    public SupportEnterpriseController supportEnterpriseController(SupportEnterpriseService service) {
+        return new SupportEnterpriseController(service);
     }
 
     @Bean

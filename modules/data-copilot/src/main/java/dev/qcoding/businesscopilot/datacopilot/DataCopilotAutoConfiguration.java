@@ -12,6 +12,9 @@ import dev.qcoding.businesscopilot.datacopilot.confirmation.SqlCandidateStore;
 import dev.qcoding.businesscopilot.datacopilot.confirmation.SqlConfirmationService;
 import dev.qcoding.businesscopilot.datacopilot.explanation.QueryResultSummarizer;
 import dev.qcoding.businesscopilot.datacopilot.explanation.ResultExplanationService;
+import dev.qcoding.businesscopilot.datacopilot.enterprise.DataGovernanceService;
+import dev.qcoding.businesscopilot.datacopilot.enterprise.DataEnterpriseProperties;
+import dev.qcoding.businesscopilot.datacopilot.enterprise.DataQueryResultService;
 import dev.qcoding.businesscopilot.datacopilot.generation.SqlGenerationService;
 import dev.qcoding.businesscopilot.datacopilot.query.JdbcReadOnlyQueryExecutor;
 import dev.qcoding.businesscopilot.datacopilot.query.QueryExecutionProperties;
@@ -23,6 +26,7 @@ import dev.qcoding.businesscopilot.datacopilot.schema.JdbcSchemaMetadataReposito
 import dev.qcoding.businesscopilot.datacopilot.schema.SchemaContextService;
 import dev.qcoding.businesscopilot.datacopilot.schema.SchemaMetadataRepository;
 import dev.qcoding.businesscopilot.datacopilot.web.DataCopilotController;
+import dev.qcoding.businesscopilot.datacopilot.web.DataEnterpriseController;
 import dev.qcoding.businesscopilot.guardrails.GuardrailsProperties;
 import dev.qcoding.businesscopilot.guardrails.SensitiveDataMasker;
 import dev.qcoding.businesscopilot.guardrails.SqlGuardrailService;
@@ -34,6 +38,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
+import tools.jackson.databind.ObjectMapper;
+
+import java.time.Duration;
 
 /**
  * Auto-configuration for the Data Copilot module.
@@ -94,6 +101,12 @@ public class DataCopilotAutoConfiguration {
     @ConfigurationProperties(prefix = "business-copilot.data-copilot.query")
     public QueryExecutionProperties queryExecutionProperties() {
         return new QueryExecutionProperties(0, 0, 0, 0, 0);
+    }
+
+    @Bean
+    @ConfigurationProperties(prefix = "business-copilot.data-copilot.enterprise")
+    public DataEnterpriseProperties dataEnterpriseProperties() {
+        return new DataEnterpriseProperties(0, true);
     }
 
     @Bean
@@ -171,12 +184,41 @@ public class DataCopilotAutoConfiguration {
     public QueryExecutionService queryExecutionService(SqlConfirmationService confirmationService,
                                                         ReadOnlyQueryExecutor readOnlyQueryExecutor,
                                                         ResultExplanationService resultExplanationService,
-                                                        AuditService auditService) {
+                                                        AuditService auditService,
+                                                        DataQueryResultService dataQueryResultService) {
         return new QueryExecutionService(
                 confirmationService,
                 readOnlyQueryExecutor,
                 resultExplanationService,
-                auditService);
+                auditService,
+                dataQueryResultService);
+    }
+
+    @Bean
+    public DataQueryResultService dataQueryResultService(
+            @Qualifier("jdbcTemplate") JdbcTemplate platformJdbcTemplate,
+            ObjectMapper objectMapper,
+            CurrentActorProvider actorProvider) {
+        return new DataQueryResultService(
+                platformJdbcTemplate, objectMapper, actorProvider, Duration.ofHours(24));
+    }
+
+    @Bean
+    public DataGovernanceService dataGovernanceService(
+            @Qualifier("jdbcTemplate") JdbcTemplate platformJdbcTemplate,
+            @Qualifier("businessQueryJdbcTemplate") JdbcTemplate businessQueryJdbcTemplate,
+            @Qualifier("businessQueryDatabaseDialect") BusinessDatabaseDialect dialect,
+            SchemaContextService schemaContextService,
+            SqlGuardrailService guardrailService,
+            GuardrailsProperties guardrailsProperties,
+            SqlConfirmationService confirmationService,
+            CurrentActorProvider actorProvider,
+            ObjectMapper objectMapper,
+            DataEnterpriseProperties enterpriseProperties) {
+        return new DataGovernanceService(
+                platformJdbcTemplate, businessQueryJdbcTemplate, dialect,
+                schemaContextService, guardrailService, guardrailsProperties,
+                confirmationService, actorProvider, objectMapper, enterpriseProperties);
     }
 
     @Bean
@@ -187,5 +229,14 @@ public class DataCopilotAutoConfiguration {
                                                        AuditService auditService) {
         return new DataCopilotController(schemaContextService, sqlGenerationService,
                 queryExecutionService, auditService);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(DataEnterpriseController.class)
+    public DataEnterpriseController dataEnterpriseController(
+            DataGovernanceService governanceService,
+            DataQueryResultService resultService,
+            QueryExecutionService executionService) {
+        return new DataEnterpriseController(governanceService, resultService, executionService);
     }
 }

@@ -90,8 +90,26 @@ public class DocumentUploadService {
             String category,
             UUID logicalDocumentId,
             KnowledgeVisibilityScope visibilityScope) {
+        return ingestManagedDocument(fileName, contentType, content, category, logicalDocumentId,
+                visibilityScope, "system-demo", "system-demo");
+    }
+
+    /**
+     * 由受信任的企业来源同步器导入资料。来源凭证和 ACL 已在同步层完成校验，
+     * 文档按系统托管对象保存，普通操作者不能绕过来源生命周期直接删除。
+     */
+    @Transactional
+    public DocumentUploadResponse ingestManagedDocument(
+            String fileName,
+            String contentType,
+            byte[] content,
+            String category,
+            UUID logicalDocumentId,
+            KnowledgeVisibilityScope visibilityScope,
+            String sourceType,
+            String ownerActorId) {
         if (logicalDocumentId == null) {
-            throw new IllegalArgumentException("系统资料必须使用固定 logicalDocumentId");
+            throw new IllegalArgumentException("托管资料必须使用固定 logicalDocumentId");
         }
         if (content != null && content.length > properties.maxDocumentSize()) {
             throw new BusinessException(ErrorCode.DOCUMENT_TOO_LARGE);
@@ -123,10 +141,10 @@ public class DocumentUploadService {
             documentRepository.supersedeCurrent(logicalDocumentId);
         }
         KnowledgeDocument document = new KnowledgeDocument(
-                null, deriveTitle(fileName), "system-demo", fileName, category,
+                null, deriveTitle(fileName), sourceType, fileName, category,
                 contentHash, false, null, null,
                 logicalDocumentId, version, true, "PENDING", null, contentType,
-                "system-demo", visibilityScope == null ? KnowledgeVisibilityScope.ALL : visibilityScope,
+                ownerActorId, visibilityScope == null ? KnowledgeVisibilityScope.ADMIN : visibilityScope,
                 true);
         Long documentId = documentRepository.save(document);
         List<KnowledgeChunk> chunks = chunkingService.chunk(documentId, sections).stream()

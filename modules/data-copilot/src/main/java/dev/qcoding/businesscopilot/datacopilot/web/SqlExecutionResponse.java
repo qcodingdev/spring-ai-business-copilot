@@ -14,5 +14,11 @@ import dev.qcoding.businesscopilot.datacopilot.query.QueryResultTable;
  */
 public record SqlExecutionResponse(
         QueryResultTable table,
-        ResultExplanationResponse explanation) {
+        ResultExplanationResponse explanation,
+        Long resultId,
+        String executionId) {
+
+    public SqlExecutionResponse(QueryResultTable table, ResultExplanationResponse explanation) {
+        this(table, explanation, null, null);
+    }
 }
