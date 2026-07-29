@@ -6,6 +6,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [2.2.1] - 2026-07-29
+
+### Changed
+
+- Refreshed the bilingual README and runnable-application visuals for the `2.2.1` release.
+- Removed internal planning, audit, architecture-decision, release-process, and local visual-generation files from the public repository.
+
+### Security
+
+- Upgraded Bouncy Castle to 1.84 to remediate CVE-2026-0636 while retaining the earlier CVE-2025-14813 fix.
+
 ## [2.2.0] - 2026-07-29
 
 ### Added

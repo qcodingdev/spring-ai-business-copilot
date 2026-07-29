@@ -2,7 +2,7 @@
 
 [简体中文](README.zh-CN.md) | [GitHub](https://github.com/qcodingdev/spring-ai-business-copilot) | [Gitee](https://gitee.com/qcodingdev/spring-ai-business-copilot)
 
-[![Release](https://img.shields.io/github/v/release/qcodingdev/spring-ai-business-copilot?display_name=tag&sort=semver)](https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.0.0)
+[![Release](https://img.shields.io/github/v/release/qcodingdev/spring-ai-business-copilot?display_name=tag&sort=semver)](https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.2.1)
 [![Java 21](https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&logoColor=white)](https://openjdk.org/projects/jdk/21/)
 [![Spring Boot 4.1](https://img.shields.io/badge/Spring%20Boot-4.1-6DB33F?logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
 [![Spring AI 2.0](https://img.shields.io/badge/Spring%20AI-2.0-6DB33F)](https://spring.io/projects/spring-ai)
@@ -58,8 +58,6 @@ Business pages lead with the conclusion, supporting evidence, items to verify, a
 
 Selecting an example only fills the form. A model call happens after the user edits and confirms. When quota or a provider is unavailable, the UI offers a separately labeled `PREGENERATED` result instead of presenting it as live output.
 
-See the [public-demo Railway deployment guide](docs/public-demo-deployment.md) for variables, least-privilege reader setup, initialization, reset, and domain-opening order.
-
 ## Why this is more than a chat demo
 
 - **Model output is not authority.** Structured responses pass deterministic, module-specific validation before they can change business state.
@@ -79,11 +77,13 @@ See the [public-demo Railway deployment guide](docs/public-demo-deployment.md) f
 - sanitized Resume ingestion, Chinese-by-default assessments, revalidated corrections, and deletion controls;
 - PostgreSQL migrations, fixed evaluation sets, SBOM generation, dependency review, and container scanning.
 
-## 2.2 enterprise expansion
+## 2.2 enterprise expansion and 2.2.1 security patch
 
-[v2.2.0](https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.2.0) keeps the five-module boundary and implements the enterprise-facing code paths across Data, Knowledge, Support, Report, and HR: governed definitions and handoffs, incremental source sync with deletion/ACL propagation, read-only ticket/ATS imports, confirmation-bound writeback drafts, scheduled report drafts, office exports, consent, interview evidence, and onboarding guides. Flyway V22–V28 and the V1→V28 PostgreSQL upgrade path are covered by integration tests. Provider adapters that depend on customer-owned SharePoint, Confluence, Notion, S3/MinIO, Jira, Zendesk, ServiceNow, Feishu, WeCom, or ATS credentials must still pass that deployment's real sandbox before being described as production-verified. See the [2.2 upgrade roadmap](docs/upgrade-roadmap.md).
+[v2.2.0](https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.2.0) keeps the five-module boundary and implements the enterprise-facing code paths across Data, Knowledge, Support, Report, and HR: governed definitions and handoffs, incremental source sync with deletion/ACL propagation, read-only ticket/ATS imports, confirmation-bound writeback drafts, scheduled report drafts, office exports, consent, interview evidence, and onboarding guides. Flyway V22–V28 and the V1→V28 PostgreSQL upgrade path are covered by integration tests. Provider adapters that depend on customer-owned SharePoint, Confluence, Notion, S3/MinIO, Jira, Zendesk, ServiceNow, Feishu, WeCom, or ATS credentials must still pass that deployment's real sandbox before being described as production-verified.
 
-![2.2 enterprise integration diagnostics verified in the running application](assets/admin-enterprise-status.png)
+[v2.2.1](https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.2.1) upgrades Bouncy Castle to 1.84 for CVE-2026-0636 and narrows the public repository to runnable source, tests, deployment examples, user-facing documentation, and verified application visuals.
+
+![2.2.1 enterprise integration diagnostics verified in the running application](assets/admin-enterprise-status.png)
 
 ## Quick Start
 
