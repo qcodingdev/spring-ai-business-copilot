@@ -6,9 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-07-29
+
 ### Added
 
-- Started the `2.2.0-SNAPSHOT` enterprise quality loop with stable Knowledge answer IDs, owner-bound idempotent helpful/not-helpful feedback, and an Admin/Reviewer quality review queue.
+- Completed the `2.2.0` enterprise quality loop with stable Knowledge answer IDs, owner-bound idempotent helpful/not-helpful feedback, and an Admin/Reviewer quality review queue.
 - Added Flyway V22 for constrained Knowledge answer feedback and workbench controls that keep users in the current answer flow with an explicit reviewer next step.
 - Added Flyway V23, concurrency-safe Knowledge quality dispositions, automatic re-queue after newer feedback, and low-cardinality quality metrics.
 - Added Flyway V24-V28 and enterprise APIs for Data governance/export/Report handoff, Knowledge source sync, Support ticket/SLA/writeback integration, Report schedules/office exports, and HR consent/interview/ATS/onboarding collaboration.
@@ -23,6 +25,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - Extended Resume protected-attribute detection to reject Chinese gender and marital-status requirements and common English age or gender restrictions.
 - Masked external Support ticket messages before persistence and made Data query-cost previews fail closed when database estimates cannot be recognized.
+- Kept Support knowledge retrieval inside the authenticated ACL boundary while falling back across document categories when a category-specific lookup has no evidence.
+- Made HR job drafts preserve recruiter-provided required and preferred qualifications deterministically and reject model-added qualifications.
+- Corrected immutable AI property binding and made Admin diagnostics distinguish provider-omitted token usage from zero usage.
 
 ### Changed
 
@@ -129,6 +134,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Kept risky actions behind single-use confirmation tokens and explicit human review.
 - Excluded local AI-agent settings, internal planning documents, and generated review evidence from the public repository.
 
-[Unreleased]: https://github.com/qcodingdev/spring-ai-business-copilot/compare/v2.0.0...main
+[Unreleased]: https://github.com/qcodingdev/spring-ai-business-copilot/compare/v2.2.0...main
+[2.2.0]: https://github.com/qcodingdev/spring-ai-business-copilot/compare/v2.0.0...v2.2.0
 [2.0.0]: https://github.com/qcodingdev/spring-ai-business-copilot/compare/v1.0.0...v2.0.0
 [1.0.0]: https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v1.0.0

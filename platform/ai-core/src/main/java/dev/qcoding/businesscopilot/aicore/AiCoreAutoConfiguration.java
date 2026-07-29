@@ -4,7 +4,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import io.micrometer.core.instrument.MeterRegistry;
 
@@ -15,21 +15,8 @@ import io.micrometer.core.instrument.MeterRegistry;
  * 但 {@link AiChatService} 调用会给出清晰错误。</p>
  */
 @AutoConfiguration
+@EnableConfigurationProperties({AiModelProperties.class, AiResilienceProperties.class})
 public class AiCoreAutoConfiguration {
-
-    @ConfigurationProperties(prefix = "business-copilot.ai-core")
-    @Bean
-    @ConditionalOnMissingBean
-    public AiModelProperties aiModelProperties() {
-        return new AiModelProperties(null, null, false, 0);
-    }
-
-    @ConfigurationProperties(prefix = "business-copilot.ai-core.resilience")
-    @Bean
-    @ConditionalOnMissingBean
-    public AiResilienceProperties aiResilienceProperties() {
-        return new AiResilienceProperties(0, null, 0, 0, 0, null);
-    }
 
     @Bean
     @ConditionalOnMissingBean

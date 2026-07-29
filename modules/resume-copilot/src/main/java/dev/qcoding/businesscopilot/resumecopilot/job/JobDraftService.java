@@ -68,13 +68,18 @@ public class JobDraftService {
                     metadata == null ? ai.modelName() : metadata.modelName(),
                     List.of("岗位画像和 JD 是待编辑草稿，岗位标准确认后才可用于简历证据分析。"));
         }
+        /*
+         * 招聘条件属于高影响输入。模型可以帮助组织语言，但不能凭常识新增学历、年限、
+         * 技术栈或行业门槛，因此正式草稿的职责/必选/加分只从招聘负责人输入确定性提取。
+         */
+        InputDerivedDraft completed = deriveFromRequirements(resolvedTitle, sanitized);
         return new JobDraftResponse(
                 resolvedTitle,
-                clean(output.jobProfile()),
-                clean(output.responsibilities()),
-                clean(output.requiredQualifications()),
-                clean(output.preferredQualifications()),
-                completeJdDraft(resolvedTitle, sanitized, output),
+                completed.profile(),
+                completed.responsibilities(),
+                completed.requiredQualifications(),
+                completed.preferredQualifications(),
+                completeJdDraft(resolvedTitle, sanitized, completed),
                 clean(output.verificationNotes()),
                 metadata == null ? ai.modelName() : metadata.modelName(),
                 List.of("岗位画像和 JD 是待编辑草稿，岗位标准确认后才可用于简历证据分析。"));
@@ -177,13 +182,14 @@ public class JobDraftService {
                 .flatMap(value -> splitItems(afterAny(value, "主要负责", "负责", "职责")).stream())
                 .toList();
         List<String> required = statements.stream()
-                .filter(value -> value.contains("要求") || value.contains("具备") || value.contains("需要"))
-                .flatMap(value -> splitItems(afterAny(value, "要求", "具备", "需要")).stream())
-                .filter(value -> !value.contains("优先"))
+                .filter(value -> value.contains("必选") || value.contains("要求")
+                        || value.contains("具备") || value.contains("需要"))
+                .flatMap(value -> splitItems(afterAny(value, "必选", "要求", "具备", "需要")).stream())
+                .filter(value -> !value.contains("优先") && !value.contains("加分"))
                 .toList();
         List<String> preferred = statements.stream()
-                .filter(value -> value.contains("优先"))
-                .map(value -> value.replaceFirst("^.*?有", "有").trim())
+                .filter(value -> value.contains("优先") || value.contains("加分"))
+                .map(value -> afterAny(value, "加分", "优先"))
                 .toList();
         if (responsibilities.isEmpty()) responsibilities = List.of("根据已填写的岗位需求推进相关业务工作");
         if (required.isEmpty()) required = List.of("具备完成上述岗位职责所需的相关经验与能力");

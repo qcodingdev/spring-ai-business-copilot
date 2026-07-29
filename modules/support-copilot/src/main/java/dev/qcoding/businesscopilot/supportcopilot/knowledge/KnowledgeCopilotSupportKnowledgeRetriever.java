@@ -44,6 +44,16 @@ public class KnowledgeCopilotSupportKnowledgeRetriever implements SupportKnowled
                 ? "PRODUCT" : "SUPPORT";
         List<RetrievedKnowledgeChunk> chunks =
                 retrievalService.retrieve(searchQuery, knowledgeCategory);
+        if (chunks.isEmpty()) {
+            /*
+             * 文档分类是部署方可配置的业务标签，不能假设一定使用 PRODUCT/SUPPORT。
+             * 精确分类未命中时，在相同 ACL/用户上下文内回退到全分类语义检索；
+             * 检索服务仍会执行 enabled/current/indexed、可见范围和相关性约束。
+             */
+            log.info("工单知识分类检索未命中，回退到当前权限范围内的全分类检索：category={}",
+                    knowledgeCategory);
+            chunks = retrievalService.retrieve(searchQuery);
+        }
 
         if (chunks.isEmpty()) {
             return SupportKnowledgeResult.noResults("未检索到与工单相关的知识依据，建议转人工处理或补充知识库内容");
