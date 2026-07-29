@@ -79,13 +79,23 @@
         `${item.call_type || item.callType} / ${item.operation}`,
         item.calls,
         `${item.successes}/${item.failures}`,
-        `${item.input_tokens || item.inputTokens}/${item.output_tokens || item.outputTokens}`,
+        tokenUsage(item),
         `${item.total_latency_ms || item.totalLatencyMs || 0} ms`,
         item.estimated_cost ?? item.estimatedCost ?? '未配置'
       ].forEach((value) => row.appendChild(el('td', value)));
       tbody.appendChild(row);
     });
     if (!values.length) tbody.appendChild(emptyRow(7, '暂无模型调用记录'));
+  }
+
+  function tokenUsage(item) {
+    const input = item.input_tokens ?? item.inputTokens;
+    const output = item.output_tokens ?? item.outputTokens;
+    const callType = item.call_type ?? item.callType;
+    if (callType === 'embedding' && Number(input || 0) === 0 && Number(output || 0) === 0) {
+      return '未提供/未提供';
+    }
+    return `${input ?? '未提供'}/${output ?? '未提供'}`;
   }
 
   function renderPrompts(values) {

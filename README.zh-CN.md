@@ -81,7 +81,7 @@ Railway 的变量、只读账号、初始化、恢复与开放域名顺序见 [�
 
 ## 2.2 企业扩展
 
-`2.2.0-SNAPSHOT` 保持五模块边界，已经实现 Data、Knowledge、Support、Report、HR 的企业接入代码闭环：受控指标/模板与结果交接、增量来源同步和删除/ACL 传播、工单与 ATS 只读导入、一次性确认绑定的内部备注回写、定时报告草稿、办公格式导出、候选人授权、面试证据和入职清单。Flyway V22–V28 及 V1→V28 PostgreSQL 升级路径已有集成测试。依赖客户 SharePoint、Confluence、Notion、S3/MinIO、Jira、Zendesk、ServiceNow、飞书、企微或 ATS 凭证的适配器，仍必须在部署方真实沙箱通过后，才能标记为“生产已验证”。完整边界见 [2.2 升级路线](docs/upgrade-roadmap.md)。
+[v2.2.0](https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.2.0) 保持五模块边界，已经实现 Data、Knowledge、Support、Report、HR 的企业接入代码闭环：受控指标/模板与结果交接、增量来源同步和删除/ACL 传播、工单与 ATS 只读导入、一次性确认绑定的内部备注回写、定时报告草稿、办公格式导出、候选人授权、面试证据和入职清单。Flyway V22–V28 及 V1→V28 PostgreSQL 升级路径已有集成测试。依赖客户 SharePoint、Confluence、Notion、S3/MinIO、Jira、Zendesk、ServiceNow、飞书、企微或 ATS 凭证的适配器，仍必须在部署方真实沙箱通过后，才能标记为“生产已验证”。完整边界见 [2.2 升级路线](docs/upgrade-roadmap.md)。
 
 ![运行中应用实测的 2.2 企业接入诊断面板](assets/admin-enterprise-status.png)
 

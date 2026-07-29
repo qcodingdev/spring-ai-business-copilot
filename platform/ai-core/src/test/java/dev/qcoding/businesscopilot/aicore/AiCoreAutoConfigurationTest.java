@@ -23,4 +23,25 @@ class AiCoreAutoConfigurationTest {
             assertThat(context).hasSingleBean(AiCallMetrics.class);
         });
     }
+
+    @Test
+    void bindsImmutableModelAndResilienceProperties() {
+        contextRunner
+                .withPropertyValues(
+                        "business-copilot.ai-core.provider-name=openai-compatible",
+                        "business-copilot.ai-core.model-name=release-model",
+                        "business-copilot.ai-core.max-prompt-input-chars=2400",
+                        "business-copilot.ai-core.resilience.max-concurrent-calls=6",
+                        "business-copilot.ai-core.resilience.acquire-timeout=3s")
+                .run(context -> {
+                    AiModelProperties model = context.getBean(AiModelProperties.class);
+                    AiResilienceProperties resilience = context.getBean(AiResilienceProperties.class);
+
+                    assertThat(model.providerName()).isEqualTo("openai-compatible");
+                    assertThat(model.modelName()).isEqualTo("release-model");
+                    assertThat(model.maxPromptInputChars()).isEqualTo(2400);
+                    assertThat(resilience.maxConcurrentCalls()).isEqualTo(6);
+                    assertThat(resilience.acquireTimeout()).hasSeconds(3);
+                });
+    }
 }

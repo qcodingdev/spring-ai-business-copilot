@@ -1,6 +1,7 @@
 package dev.qcoding.businesscopilot.aicore;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.bind.ConstructorBinding;
 
 /**
  * Configuration for the AI core boundary.
@@ -24,6 +25,7 @@ public record AiModelProperties(
     }
 
     /** Defaults applied when no configuration is present. */
+    @ConstructorBinding
     public AiModelProperties {
         if (modelName == null || modelName.isBlank()) {
             modelName = "unknown";
