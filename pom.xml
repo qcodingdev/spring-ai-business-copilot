@@ -42,7 +42,8 @@
         <pdfbox.version>3.0.8</pdfbox.version>
         <poi.version>5.5.1</poi.version>
         <jsoup.version>1.21.2</jsoup.version>
-        <minio.version>8.5.17</minio.version>
+        <minio.version>8.6.0</minio.version>
+        <minio.okhttp-jvm.version>5.1.0</minio.okhttp-jvm.version>
         <postgresql.version>42.7.12</postgresql.version>
         <netty.version>4.2.16.Final</netty.version>
         <resilience4j.version>2.2.0</resilience4j.version>
