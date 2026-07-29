@@ -44,6 +44,7 @@
         <jsoup.version>1.21.2</jsoup.version>
         <minio.version>8.6.0</minio.version>
         <minio.okhttp-jvm.version>5.1.0</minio.okhttp-jvm.version>
+        <bouncycastle.version>1.81.1</bouncycastle.version>
         <postgresql.version>42.7.12</postgresql.version>
         <netty.version>4.2.16.Final</netty.version>
         <resilience4j.version>2.2.0</resilience4j.version>
@@ -84,6 +85,11 @@
                 <version>${spring-ai.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcprov-jdk18on</artifactId>
+                <version>${bouncycastle.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
