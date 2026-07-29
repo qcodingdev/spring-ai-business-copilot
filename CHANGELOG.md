@@ -39,7 +39,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Bound Knowledge feedback to the authenticated creator of the persisted answer audit and restricted the cross-user quality queue to Admin/Reviewer roles.
 - Masked phone numbers, email addresses, ID cards, and credential assignments in feedback comments and reviewer notes before persistence.
 - Restricted Actuator metrics to Admin and Reviewer roles and kept user input, Prompt text, and file names out of metric labels and AI operation logs.
-- Upgraded the MinIO Java client to 8.6.0 to remediate CVE-2025-59952 and selected OkHttp JVM 5.1.0 explicitly for Maven runtime compatibility.
+- Upgraded the MinIO Java client to 8.6.0 for CVE-2025-59952, pinned Bouncy Castle 1.81.1 for CVE-2025-14813, and selected OkHttp JVM 5.1.0 explicitly for Maven runtime compatibility.
 
 ## [2.0.0] - 2026-07-18
 
