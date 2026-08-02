@@ -9,6 +9,8 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.ObjectProvider;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Thin wrapper around Spring AI {@link ChatClient} that provides text and structured generation,
@@ -26,6 +28,7 @@ public class AiChatService {
     private final AiModelProperties properties;
     private final AiCallCoordinator coordinator;
     private final AiOutputLocaleGuard localeGuard = new AiOutputLocaleGuard();
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     public AiChatService(ObjectProvider<ChatClient.Builder> chatClientBuilderProvider,
                          AiModelProperties properties) {
@@ -144,6 +147,49 @@ public class AiChatService {
             throw new BusinessException(ErrorCode.AI_OUTPUT_PARSE_ERROR,
                     "AI 模型输出无法转换为预期结构", ex);
         }
+    }
+
+    /**
+     * Provider-compatible JSON generation for models that return valid JSON inside Markdown fences
+     * but do not fully support schema-assisted structured output. The prompt must describe its JSON
+     * contract; parsing still rejects missing, truncated, or non-object output.
+     */
+    public <T> AiInvocationResult<T> generatePromptJsonWithMetadata(
+            String operation, String prompt, Class<T> type) {
+        AiInvocationResult<String> raw = generateTextWithMetadata(operation, prompt);
+        try {
+            T content = objectMapper.readValue(extractJsonObject(raw.content()), type);
+            ensureLocale(content);
+            return new AiInvocationResult<>(content, raw.metadata());
+        } catch (JacksonException | IllegalArgumentException ex) {
+            log.error("对话模型提示词 JSON 解析失败：操作={}", operation, ex);
+            throw new BusinessException(ErrorCode.AI_OUTPUT_PARSE_ERROR,
+                    "AI 模型输出无法转换为预期结构", ex);
+        }
+    }
+
+    static String extractJsonObject(String raw) {
+        if (raw == null || raw.isBlank()) {
+            throw new IllegalArgumentException("AI JSON output is blank");
+        }
+        int start = raw.indexOf('{');
+        if (start < 0) throw new IllegalArgumentException("AI JSON object start is missing");
+        boolean quoted = false;
+        boolean escaped = false;
+        int depth = 0;
+        for (int index = start; index < raw.length(); index++) {
+            char current = raw.charAt(index);
+            if (quoted) {
+                if (escaped) escaped = false;
+                else if (current == '\\') escaped = true;
+                else if (current == '"') quoted = false;
+                continue;
+            }
+            if (current == '"') quoted = true;
+            else if (current == '{') depth++;
+            else if (current == '}' && --depth == 0) return raw.substring(start, index + 1);
+        }
+        throw new IllegalArgumentException("AI JSON object is truncated");
     }
 
     /** Text generation with metadata from the exact same provider response. */

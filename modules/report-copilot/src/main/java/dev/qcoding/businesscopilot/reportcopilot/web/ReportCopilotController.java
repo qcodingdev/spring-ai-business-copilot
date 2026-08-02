@@ -115,6 +115,14 @@ public class ReportCopilotController {
         return ResponseEntity.ok(ApiResponse.ok(confirmationService.confirm(draftId, request.confirmationToken())));
     }
 
+    /** Saves human text edits without allowing evidence links or report structure to change. */
+    @PostMapping("/reports/{draftId}/edit")
+    public ResponseEntity<ApiResponse<ReportDraftConfirmationService.EditResult>> editReport(
+            @PathVariable Long draftId, @Valid @RequestBody EditRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(confirmationService.edit(
+                draftId, request.confirmationToken(), request.content())));
+    }
+
     /** Cancels a server-generated DRAFTED or NEEDS_REVIEW report and invalidates its token. */
     @PostMapping("/reports/{draftId}/cancel")
     public ResponseEntity<ApiResponse<ReportDraftConfirmationService.ConfirmationResult>> cancelReport(
@@ -142,5 +150,11 @@ public class ReportCopilotController {
 
     public record ConfirmationRequest(
             @jakarta.validation.constraints.NotBlank(message = "确认凭证不能为空。") String confirmationToken) {
+    }
+
+    public record EditRequest(
+            @jakarta.validation.constraints.NotBlank(message = "确认凭证不能为空。") String confirmationToken,
+            @jakarta.validation.constraints.NotNull(message = "报告内容不能为空。")
+            dev.qcoding.businesscopilot.reportcopilot.generation.LlmReportOutput content) {
     }
 }

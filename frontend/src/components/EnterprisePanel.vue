@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api, ApiError, jsonBody } from '@/api/client'
 import { useSession } from '@/composables/useSession'
 import RequestId from './RequestId.vue'
 import ConfirmDialog from './ConfirmDialog.vue'
 import { safeJson } from '@/utils/safeDisplay'
+import ToastMessage from './ToastMessage.vue'
 
 type ModuleKey = 'data' | 'knowledge' | 'support' | 'report' | 'hr'
 const props = defineProps<{ module: ModuleKey; tab: string }>()
@@ -24,6 +25,16 @@ const enabled = ref(true)
 const resourceId = ref('')
 const actionValue = ref('')
 const actionConfirmOpen = ref(false)
+const toast = ref('')
+const toastTone = ref<'success' | 'danger'>('success')
+let toastTimer: ReturnType<typeof setTimeout> | undefined
+
+function showToast(message: string, tone: 'success' | 'danger' = 'success'): void {
+  if (toastTimer) clearTimeout(toastTimer)
+  toast.value = message
+  toastTone.value = tone
+  toastTimer = setTimeout(() => { toast.value = '' }, 4500)
+}
 
 const readEndpoint = computed(() => {
   const endpoints: Record<ModuleKey, Record<string, string>> = {
@@ -76,6 +87,7 @@ watch([() => props.module, () => props.tab], () => {
   data.value = null
   errorCode.value = ''
   provider.value = providerOptions.value[0] ?? ''
+  void load()
 }, { immediate: true })
 
 async function load(): Promise<void> {
@@ -89,6 +101,7 @@ async function load(): Promise<void> {
   } catch (error) {
     errorCode.value = error instanceof ApiError ? error.errorCode : 'generic'
     requestId.value = error instanceof ApiError ? error.requestId : null
+    showToast(localizedError.value, 'danger')
   } finally {
     loading.value = false
   }
@@ -122,9 +135,11 @@ async function saveConnection(): Promise<void> {
     const response = await api<unknown>(request.path, { method: 'POST', ...jsonBody(request.body) })
     data.value = response.data
     requestId.value = response.requestId
+    showToast(t('common.operationSucceeded'))
   } catch (error) {
     errorCode.value = error instanceof ApiError ? error.errorCode : 'generic'
     requestId.value = error instanceof ApiError ? error.requestId : null
+    showToast(localizedError.value, 'danger')
   } finally {
     loading.value = false
   }
@@ -233,14 +248,18 @@ async function runControlledAction(): Promise<void> {
     data.value = response.data
     requestId.value = response.requestId
     actionConfirmOpen.value = false
+    showToast(t('common.operationSucceeded'))
   } catch (error) {
     errorCode.value = error instanceof ApiError ? error.errorCode : 'generic'
     requestId.value = error instanceof ApiError ? error.requestId : null
     actionConfirmOpen.value = false
+    showToast(localizedError.value, 'danger')
   } finally {
     loading.value = false
   }
 }
+
+onUnmounted(() => { if (toastTimer) clearTimeout(toastTimer) })
 </script>
 
 <template>
@@ -308,7 +327,6 @@ async function runControlledAction(): Promise<void> {
       </div>
     </section>
 
-    <div v-if="localizedError" class="alert alert--danger" role="alert">{{ localizedError }}</div>
     <pre v-if="data" class="result-preview">{{ safeJson(data) }}</pre>
     <p v-else-if="!connectionTab" class="empty-state">{{ t('common.noData') }}</p>
     <RequestId :value="requestId" />
@@ -326,4 +344,5 @@ async function runControlledAction(): Promise<void> {
       @cancel="actionConfirmOpen = false"
     />
   </section>
+  <ToastMessage :message="toast" :tone="toastTone" />
 </template>

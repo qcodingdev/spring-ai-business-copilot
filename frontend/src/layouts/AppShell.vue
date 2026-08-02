@@ -56,6 +56,14 @@ const userInitial = computed(() => (session.value?.username?.slice(0, 1) || 'U')
           <span>{{ item.label }}</span>
           <span class="nav-arrow" aria-hidden="true">›</span>
         </RouterLink>
+        <div v-if="route.path === '/hr'" class="sidebar-subnav" :aria-label="t('hr.title')">
+          <RouterLink :to="{ path: '/hr', query: { section: 'recruiting' } }" :class="{ active: route.query.section !== 'employee' }" @click="menuOpen = false">
+            <span>{{ t('hr.sections.recruiting') }}</span>
+          </RouterLink>
+          <RouterLink :to="{ path: '/hr', query: { section: 'employee' } }" :class="{ active: route.query.section === 'employee' }" @click="menuOpen = false">
+            <span>{{ t('hr.sections.employee') }}</span>
+          </RouterLink>
+        </div>
         <RouterLink v-if="isAdmin" to="/admin" @click="menuOpen = false">
           <span class="nav-icon"><ModuleIcon name="admin" /></span>
           <span>{{ t('navigation.admin') }}</span>

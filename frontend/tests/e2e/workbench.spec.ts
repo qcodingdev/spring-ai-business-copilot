@@ -159,6 +159,17 @@ test('login and Admin expose the same persistent language switch', async ({ page
       }),
     })
   })
+  await page.route('**/api/admin/demo-data/jobs/fictional-initialize-job', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: { id: 'fictional-initialize-job', jobType: 'INITIALIZE', status: 'COMPLETED', summaryJson: '{"documents":3}' },
+        success: true,
+        requestId: 'e2e-admin-initialize-completed',
+        timestamp: new Date().toISOString(),
+      }),
+    })
+  })
   await page.route('**/api/admin/demo-data/reset-intents', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
@@ -187,21 +198,141 @@ test('login and Admin expose the same persistent language switch', async ({ page
     })
   })
   await page.goto('/admin')
-  await expect(page.getByRole('heading', { name: 'System health and experience management' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'System administration' })).toBeVisible()
   await expect(page.locator('html')).toHaveAttribute('lang', 'en-US')
+  await page.getByRole('button', { name: 'Experience data' }).click()
   await page.getByRole('button', { name: 'Prepare experience data' }).click()
   await page.getByRole('dialog')
     .getByRole('button', { name: 'Prepare experience data' })
     .click()
-  await expect(page.getByText('e2e-admin-initialize')).toBeVisible()
-  await page.getByRole('button', { name: 'Preview restore impact' }).click()
-  await page.getByLabel('Enter the confirmation text below to continue')
-    .fill('恢复公网演示初始数据')
-  await page.getByRole('button', { name: 'Restore experience area' }).click()
-  await page.getByRole('dialog')
-    .getByRole('button', { name: 'Restore experience area' })
-    .click()
-  await expect(page.getByText('e2e-admin-reset')).toBeVisible()
+  await expect(page.getByText('fictional-initialize-job')).toBeVisible()
+  await expect(page.getByText('Experience data preparation completed.', { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Preview restore impact' })).toBeDisabled()
+  await expect(page.getByText(/available only in public-demo mode/)).toBeVisible()
+})
+
+test('keeps processing results scoped to the tab that produced them', async ({ page }) => {
+  await mockSession(page)
+  await page.route('**/api/knowledge-copilot/questions', async (route) => {
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({
+      data: { status: 'ANSWERED', answer: '试用期为三个月。', citations: [{ sourceTitle: '员工手册', snippet: '试用期三个月' }] },
+      success: true, requestId: 'knowledge-scoped-result', timestamp: new Date().toISOString(),
+    }) })
+  })
+  await page.route('**/api/knowledge-copilot/sources', async (route) => {
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: [], success: true, requestId: 'sources-tab', timestamp: new Date().toISOString() }) })
+  })
+  await page.goto('/knowledge')
+  await page.getByLabel('知识问题').fill('试用期多久？')
+  await page.getByRole('button', { name: '检索并回答' }).click()
+  await expect(page.getByText('试用期为三个月。', { exact: true })).toBeVisible()
+  await page.getByRole('tab', { name: '外部来源' }).click()
+  await expect(page.getByText('试用期为三个月。', { exact: true })).toHaveCount(0)
+  await expect(page.getByText('本次处理结果')).toHaveCount(0)
+})
+
+test('shows and completes the support draft review flow', async ({ page }) => {
+  await mockSession(page)
+  await page.route('**/api/support-copilot/tickets/analyze', async (route) => {
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({
+      data: { status: 'DRAFTED', summary: '退款咨询', needsHuman: true, draft: { draftId: 7, replyText: '您好，我们会核实退款条件。', confirmationToken: 'support-token', expiresAt: new Date(Date.now() + 60_000).toISOString(), citations: [] } },
+      success: true, requestId: 'support-draft-result', timestamp: new Date().toISOString(),
+    }) })
+  })
+  await page.route('**/api/support-copilot/reply-drafts/7/confirm', async (route) => {
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: { draftId: 7, status: 'CONFIRMED' }, success: true, requestId: 'support-confirmed', timestamp: new Date().toISOString() }) })
+  })
+  await page.goto('/support')
+  await page.getByLabel('客户消息').fill('请协助处理退款。')
+  await page.getByRole('button', { name: '分析工单并生成草稿' }).click()
+  await expect(page.locator('.review-editor textarea').first()).toHaveValue('您好，我们会核实退款条件。')
+  await page.getByRole('button', { name: '确认采用草稿' }).click()
+  await page.getByRole('dialog').getByRole('button', { name: '确认客服回复草稿' }).click()
+  await expect(page.getByText('回复草稿已确认；系统不会自动向客户发送。')).toBeVisible()
+})
+
+test('shows, edits, and confirms a report draft', async ({ page }) => {
+  await mockSession(page)
+  const content = {
+    executiveSummary: '原始执行摘要',
+    executiveSummarySourceIds: ['meeting-1'],
+    metricHighlights: [{ metricName: '交付数', metricValue: '3', unit: '项', summary: '完成三项交付', sourceIds: ['meeting-1'] }],
+    completedItems: [{ text: '完成版本发布', sourceIds: ['meeting-1'] }],
+    risks: [],
+    actionItems: [],
+    suggestions: [],
+    citations: [{ sourceId: 'meeting-1', title: '周会纪要', excerpt: '本周完成三项交付' }],
+  }
+  await page.route('**/api/report-copilot/reports/generate', async (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({
+    data: { draftId: 21, status: 'DRAFTED', content, confirmationToken: 'report-token', expiresAt: new Date(Date.now() + 60_000).toISOString() },
+    success: true, requestId: 'report-generated', timestamp: new Date().toISOString(),
+  }) }))
+  await page.route('**/api/report-copilot/reports/21/edit', async (route) => {
+    const body = route.request().postDataJSON()
+    expect(body.content.executiveSummary).toBe('人工修改后的摘要')
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: { draftId: 21, status: 'DRAFTED', content: body.content }, success: true, requestId: 'report-edited', timestamp: new Date().toISOString() }) })
+  })
+  await page.route('**/api/report-copilot/reports/21/confirm', async (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: { draftId: 21, status: 'CONFIRMED' }, success: true, requestId: 'report-confirmed', timestamp: new Date().toISOString() }) }))
+
+  await page.goto('/report')
+  await page.getByLabel('报告标题').fill('研发周报')
+  await page.getByLabel('来源数据').fill('本周完成三项交付。')
+  await page.getByRole('button', { name: '生成报告草稿' }).click()
+  await expect(page.getByLabel('执行摘要')).toHaveValue('原始执行摘要')
+  await expect(page.locator('.report-edit-section textarea').first()).toHaveValue('完成三项交付')
+  await page.getByLabel('执行摘要').fill('人工修改后的摘要')
+  await page.getByRole('button', { name: '保存人工修改' }).click()
+  await expect(page.getByText('报告修改已保存，仍需人工确认。')).toBeVisible()
+  await page.getByRole('button', { name: '确认报告' }).click()
+  await page.getByRole('dialog').getByRole('button', { name: '确认经营报告' }).click()
+  await expect(page.getByText('报告已确认，现在可以导出；系统不会自动发布。')).toBeVisible()
+  await expect(page.getByLabel('执行摘要')).toBeDisabled()
+})
+
+test('completes job criteria confirmation and candidate review', async ({ page }) => {
+  await mockSession(page)
+  const criteria = [{ criterionId: 'java', requirementType: 'MUST_HAVE', category: '技术', description: '熟悉 Java', weight: 1 }]
+  await page.route('**/api/resume-copilot/jobs/draft', async (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: { jdDraft: 'Java 工程师岗位说明' }, success: true, requestId: 'job-drafted', timestamp: new Date().toISOString() }) }))
+  await page.route('**/api/resume-copilot/jobs/criteria', async (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: { jobId: 31, status: 'DRAFTED', criteria, confirmationToken: 'criteria-token', expiresAt: new Date(Date.now() + 60_000).toISOString() }, success: true, requestId: 'criteria-generated', timestamp: new Date().toISOString() }) }))
+  await page.route('**/api/resume-copilot/jobs/31/criteria', async (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: { jobId: 31, status: 'DRAFTED', criteria: route.request().postDataJSON().criteria, confirmationToken: 'criteria-token' }, success: true, requestId: 'criteria-edited', timestamp: new Date().toISOString() }) }))
+  await page.route('**/api/resume-copilot/jobs/31/criteria/confirm', async (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: { jobId: 31, status: 'CONFIRMED' }, success: true, requestId: 'criteria-confirmed', timestamp: new Date().toISOString() }) }))
+  await page.route('**/api/resume-copilot/jobs/confirmed', async (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: [{ jobId: 31, title: 'Java 工程师', criteriaVersion: 1 }], success: true, requestId: 'confirmed-jobs', timestamp: new Date().toISOString() }) }))
+  await page.route('**/api/resume-copilot/assessments', async (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: { assessmentId: 41, status: 'DRAFTED', reviewToken: 'review-token', expiresAt: new Date(Date.now() + 60_000).toISOString(), content: { anonymousSummary: '候选人具备 Java 项目经验', criterionAssessments: [{ criterionId: 'java', status: 'SUPPORTED', explanation: '简历中有明确项目证据' }] }, evidence: [{ evidenceId: 'E1', section: '项目经验', sanitizedText: '负责 Java 服务开发' }], reviewReasons: [] }, success: true, requestId: 'assessment-generated', timestamp: new Date().toISOString() }) }))
+  await page.route('**/api/resume-copilot/assessments/41/review', async (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: { assessmentId: 41, status: 'REVIEWED' }, success: true, requestId: 'assessment-reviewed', timestamp: new Date().toISOString() }) }))
+
+  await page.goto('/hr')
+  await page.getByLabel('职位名称').fill('Java 工程师')
+  await page.getByLabel('岗位需求').fill('负责 Java 服务开发。')
+  await page.getByRole('button', { name: '生成岗位画像和 JD' }).click()
+  await expect(page.locator('.review-editor textarea')).toHaveValue('Java 工程师岗位说明')
+  await page.getByRole('button', { name: '提取岗位标准' }).click()
+  await page.getByLabel(/MUST_HAVE/).fill('熟悉 Java 与 Spring')
+  await page.getByRole('button', { name: '保存岗位标准修改' }).click()
+  await page.getByRole('button', { name: '确认岗位标准' }).click()
+  await page.getByRole('dialog').getByRole('button', { name: '确认岗位标准' }).click()
+  await expect(page.getByText('岗位标准已确认，可进入候选人评估选择使用。')).toBeVisible()
+  await page.getByRole('tab', { name: '候选人评估' }).click()
+  await page.getByLabel('已确认岗位标准').selectOption('31')
+  await page.getByLabel('候选人简历文本').fill('候选人负责过 Java 服务开发。')
+  await page.getByRole('button', { name: '开始证据评估' }).click()
+  await expect(page.getByText('候选人具备 Java 项目经验', { exact: true })).toBeVisible()
+  await expect(page.getByText('负责 Java 服务开发', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: '确认人工复核完成' }).click()
+  await page.getByRole('dialog').getByRole('button', { name: '完成人工复核' }).click()
+  await expect(page.getByText('候选人评估已完成人工复核。')).toBeVisible()
+})
+
+test('separates recruiting and employee service in the left navigation', async ({ page }) => {
+  await mockSession(page)
+  await page.goto('/hr')
+  if ((page.viewportSize()?.width ?? 1280) < 900) {
+    await page.getByRole('button', { name: '打开导航' }).click()
+  }
+  await expect(page.locator('.sidebar-subnav').getByRole('link', { name: '招聘协同' })).toBeVisible()
+  await page.locator('.sidebar-subnav').getByRole('link', { name: '员工服务' }).click()
+  await expect(page.getByRole('tab', { name: '员工问答' })).toBeVisible()
+  await expect(page.getByLabel('员工服务问题')).toBeVisible()
+  await expect(page.getByRole('tab', { name: '岗位标准' })).toHaveCount(0)
 })
 
 test('public preview uses only curated confirmed scenarios', async ({ page }) => {
@@ -328,6 +459,8 @@ for (const scenario of [
     await page.getByLabel(scenario[1]).fill('Fictional business input with no personal data.')
     await page.getByRole('button', { name: scenario[2] }).click()
     await expect(page.getByText('e2e-module-request')).toBeVisible()
-    await expect(page.locator('.evidence-list').getByText('Fictional evidence.', { exact: true })).toBeVisible()
+    if (scenario[0] !== '/hr') {
+      await expect(page.locator('.evidence-list').getByText('Fictional evidence.', { exact: true })).toBeVisible()
+    }
   })
 }

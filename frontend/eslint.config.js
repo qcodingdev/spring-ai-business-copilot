@@ -18,6 +18,13 @@ export default [
         URLSearchParams: 'readonly',
         HTMLDialogElement: 'readonly',
         HTMLElement: 'readonly',
+        HTMLInputElement: 'readonly',
+        Event: 'readonly',
+        File: 'readonly',
+        FormData: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        structuredClone: 'readonly',
       },
       parserOptions: {
         parser: tseslint.parser,

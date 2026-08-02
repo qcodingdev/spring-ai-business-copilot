@@ -150,9 +150,10 @@ public class ReportCopilotAutoConfiguration {
                                                                          ReportAuditService auditService,
                                                                          CurrentActorProvider actorProvider,
                                                                          ObjectAccessPolicy accessPolicy,
-                                                                         ConfirmationTokenService tokenService) {
+                                                                         ConfirmationTokenService tokenService,
+                                                                         ReportOutputSanitizer outputSanitizer) {
         return new ReportDraftConfirmationService(
-                draftRepository, auditService, actorProvider, accessPolicy, tokenService);
+                draftRepository, auditService, actorProvider, accessPolicy, tokenService, outputSanitizer);
     }
 
     @Bean

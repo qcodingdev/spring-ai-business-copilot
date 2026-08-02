@@ -132,6 +132,7 @@ public class SecurityConfiguration {
                                 "/api/support-copilot/enterprise/writebacks/*/confirm",
                                 "/api/report-copilot/enterprise/reports/generate",
                                 "/api/report-copilot/reports/*/confirm",
+                                "/api/report-copilot/reports/*/edit",
                                 "/api/report-copilot/reports/*/cancel",
                                 "/api/resume-copilot/enterprise/consents",
                                 "/api/resume-copilot/enterprise/consents/*/revoke",
