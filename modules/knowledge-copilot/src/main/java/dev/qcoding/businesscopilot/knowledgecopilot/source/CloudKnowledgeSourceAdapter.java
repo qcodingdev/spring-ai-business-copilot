@@ -1,6 +1,7 @@
 package dev.qcoding.businesscopilot.knowledgecopilot.source;
 
 import dev.qcoding.businesscopilot.commonsecurity.ExternalSecretResolver;
+import dev.qcoding.businesscopilot.commonsecurity.ExternalHttpClientFactory;
 import org.springframework.http.MediaType;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
@@ -16,13 +17,13 @@ import java.util.Map;
 /** SharePoint、Confluence 与 Notion 的只读 REST 适配器。 */
 public class CloudKnowledgeSourceAdapter implements KnowledgeSourceAdapter {
 
-    private final RestClient.Builder restClientBuilder;
+    private final ExternalHttpClientFactory clientFactory;
     private final ExternalSecretResolver secretResolver;
 
     public CloudKnowledgeSourceAdapter(
-            RestClient.Builder restClientBuilder,
+            ExternalHttpClientFactory clientFactory,
             ExternalSecretResolver secretResolver) {
-        this.restClientBuilder = restClientBuilder;
+        this.clientFactory = clientFactory;
         this.secretResolver = secretResolver;
     }
 
@@ -132,10 +133,11 @@ public class CloudKnowledgeSourceAdapter implements KnowledgeSourceAdapter {
         if (cursor != null && !cursor.isBlank()) {
             search.put("start_cursor", cursor);
         }
-        JsonNode response = client.post().uri(trimSlash(connection.baseUrl()) + "/v1/search")
+        JsonNode response = clientFactory.validatePayload(client.post()
+                .uri(trimSlash(connection.baseUrl()) + "/v1/search")
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(search)
-                .retrieve().body(JsonNode.class);
+                .retrieve().body(JsonNode.class));
         List<SourceItem> items = new ArrayList<>();
         for (JsonNode page : iterable(response.path("results"))) {
             String id = page.path("id").asText();
@@ -182,22 +184,21 @@ public class CloudKnowledgeSourceAdapter implements KnowledgeSourceAdapter {
     }
 
     private RestClient bearerClient(KnowledgeSourceConnection connection) {
-        return restClientBuilder.clone()
+        return clientFactory.builder(connection.baseUrl())
                 .defaultHeader("Authorization", "Bearer " + secretResolver.resolve(connection.secretRef()))
                 .build();
     }
 
     private RestClient notionClient(KnowledgeSourceConnection connection) {
-        return restClientBuilder.clone()
+        return clientFactory.builder(connection.baseUrl())
                 .defaultHeader("Authorization", "Bearer " + secretResolver.resolve(connection.secretRef()))
                 .defaultHeader("Notion-Version", "2022-06-28")
                 .build();
     }
 
     private JsonNode getJson(RestClient client, String url) {
-        JsonNode body = client.get().uri(url).retrieve().body(JsonNode.class);
-        if (body == null) throw new IllegalStateException("外部知识来源返回空响应");
-        return body;
+        return clientFactory.validatePayload(
+                client.get().uri(url).retrieve().body(JsonNode.class));
     }
 
     private Iterable<JsonNode> iterable(JsonNode node) {

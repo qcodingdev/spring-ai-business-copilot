@@ -86,9 +86,11 @@ if [[ "$healthy" != "true" ]]; then
 fi
 
 curl --fail --silent --show-error --cookie-jar "$cookie_file" "$base_url/login" >"$login_page"
-login_csrf_token="$(sed -n 's/.*name="_csrf"[^>]*value="\([^"]*\)".*/\1/p' "$login_page" | head -n 1)"
+curl --fail --silent --show-error --cookie "$cookie_file" --cookie-jar "$cookie_file" \
+  "$base_url/api/session" >/dev/null
+login_csrf_token="$(awk '$6 == "XSRF-TOKEN" { token = $7 } END { print token }' "$cookie_file")"
 if [[ -z "$login_csrf_token" ]]; then
-  echo "发布 AI 冒烟测试失败：登录页未生成 CSRF token。" >&2
+  echo "发布 AI 冒烟测试失败：匿名会话未签发 CSRF Cookie。" >&2
   exit 1
 fi
 
@@ -107,7 +109,7 @@ if [[ "$login_status" != "302" ]]; then
 fi
 
 curl --fail --silent --show-error --cookie "$cookie_file" --cookie-jar "$cookie_file" \
-  "$base_url/" >/dev/null
+  "$base_url/api/session" >/dev/null
 csrf_token="$(awk '$6 == "XSRF-TOKEN" { token = $7 } END { print token }' "$cookie_file")"
 if [[ -z "$csrf_token" ]]; then
   echo "发布 AI 冒烟测试失败：应用未签发 API CSRF Cookie。" >&2

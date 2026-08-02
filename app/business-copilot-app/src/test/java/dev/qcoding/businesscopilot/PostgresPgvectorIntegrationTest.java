@@ -124,6 +124,19 @@ class PostgresPgvectorIntegrationTest {
                     'resume_audit_logs'
                   )
                 """, Integer.class);
+        Integer localeColumns = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND column_name = 'locale'
+                  AND table_name IN (
+                    'query_audit_logs',
+                    'knowledge_qa_audit_logs',
+                    'support_audit_logs',
+                    'report_audit_logs',
+                    'resume_audit_logs'
+                  )
+                """, Integer.class);
         String latestMigration = jdbcTemplate.queryForObject(
                 "SELECT version FROM flyway_schema_history WHERE success = TRUE ORDER BY installed_rank DESC LIMIT 1",
                 String.class);
@@ -131,7 +144,8 @@ class PostgresPgvectorIntegrationTest {
         assertThat(extension).isEqualTo("vector");
         assertThat(actorColumns).isEqualTo(5);
         assertThat(httpRequestColumns).isEqualTo(5);
-        assertThat(latestMigration).isEqualTo("28");
+        assertThat(localeColumns).isEqualTo(5);
+        assertThat(latestMigration).isEqualTo("29");
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT format_type(atttypid, atttypmod) "
                         + "FROM pg_attribute "
@@ -184,13 +198,65 @@ class PostgresPgvectorIntegrationTest {
                 """, Integer.class)).isEqualTo(10);
         assertThat(upgradeJdbcTemplate.queryForObject(
                 "SELECT version FROM flyway_schema_history WHERE success = TRUE ORDER BY installed_rank DESC LIMIT 1",
-                String.class)).isEqualTo("28");
+                String.class)).isEqualTo("29");
+        assertThat(upgradeJdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND column_name = 'locale'
+                  AND table_name IN (
+                    'query_audit_logs',
+                    'knowledge_qa_audit_logs',
+                    'support_audit_logs',
+                    'report_audit_logs',
+                    'resume_audit_logs'
+                  )
+                """, Integer.class)).isEqualTo(5);
         assertThat(upgradeJdbcTemplate.queryForObject(
                 "SELECT format_type(atttypid, atttypmod) "
                         + "FROM pg_attribute "
                         + "WHERE attrelid = 'knowledge_chunk_embeddings'::regclass "
                         + "AND attname = 'embedding'",
                 String.class)).isEqualTo("vector");
+    }
+
+    @Test
+    void upgradesV221SchemaToV230WithoutLosingExistingAuditRows() {
+        JdbcTemplate adminJdbcTemplate = new JdbcTemplate(new DriverManagerDataSource(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword()));
+        adminJdbcTemplate.execute("CREATE DATABASE business_copilot_v221_upgrade_test");
+
+        String upgradeJdbcUrl = "jdbc:postgresql://" + POSTGRES.getHost() + ":"
+                + POSTGRES.getFirstMappedPort() + "/business_copilot_v221_upgrade_test";
+        DriverManagerDataSource upgradeDataSource = new DriverManagerDataSource(
+                upgradeJdbcUrl, POSTGRES.getUsername(), POSTGRES.getPassword());
+        Flyway.configure().dataSource(upgradeDataSource).target("28").load().migrate();
+        JdbcTemplate upgradeJdbcTemplate = new JdbcTemplate(upgradeDataSource);
+        Long auditId = upgradeJdbcTemplate.queryForObject(
+                "INSERT INTO query_audit_logs DEFAULT VALUES RETURNING id", Long.class);
+
+        Flyway.configure().dataSource(upgradeDataSource).load().migrate();
+
+        assertThat(upgradeJdbcTemplate.queryForObject(
+                "SELECT version FROM flyway_schema_history WHERE success = TRUE "
+                        + "ORDER BY installed_rank DESC LIMIT 1",
+                String.class)).isEqualTo("29");
+        assertThat(upgradeJdbcTemplate.queryForObject(
+                "SELECT locale FROM query_audit_logs WHERE id = ?",
+                String.class, auditId)).isEqualTo("zh-CN");
+        assertThat(upgradeJdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND column_name = 'locale'
+                  AND table_name IN (
+                    'query_audit_logs',
+                    'knowledge_qa_audit_logs',
+                    'support_audit_logs',
+                    'report_audit_logs',
+                    'resume_audit_logs'
+                  )
+                """, Integer.class)).isEqualTo(5);
     }
 
     @Test
@@ -339,6 +405,12 @@ class PostgresPgvectorIntegrationTest {
 
         repository.upsert(scenario);
         repository.upsert(scenario);
+        assertThat(repository.findEnabled(null))
+                .extracting(DemoScenario::scenarioId)
+                .contains(scenario.scenarioId());
+        assertThat(repository.findEnabled(DemoModule.KNOWLEDGE))
+                .extracting(DemoScenario::scenarioId)
+                .contains(scenario.scenarioId());
         repository.upsertSampleResult(
                 scenario.scenarioId(), 1, "{\"notice\":\"stale\"}", Instant.now(), "b".repeat(64));
 

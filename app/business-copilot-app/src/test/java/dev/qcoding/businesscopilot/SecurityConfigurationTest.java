@@ -6,7 +6,6 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -14,7 +13,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.PathVariable;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -24,6 +22,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
 @WebMvcTest(controllers = HomeController.class)
 @Import({
@@ -42,34 +41,25 @@ class SecurityConfigurationTest {
     private MockMvc mockMvc;
 
     @Test
-    void loginPageHidesFormUntilUserRequestsTheExperience() throws Exception {
-        String body = mockMvc.perform(get("/login"))
+    void loginRouteForwardsToPackagedSpa() throws Exception {
+        mockMvc.perform(get("/login"))
                 .andExpect(status().isOk())
-                .andReturn().getResponse().getContentAsString();
-
-        assertThat(body).contains("登录体验");
-        assertThat(loginFormTag(body)).contains("hidden");
+                .andExpect(view().name("forward:/index.html"));
     }
 
     @Test
-    void loginFailureExpandsTheFormForImmediateCorrection() throws Exception {
-        String body = mockMvc.perform(get("/login?error"))
+    void loginFailureQueryStillForwardsToSpa() throws Exception {
+        mockMvc.perform(get("/login?error"))
                 .andExpect(status().isOk())
-                .andReturn().getResponse().getContentAsString();
-
-        assertThat(loginFormTag(body)).doesNotContain("hidden");
-        assertThat(body).contains("用户名或密码错误");
+                .andExpect(view().name("forward:/index.html"));
     }
 
     @Test
-    void authenticatedBrandLinksBackToDefaultDataWorkbench() throws Exception {
-        String body = mockMvc.perform(get("/")
+    void authenticatedUserCanOpenSpaEntry() throws Exception {
+        mockMvc.perform(get("/")
                         .with(user("operator").roles("OPERATOR")))
                 .andExpect(status().isOk())
-                .andReturn().getResponse().getContentAsString();
-
-        assertThat(body).contains("class=\"brand brand-home-link\"");
-        assertThat(body).contains("href=\"/#data-copilot\"");
+                .andExpect(view().name("forward:/index.html"));
     }
 
     @Test
@@ -133,24 +123,10 @@ class SecurityConfigurationTest {
     }
 
     @Test
-    void browserCanReturnRenderedCsrfValueInHeader() throws Exception {
-        MvcResult home = mockMvc.perform(get("/")
-                        .with(user("operator").roles("OPERATOR")))
-                .andExpect(status().isOk())
-                .andReturn();
-        String body = home.getResponse().getContentAsString();
-        java.util.regex.Matcher tokenMatcher = java.util.regex.Pattern
-                .compile("<meta name=\"_csrf\" content=\"([^\"]+)\"")
-                .matcher(body);
-        org.assertj.core.api.Assertions.assertThat(tokenMatcher.find()).isTrue();
-        String csrfToken = tokenMatcher.group(1);
-        org.springframework.mock.web.MockHttpSession session =
-                (org.springframework.mock.web.MockHttpSession) home.getRequest().getSession(false);
-
+    void browserCanSubmitCsrfHeader() throws Exception {
         mockMvc.perform(post("/api/test/actions")
                         .with(user("operator").roles("OPERATOR"))
-                        .session(session)
-                        .header("X-CSRF-TOKEN", csrfToken)
+                        .with(csrf().asHeader())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isOk())
@@ -353,14 +329,6 @@ class SecurityConfigurationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isOk());
-    }
-
-    private String loginFormTag(String body) {
-        java.util.regex.Matcher matcher = java.util.regex.Pattern
-                .compile("<aside[^>]*id=\"login-form\"[^>]*>")
-                .matcher(body);
-        assertThat(matcher.find()).isTrue();
-        return matcher.group();
     }
 
     @RestController

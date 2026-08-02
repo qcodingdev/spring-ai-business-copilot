@@ -3,6 +3,8 @@ package dev.qcoding.businesscopilot.knowledgecopilot;
 import dev.qcoding.businesscopilot.guardrails.SensitiveTextMasker;
 import dev.qcoding.businesscopilot.commonsecurity.CurrentActorProvider;
 import dev.qcoding.businesscopilot.commonsecurity.ExternalSecretResolver;
+import dev.qcoding.businesscopilot.commonsecurity.ExternalEndpointPolicy;
+import dev.qcoding.businesscopilot.commonsecurity.ExternalHttpClientFactory;
 import dev.qcoding.businesscopilot.documentprocessing.DocumentTextExtractor;
 import dev.qcoding.businesscopilot.knowledgecopilot.answer.KnowledgeAnswerService;
 import dev.qcoding.businesscopilot.knowledgecopilot.answer.KnowledgeQuestionService;
@@ -211,8 +213,9 @@ public class KnowledgeCopilotAutoConfiguration {
 
     @Bean
     public CloudKnowledgeSourceAdapter cloudKnowledgeSourceAdapter(
-            ExternalSecretResolver secretResolver) {
-        return new CloudKnowledgeSourceAdapter(RestClient.builder(), secretResolver);
+            ExternalSecretResolver secretResolver,
+            ExternalHttpClientFactory clientFactory) {
+        return new CloudKnowledgeSourceAdapter(clientFactory, secretResolver);
     }
 
     @Bean
@@ -222,9 +225,11 @@ public class KnowledgeCopilotAutoConfiguration {
             DocumentUploadService uploadService,
             CurrentActorProvider actorProvider,
             ExternalSecretResolver secretResolver,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            ExternalEndpointPolicy endpointPolicy) {
         return new KnowledgeSourceSyncService(
-                jdbcTemplate, adapters, uploadService, actorProvider, secretResolver, objectMapper);
+                jdbcTemplate, adapters, uploadService, actorProvider, secretResolver,
+                objectMapper, endpointPolicy);
     }
 
     @Bean

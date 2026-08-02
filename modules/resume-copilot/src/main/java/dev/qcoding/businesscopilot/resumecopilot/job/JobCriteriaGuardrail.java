@@ -2,6 +2,7 @@ package dev.qcoding.businesscopilot.resumecopilot.job;
 
 import dev.qcoding.businesscopilot.resumecopilot.ResumeCopilotProperties;
 import dev.qcoding.businesscopilot.resumecopilot.ResumeModels;
+import dev.qcoding.businesscopilot.commonweb.request.BusinessRequestContextHolder;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -35,7 +36,8 @@ public class JobCriteriaGuardrail {
                 if (!sanitizedJd.contains(criterion.sourceText().trim())) {
                     reasons.add("职位标准无法追溯到原始职位描述。");
                 }
-                if (!containsChinese(criterion.description())) {
+                if (!"en-US".equals(BusinessRequestContextHolder.currentLocale())
+                        && !containsChinese(criterion.description())) {
                     reasons.add("职位标准说明必须使用简体中文，技术专有名词除外。");
                 }
                 String text = (criterion.description() + " " + criterion.sourceText()).toLowerCase(Locale.ROOT);

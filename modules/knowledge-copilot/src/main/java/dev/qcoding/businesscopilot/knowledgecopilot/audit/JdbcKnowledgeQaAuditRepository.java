@@ -25,8 +25,8 @@ public class JdbcKnowledgeQaAuditRepository implements KnowledgeQaAuditRepositor
                 latency_ms, creator_actor_id, action_actor_id, provider_name,
                 provider_request_id, prompt_name, prompt_version, prompt_hash,
                 policy_version, violation_codes, input_tokens, output_tokens,
-                finish_reason, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                finish_reason, locale, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             RETURNING id
             """;
 
@@ -105,6 +105,7 @@ public class JdbcKnowledgeQaAuditRepository implements KnowledgeQaAuditRepositor
                 log.inputTokens(),
                 log.outputTokens(),
                 log.finishReason(),
+                BusinessRequestContextHolder.currentLocale(),
                 now);
     }
 

@@ -64,7 +64,9 @@ public class SecurityConfiguration {
         CsrfTokenRequestAttributeHandler csrfRequestHandler = new CsrfTokenRequestAttributeHandler();
 
         http.authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/login", "/error", "/favicon.ico", "/css/**", "/js/**", "/images/**").permitAll()
+                        .requestMatchers("/login", "/index.html", "/error", "/favicon.ico",
+                                "/assets/**", "/css/**", "/js/**", "/images/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/session").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         .requestMatchers("/admin", "/admin/**", "/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/actuator/metrics/**").hasAnyRole("ADMIN", "REVIEWER")

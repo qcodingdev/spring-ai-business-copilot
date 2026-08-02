@@ -1,0 +1,16 @@
+export default {
+  title: 'System health and experience management',
+  description: 'Review core services, models, and enterprise connections, and maintain the public experience area.',
+  diagnostics: 'System health',
+  demoData: 'Experience data management',
+  initialize: 'Prepare experience data',
+  reset: 'Restore experience area',
+  adminOnly: 'This page is available to administrators only.',
+  connections: 'Enterprise connection security status',
+  httpsAllowlist: 'HTTPS and host allowlist',
+  dnsRedirect: 'DNS/IP and redirect revalidation',
+  secretReferences: 'Environment-only secret references',
+  resourceLimits: 'Time, response size, page and JSON depth limits',
+  prepareReset: 'Preview restore impact',
+  resetConfirmation: 'Enter the confirmation text below to continue',
+}

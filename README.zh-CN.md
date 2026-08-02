@@ -23,11 +23,15 @@
   <a href="https://gitee.com/qcodingdev/spring-ai-business-copilot">Gitee 镜像</a>
 </p>
 
-![Spring AI Business Copilot 业务工作台](assets/workbench-demo.gif)
+![Spring AI Business Copilot 2.3 业务工作台](assets/workbench-v2.3-desktop-chromium.png)
 
 多数 AI 示例在模型返回一段文字后就结束了。真实业务还必须继续完成证据核验、确定性规则、人工确认、状态流转、审计和故障诊断。
 
 Spring AI Business Copilot 把这条完整路径放进一个可自行部署的参考应用。它不是另一个聊天 UI、Agent 框架或低代码平台：先运行并检查五个具体业务闭环，再选择与自己业务最接近的模块进行改造。
+
+当前源码开发线为 `2.3.0-SNAPSHOT`：在保持 2.2.1 API、安全和部署模型兼容的
+前提下，增加同源 Vue 3 工作台、确定性的 `zh-CN`/`en-US` 双语能力和失败关闭的
+企业连接控制。
 
 ## 五个业务闭环
 
@@ -109,17 +113,14 @@ Chat 和 Embedding 有意分开配置，因为很多 OpenAI 兼容 Chat 服务�
 
 选择范例只会填充表单，用户检查并确认后才会调用模型。`public-demo` 的供应商或额度不可用时，页面可以单独展示明确标记为 `PREGENERATED` 的示例结果，不会把它伪装成实时模型输出。
 
-## 直接看运行结果
+## 查看工作台
 
-| 已确认的 Text-to-SQL 结果 | 带引用知识答案 |
+| 桌面端 | 移动端 |
 |---|---|
-| ![Data Copilot 查询结果](assets/data-copilot-result.png) | ![Knowledge Copilot 引用答案](assets/knowledge-copilot-result.png) |
-| 有知识依据的客服草稿 | 基于来源证据的报告草稿 |
-| ![Support Copilot 证据与草稿](assets/support-copilot-result.png) | ![Report Copilot 证据化草稿](assets/report-copilot-result.png) |
+| ![2.3 桌面工作台](assets/workbench-v2.3-desktop-chromium.png) | ![2.3 移动工作台](assets/workbench-v2.3-mobile-chromium.png) |
 
-![HR Copilot 证据化评估](assets/resume-copilot-result.png)
-
-以上图片均从当前 Docker Compose 应用实测获取，使用的全部是虚构样例数据。
+以上 2.3 画面使用虚构操作员会话。相同浏览器测试同时检查桌面/移动布局、两种语言、
+五个主流程、键盘焦点以及严重/关键级无障碍问题。
 
 ## 总体架构
 
@@ -127,7 +128,7 @@ Chat 和 Embedding 有意分开配置，因为很多 OpenAI 兼容 Chat 服务�
 
 ```mermaid
 flowchart LR
-    UI["Thymeleaf + 原生 JS 工作台"] --> APP["business-copilot-app"]
+    UI["Vue 3 + TypeScript 工作台"] --> APP["business-copilot-app"]
     APP --> DATA["Data"] & KNOW["Knowledge"] & SUPPORT["Support"] & REPORT["Report"] & HR["HR"]
     KNOW & REPORT & HR --> DOC["document-processing"]
     DATA & KNOW & SUPPORT & REPORT & HR --> AI["ai-core"]
@@ -142,7 +143,7 @@ flowchart LR
 | 运行时 | Java 21、Spring Boot 4.1 | 单一可执行应用，各业务模块显式自动装配 |
 | AI | Spring AI 2.0、Jackson 3 | 集中 Prompt、结构化输出、超时、重试、并发隔离和熔断 |
 | 持久层 | Spring JDBC、Flyway | 显式 Repository、条件状态更新、迁移、批处理和 pgvector |
-| Web | Spring MVC、Thymeleaf、原生 JavaScript | 一个响应式业务工作台，不引入前端构建工具链 |
+| Web | Vue 3、TypeScript、Vite、Spring MVC | 打包进可执行 JAR 的同源双语 SPA |
 | 交付 | Docker Compose、GitHub Actions、CycloneDX | 可复现启动、固定评测门禁、集成测试和 SBOM |
 
 ### 仓库结构
@@ -153,7 +154,8 @@ flowchart LR
 | [`modules`](modules) | 五个归属清晰的业务 Copilot 模块 |
 | [`platform/ai-core`](platform/ai-core) | 模型调用、向量、可观测性和 Prompt 模板 |
 | [`platform/ai-guardrails`](platform/ai-guardrails) | SQL、隐私、证据和业务策略的确定性校验 |
-| [`platform/common-security`](platform/common-security) | actor、角色、对象策略和确认 token 基础能力 |
+| [`platform/common-security`](platform/common-security) | actor、角色、确认 token、密钥引用和失败关闭外部网络控制 |
+| [`frontend`](frontend) | Vue 工作台、按域拆分翻译、组件测试和 Playwright 流程 |
 | [`platform/document-processing`](platform/document-processing) | 受限 TXT、Markdown、PDF、DOCX、XLSX 和 HTML 提取 |
 | [`examples`](examples) | Docker Compose 与环境变量参考 |
 
@@ -162,14 +164,17 @@ flowchart LR
 - 共享环境或类生产部署应设置 `SPRING_PROFILES_ACTIVE=prod`。平台数据库凭据、角色密码或独立只读业务数据源缺失时，应用会启动失败，不会回退到演示值。
 - 自定义 Data Copilot 查询目标必须独立创建最小权限 `SELECT` 账号，并配置显式 schema/表白名单和完整限定列白名单。查询目标支持 PostgreSQL 和 MySQL；平台状态仍保存在 PostgreSQL + pgvector。
 - SharePoint、Confluence、Notion、S3/MinIO、Jira、Zendesk、ServiceNow、飞书、企微和 ATS 适配器需要部署方凭据与真实沙箱验收。代码中存在适配器不等于已经获得厂商认证或通过生产验证。
+- REST 企业适配器必须配置显式 HTTPS 域名白名单，并且只引用环境变量密钥；详见[外部连接安全边界](docs/external-connection-security.md)。
 - 本项目是参考应用，不是开箱即用的生产安全方案。部署方仍需评审身份认证、网络隔离、密钥、保留策略、隐私、模型供应商条款和地域合规，详见 [SECURITY.md](SECURITY.md)。
 
 ## 本地开发与验证
 
-本地开发需要 Java 21、PostgreSQL 16 和 pgvector：
+本地开发需要 Java 21、Node 22/npm 10、PostgreSQL 16 和 pgvector。Maven 会安装
+固定 Node/npm 版本，保证 JAR 构建可复现：
 
 ```bash
 ./scripts/install-jdk21.sh       # 可选：项目内 JDK
+./scripts/check-frontend-syntax.sh
 ./mvnw -q -DskipTests install
 ./mvnw -pl app/business-copilot-app spring-boot:run
 ```

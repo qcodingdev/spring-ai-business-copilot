@@ -3,6 +3,7 @@ package dev.qcoding.businesscopilot.supportcopilot.integration;
 import dev.qcoding.businesscopilot.commonsecurity.ConfirmationTokenService;
 import dev.qcoding.businesscopilot.commonsecurity.CurrentActorProvider;
 import dev.qcoding.businesscopilot.commonsecurity.ExternalSecretResolver;
+import dev.qcoding.businesscopilot.commonsecurity.ExternalEndpointPolicy;
 import dev.qcoding.businesscopilot.commonweb.api.BusinessException;
 import dev.qcoding.businesscopilot.commonweb.api.ErrorCode;
 import dev.qcoding.businesscopilot.guardrails.SensitiveTextMasker;
@@ -37,6 +38,7 @@ public class SupportEnterpriseService {
     private final ExternalSecretResolver secretResolver;
     private final SensitiveTextMasker sensitiveTextMasker;
     private final ObjectMapper objectMapper;
+    private final ExternalEndpointPolicy endpointPolicy;
 
     public SupportEnterpriseService(
             JdbcTemplate jdbcTemplate,
@@ -46,7 +48,8 @@ public class SupportEnterpriseService {
             ConfirmationTokenService tokenService,
             ExternalSecretResolver secretResolver,
             SensitiveTextMasker sensitiveTextMasker,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            ExternalEndpointPolicy endpointPolicy) {
         this.jdbcTemplate = jdbcTemplate;
         this.ticketRepository = ticketRepository;
         this.adapters = List.copyOf(adapters);
@@ -55,10 +58,12 @@ public class SupportEnterpriseService {
         this.secretResolver = secretResolver;
         this.sensitiveTextMasker = sensitiveTextMasker;
         this.objectMapper = objectMapper;
+        this.endpointPolicy = endpointPolicy;
     }
 
     public SupportExternalConnection save(ConnectionCommand command) {
         ExternalSecretResolver.validateRef(command.secretRef());
+        endpointPolicy.validateBaseUrl(command.baseUrl());
         String actorId = actorProvider.currentActor().actorId();
         return jdbcTemplate.queryForObject("""
                 INSERT INTO support_external_connections (

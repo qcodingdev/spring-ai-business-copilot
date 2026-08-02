@@ -1,0 +1,16 @@
+export default {
+  title: '系统运行与体验区管理',
+  description: '查看核心服务、模型和企业连接状态，并维护公开体验区。',
+  diagnostics: '系统运行状态',
+  demoData: '体验区数据管理',
+  initialize: '准备体验数据',
+  reset: '恢复体验区初始状态',
+  adminOnly: '此页面仅管理员可用。',
+  connections: '企业连接安全状态',
+  httpsAllowlist: 'HTTPS 与主机白名单',
+  dnsRedirect: 'DNS/IP 与重定向逐次校验',
+  secretReferences: '仅使用环境变量密钥引用',
+  resourceLimits: '时间、响应大小、分页与 JSON 深度限制',
+  prepareReset: '预览恢复影响',
+  resetConfirmation: '输入下方确认文字后继续',
+}

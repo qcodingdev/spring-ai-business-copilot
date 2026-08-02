@@ -76,7 +76,8 @@ class SupportEnterpriseServiceTest {
                 jdbcTemplate, repository, List.of(adapter),
                 () -> new CurrentActor("operator-1", Set.of(BusinessRole.OPERATOR)),
                 new ConfirmationTokenService(), mock(ExternalSecretResolver.class),
-                new SensitiveTextMasker(), new ObjectMapper());
+                new SensitiveTextMasker(), new ObjectMapper(),
+                mock(dev.qcoding.businesscopilot.commonsecurity.ExternalEndpointPolicy.class));
 
         SupportEnterpriseService.ImportResult result = service.importRecent(5L, 20);
 

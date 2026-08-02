@@ -79,6 +79,7 @@ class JdbcQueryAuditRepositoryTest {
                 eq(null),
                 eq(null),
                 eq(null),
+                eq("zh-CN"),
                 any(java.sql.Timestamp.class));
     }
 

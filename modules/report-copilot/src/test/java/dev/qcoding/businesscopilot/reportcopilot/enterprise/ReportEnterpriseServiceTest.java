@@ -42,7 +42,9 @@ class ReportEnterpriseServiceTest {
         when(generationService.generate(any(ReportGenerateRequest.class))).thenReturn(draft);
         ReportEnterpriseService service = new ReportEnterpriseService(
                 jdbcTemplate, generationService, mock(), mock(ExternalSecretResolver.class),
-                new ObjectMapper(), org.springframework.web.client.RestClient.builder());
+                new ObjectMapper(),
+                mock(dev.qcoding.businesscopilot.commonsecurity.ExternalEndpointPolicy.class),
+                mock(dev.qcoding.businesscopilot.commonsecurity.ExternalHttpClientFactory.class));
 
         ReportDraftResponse result = service.generate(new ReportEnterpriseService.GenerateCommand(
                 ReportType.BUSINESS_WEEKLY, draft.period(), "客服经营周报",
@@ -70,7 +72,9 @@ class ReportEnterpriseServiceTest {
         when(generationService.generate(any(ReportGenerateRequest.class))).thenReturn(draft);
         ReportEnterpriseService service = new ReportEnterpriseService(
                 jdbcTemplate, generationService, mock(), mock(ExternalSecretResolver.class),
-                new ObjectMapper(), org.springframework.web.client.RestClient.builder());
+                new ObjectMapper(),
+                mock(dev.qcoding.businesscopilot.commonsecurity.ExternalEndpointPolicy.class),
+                mock(dev.qcoding.businesscopilot.commonsecurity.ExternalHttpClientFactory.class));
 
         service.generate(new ReportEnterpriseService.GenerateCommand(
                 ReportType.BUSINESS_WEEKLY, draft.period(), "经营简报",

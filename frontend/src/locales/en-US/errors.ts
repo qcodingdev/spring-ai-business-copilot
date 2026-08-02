@@ -1,0 +1,12 @@
+export default {
+  generic: 'The request did not complete. Retry later and include the request ID when reporting it.',
+  SEC_0401: 'Please sign in or sign in again.',
+  SEC_0403: 'Your account is not allowed to perform this operation.',
+  BIZ_0001: 'Validation failed. Check the required fields.',
+  BIZ_0002: 'The target state changed. Refresh before trying again.',
+  BIZ_0003: 'The requested business object does not exist or was deleted.',
+  confirmationExpired: 'The confirmation token expired. Preview the operation again.',
+  confirmationReplayed: 'The confirmation token has already been used and cannot be replayed.',
+  networkTimeout: 'The network request timed out. External writes are not retried automatically.',
+  aiDisabled: 'No AI model is enabled in this environment.',
+}

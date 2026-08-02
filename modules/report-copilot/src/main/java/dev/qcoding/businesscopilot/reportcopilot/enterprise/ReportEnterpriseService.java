@@ -2,6 +2,8 @@ package dev.qcoding.businesscopilot.reportcopilot.enterprise;
 
 import dev.qcoding.businesscopilot.commonsecurity.CurrentActorProvider;
 import dev.qcoding.businesscopilot.commonsecurity.ExternalSecretResolver;
+import dev.qcoding.businesscopilot.commonsecurity.ExternalEndpointPolicy;
+import dev.qcoding.businesscopilot.commonsecurity.ExternalHttpClientFactory;
 import dev.qcoding.businesscopilot.commonweb.api.BusinessException;
 import dev.qcoding.businesscopilot.commonweb.api.ErrorCode;
 import dev.qcoding.businesscopilot.commonweb.request.BusinessRequestContext;
@@ -41,7 +43,8 @@ public class ReportEnterpriseService {
     private final CurrentActorProvider actorProvider;
     private final ExternalSecretResolver secretResolver;
     private final ObjectMapper objectMapper;
-    private final RestClient.Builder restClientBuilder;
+    private final ExternalEndpointPolicy endpointPolicy;
+    private final ExternalHttpClientFactory clientFactory;
 
     public ReportEnterpriseService(
             JdbcTemplate jdbcTemplate,
@@ -49,19 +52,22 @@ public class ReportEnterpriseService {
             CurrentActorProvider actorProvider,
             ExternalSecretResolver secretResolver,
             ObjectMapper objectMapper,
-            RestClient.Builder restClientBuilder) {
+            ExternalEndpointPolicy endpointPolicy,
+            ExternalHttpClientFactory clientFactory) {
         this.jdbcTemplate = jdbcTemplate;
         this.generationService = generationService;
         this.actorProvider = actorProvider;
         this.secretResolver = secretResolver;
         this.objectMapper = objectMapper;
-        this.restClientBuilder = restClientBuilder;
+        this.endpointPolicy = endpointPolicy;
+        this.clientFactory = clientFactory;
     }
 
     public Connection saveConnection(ConnectionCommand command) {
         if (command.provider() == Provider.JIRA) {
             ExternalSecretResolver.validateRef(command.secretRef());
         }
+        endpointPolicy.validateBaseUrl(command.baseUrl());
         String actorId = actorProvider.currentActor().actorId();
         return jdbcTemplate.queryForObject("""
                 INSERT INTO report_external_connections (
@@ -208,7 +214,9 @@ public class ReportEnterpriseService {
 
     private List<RawReportSource> collect(SourceSelection selection, ReportPeriod period) {
         List<RawReportSource> sources = new ArrayList<>();
+        long externalStarted = System.nanoTime();
         for (Long connectionId : selection.connectionIds()) {
+            clientFactory.ensureWithinTaskTimeout(externalStarted);
             Connection connection = requireConnection(connectionId);
             if (!connection.enabled()) continue;
             sources.addAll(loadExternal(connection, period));
@@ -230,11 +238,13 @@ public class ReportEnterpriseService {
         if (connection.provider() == Provider.JIRA) {
             String secret = secretResolver.resolve(connection.secretRef());
             String auth = secret.contains(" ") ? secret : "Bearer " + secret;
-            RestClient client = restClientBuilder.clone()
+            RestClient client = clientFactory.builder(connection.baseUrl())
                     .defaultHeader("Authorization", auth).build();
-            JsonNode response = client.get().uri(trimSlash(connection.baseUrl())
+            JsonNode response = clientFactory.validatePayload(client.get()
+                    .uri(trimSlash(connection.baseUrl())
                     + "/rest/api/3/search?jql=updated%20%3E%3D%20"
-                    + period.periodStart() + "&maxResults=100").retrieve().body(JsonNode.class);
+                    + period.periodStart() + "&maxResults=100")
+                    .retrieve().body(JsonNode.class));
             List<RawReportSource> sources = new ArrayList<>();
             for (JsonNode issue : iterable(response == null ? null : response.path("issues"))) {
                 JsonNode fields = issue.path("fields");
@@ -248,10 +258,11 @@ public class ReportEnterpriseService {
             return sources;
         }
         if (connection.provider() == Provider.MEETING_NOTES) {
-            JsonNode response = restClientBuilder.build().get()
+            JsonNode response = clientFactory.validatePayload(
+                    clientFactory.builder(connection.baseUrl()).build().get()
                     .uri(trimSlash(connection.baseUrl()) + "/notes?from="
                             + period.periodStart() + "&to=" + period.periodEnd())
-                    .retrieve().body(JsonNode.class);
+                    .retrieve().body(JsonNode.class));
             List<RawReportSource> sources = new ArrayList<>();
             for (JsonNode note : iterable(response == null ? null : response.path("items"))) {
                 sources.add(raw(ReportSourceType.MEETING_NOTE,

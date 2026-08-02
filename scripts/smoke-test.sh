@@ -28,10 +28,11 @@ if [[ "$healthy" != "true" ]]; then
 fi
 
 curl --fail --silent --show-error --cookie-jar "$cookie_file" "$base_url/login" >"$login_page"
-
-csrf_token="$(sed -n 's/.*name="_csrf"[^>]*value="\([^"]*\)".*/\1/p' "$login_page" | head -n 1)"
+curl --fail --silent --show-error --cookie "$cookie_file" --cookie-jar "$cookie_file" \
+  "$base_url/api/session" >/dev/null
+csrf_token="$(awk '$6 == "XSRF-TOKEN" { token = $7 } END { print token }' "$cookie_file")"
 if [[ -z "$csrf_token" ]]; then
-  echo "Smoke test failed: login CSRF token was not rendered." >&2
+  echo "Smoke test failed: anonymous session did not issue a CSRF cookie." >&2
   exit 1
 fi
 
@@ -50,6 +51,8 @@ if [[ "$login_status" != "302" ]]; then
   exit 1
 fi
 
+curl --fail --silent --show-error --cookie "$cookie_file" --cookie-jar "$cookie_file" \
+  "$base_url/api/session" >/dev/null
 curl --fail --silent --show-error --cookie "$cookie_file" "$base_url/" >/dev/null
 curl --fail --silent --show-error --cookie "$cookie_file" \
   "$base_url/api/data-copilot/schema" >/dev/null

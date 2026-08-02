@@ -25,8 +25,8 @@ public class JdbcQueryAuditRepository implements QueryAuditRepository {
                 execution_status, row_count, error_message,
                 model_name, latency_ms, creator_actor_id, action_actor_id,
                 provider_name, provider_request_id, prompt_name, prompt_version, prompt_hash,
-                policy_version, violation_codes, input_tokens, output_tokens, finish_reason, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                policy_version, violation_codes, input_tokens, output_tokens, finish_reason, locale, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             RETURNING id
             """;
 
@@ -113,6 +113,7 @@ public class JdbcQueryAuditRepository implements QueryAuditRepository {
                 event.inputTokens(),
                 event.outputTokens(),
                 event.finishReason(),
+                BusinessRequestContextHolder.currentLocale(),
                 now);
     }
 

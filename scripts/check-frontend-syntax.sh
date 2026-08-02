@@ -2,15 +2,14 @@
 set -Eeuo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-files=("$repo_root"/app/business-copilot-app/src/main/resources/static/js/*.js)
+frontend_dir="$repo_root/frontend"
 
-if [[ ${#files[@]} -eq 0 ]]; then
-  echo "Frontend syntax check failed: no JavaScript files were found." >&2
+if [[ ! -f "$frontend_dir/package-lock.json" ]]; then
+  echo "Frontend check failed: package-lock.json is missing." >&2
   exit 1
 fi
 
-for file in "${files[@]}"; do
-  node --check "$file"
-done
+npm --prefix "$frontend_dir" ci --no-audit --no-fund
+npm --prefix "$frontend_dir" run check
 
-echo "Frontend syntax check passed for ${#files[@]} JavaScript files."
+echo "Vue frontend type, lint, unit, i18n and production build checks passed."

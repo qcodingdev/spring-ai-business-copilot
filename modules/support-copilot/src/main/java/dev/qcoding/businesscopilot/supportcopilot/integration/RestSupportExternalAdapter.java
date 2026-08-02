@@ -1,6 +1,7 @@
 package dev.qcoding.businesscopilot.supportcopilot.integration;
 
 import dev.qcoding.businesscopilot.commonsecurity.ExternalSecretResolver;
+import dev.qcoding.businesscopilot.commonsecurity.ExternalHttpClientFactory;
 import org.springframework.http.MediaType;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
@@ -14,11 +15,12 @@ import java.util.Map;
 /** Jira Service Management、Zendesk、ServiceNow、飞书和企微的 REST 适配器。 */
 public class RestSupportExternalAdapter implements SupportExternalAdapter {
 
-    private final RestClient.Builder builder;
+    private final ExternalHttpClientFactory clientFactory;
     private final ExternalSecretResolver secretResolver;
 
-    public RestSupportExternalAdapter(RestClient.Builder builder, ExternalSecretResolver secretResolver) {
-        this.builder = builder;
+    public RestSupportExternalAdapter(ExternalHttpClientFactory clientFactory,
+                                      ExternalSecretResolver secretResolver) {
+        this.clientFactory = clientFactory;
         this.secretResolver = secretResolver;
     }
 
@@ -38,7 +40,8 @@ public class RestSupportExternalAdapter implements SupportExternalAdapter {
             case FEISHU -> base + "/open-apis/helpdesk/v1/tickets?page_size=" + limit;
             case WECOM -> base + "/cgi-bin/kf/tickets?limit=" + limit;
         };
-        JsonNode response = client.get().uri(url).retrieve().body(JsonNode.class);
+        JsonNode response = clientFactory.validatePayload(
+                client.get().uri(url).retrieve().body(JsonNode.class));
         JsonNode items = firstArray(response, "values", "tickets", "result", "items");
         List<ExternalTicket> tickets = new ArrayList<>();
         for (JsonNode item : iterable(items)) {
@@ -98,7 +101,8 @@ public class RestSupportExternalAdapter implements SupportExternalAdapter {
     private RestClient client(SupportExternalConnection connection) {
         String secret = secretResolver.resolve(connection.secretRef());
         String authorization = secret.contains(" ") ? secret : "Bearer " + secret;
-        return builder.clone().defaultHeader("Authorization", authorization).build();
+        return clientFactory.builder(connection.baseUrl())
+                .defaultHeader("Authorization", authorization).build();
     }
 
     private JsonNode firstArray(JsonNode root, String... names) {

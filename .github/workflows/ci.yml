@@ -27,12 +27,14 @@ jobs:
       - name: Verify Maven wrapper
         run: ./mvnw --version
 
-      - name: Set up Node.js for frontend syntax checks
+      - name: Set up Node.js for Vue frontend checks
         uses: actions/setup-node@v6
         with:
           node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
-      - name: Check frontend JavaScript syntax
+      - name: Check Vue TypeScript, lint, unit, i18n and production build
         run: ./scripts/check-frontend-syntax.sh
 
       - name: Check fixed evaluation dataset gates

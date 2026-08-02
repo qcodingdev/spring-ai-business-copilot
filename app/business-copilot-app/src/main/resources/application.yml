@@ -160,6 +160,18 @@ business-copilot:
       - avg
       - min
       - max
+  external-security:
+    # 企业外部连接失败关闭；生产环境必须显式配置逗号分隔域名或 *.example.com。
+    allowed-hosts: ${EXTERNAL_ALLOWED_HOSTS:}
+    allow-http: ${EXTERNAL_ALLOW_HTTP:false}
+    allow-private-addresses: ${EXTERNAL_ALLOW_PRIVATE_ADDRESSES:false}
+    connect-timeout: ${EXTERNAL_CONNECT_TIMEOUT:PT3S}
+    read-timeout: ${EXTERNAL_READ_TIMEOUT:PT10S}
+    task-timeout: ${EXTERNAL_TASK_TIMEOUT:PT30S}
+    max-response-bytes: ${EXTERNAL_MAX_RESPONSE_BYTES:2000000}
+    max-pages: ${EXTERNAL_MAX_PAGES:10}
+    max-items: ${EXTERNAL_MAX_ITEMS:1000}
+    max-json-depth: ${EXTERNAL_MAX_JSON_DEPTH:32}
   ai-core:
     model-name: ${SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL:deepseek-v4-flash}
     provider-name: ${BUSINESS_COPILOT_AI_PROVIDER:openai-compatible}

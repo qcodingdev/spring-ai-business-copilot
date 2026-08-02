@@ -339,8 +339,8 @@ public class ResumeRepository {
                         + "assessment_id, event_type, criteria_count, evidence_count, model_name, status, "
                         + "error_message, creator_actor_id, action_actor_id, provider_name, provider_request_id, "
                         + "prompt_name, prompt_version, prompt_hash, policy_version, violation_codes, input_tokens, "
-                        + "output_tokens, finish_reason, latency_ms) "
-                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        + "output_tokens, finish_reason, latency_ms, locale) "
+                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 UUID.randomUUID().toString(), BusinessRequestContextHolder.currentRequestId(),
                 BusinessRequestContextHolder.currentActorId(), jobId, submissionId, assessmentId,
                 eventType, criteriaCount, evidenceCount, modelName, status, errorMessage,
@@ -354,7 +354,7 @@ public class ResumeRepository {
                 aiMetadata != null ? aiMetadata.inputTokens() : null,
                 aiMetadata != null ? aiMetadata.outputTokens() : null,
                 aiMetadata != null ? aiMetadata.finishReason() : null,
-                latencyMs);
+                latencyMs, BusinessRequestContextHolder.currentLocale());
     }
 
     private String sha256(String value) {

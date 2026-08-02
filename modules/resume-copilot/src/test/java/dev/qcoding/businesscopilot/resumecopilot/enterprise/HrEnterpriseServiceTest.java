@@ -29,7 +29,9 @@ class HrEnterpriseServiceTest {
         service = new HrEnterpriseService(
                 jdbcTemplate, mock(ResumeAssessmentService.class), mock(),
                 mock(ExternalSecretResolver.class), new SensitiveTextMasker(),
-                new ObjectMapper(), org.springframework.web.client.RestClient.builder());
+                new ObjectMapper(),
+                mock(dev.qcoding.businesscopilot.commonsecurity.ExternalEndpointPolicy.class),
+                mock(dev.qcoding.businesscopilot.commonsecurity.ExternalHttpClientFactory.class));
     }
 
     @Test

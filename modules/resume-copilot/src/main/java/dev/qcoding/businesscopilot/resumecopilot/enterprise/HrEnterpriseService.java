@@ -2,6 +2,8 @@ package dev.qcoding.businesscopilot.resumecopilot.enterprise;
 
 import dev.qcoding.businesscopilot.commonsecurity.CurrentActorProvider;
 import dev.qcoding.businesscopilot.commonsecurity.ExternalSecretResolver;
+import dev.qcoding.businesscopilot.commonsecurity.ExternalEndpointPolicy;
+import dev.qcoding.businesscopilot.commonsecurity.ExternalHttpClientFactory;
 import dev.qcoding.businesscopilot.commonweb.api.BusinessException;
 import dev.qcoding.businesscopilot.commonweb.api.ErrorCode;
 import dev.qcoding.businesscopilot.guardrails.SensitiveTextMasker;
@@ -34,7 +36,8 @@ public class HrEnterpriseService {
     private final ExternalSecretResolver secretResolver;
     private final SensitiveTextMasker sensitiveTextMasker;
     private final ObjectMapper objectMapper;
-    private final RestClient.Builder restClientBuilder;
+    private final ExternalEndpointPolicy endpointPolicy;
+    private final ExternalHttpClientFactory clientFactory;
 
     public HrEnterpriseService(
             JdbcTemplate jdbcTemplate,
@@ -43,14 +46,16 @@ public class HrEnterpriseService {
             ExternalSecretResolver secretResolver,
             SensitiveTextMasker sensitiveTextMasker,
             ObjectMapper objectMapper,
-            RestClient.Builder restClientBuilder) {
+            ExternalEndpointPolicy endpointPolicy,
+            ExternalHttpClientFactory clientFactory) {
         this.jdbcTemplate = jdbcTemplate;
         this.assessmentService = assessmentService;
         this.actorProvider = actorProvider;
         this.secretResolver = secretResolver;
         this.sensitiveTextMasker = sensitiveTextMasker;
         this.objectMapper = objectMapper;
-        this.restClientBuilder = restClientBuilder;
+        this.endpointPolicy = endpointPolicy;
+        this.clientFactory = clientFactory;
     }
 
     public Consent saveConsent(ConsentCommand command) {
@@ -211,6 +216,7 @@ public class HrEnterpriseService {
 
     public AtsConnection saveAtsConnection(AtsConnectionCommand command) {
         ExternalSecretResolver.validateRef(command.secretRef());
+        endpointPolicy.validateBaseUrl(command.baseUrl());
         String actorId = actorProvider.currentActor().actorId();
         return jdbcTemplate.queryForObject("""
                 INSERT INTO hr_ats_connections (
@@ -239,10 +245,10 @@ public class HrEnterpriseService {
         Consent consent = requireValidConsent(consentReference, null);
         String secret = secretResolver.resolve(connection.secretRef());
         String auth = secret.contains(" ") ? secret : "Bearer " + secret;
-        RestClient client = restClientBuilder.clone()
+        RestClient client = clientFactory.builder(connection.baseUrl())
                 .defaultHeader("Authorization", auth).build();
-        JsonNode response = client.get().uri(atsUrl(connection, limit))
-                .retrieve().body(JsonNode.class);
+        JsonNode response = clientFactory.validatePayload(client.get()
+                .uri(atsUrl(connection, limit)).retrieve().body(JsonNode.class));
         JsonNode candidates = firstArray(response, "candidates", "results", "items", "data");
         int imported = 0;
         for (JsonNode candidate : iterable(candidates)) {

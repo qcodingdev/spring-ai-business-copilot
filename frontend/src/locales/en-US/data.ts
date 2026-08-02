@@ -1,0 +1,20 @@
+export default {
+  title: 'Controlled read-only data query',
+  description: 'Generate and inspect SQL, guardrails, and cost before a human confirms execution.',
+  tabs: { query: 'Ask and query', governance: 'Governance templates', records: 'Execution records', handoff: 'Result handoff' },
+  question: 'Business question',
+  questionPlaceholder: 'For example: What was paid order revenue by region last month?',
+  generate: 'Generate SQL candidate',
+  execute: 'Confirm query execution',
+  sqlPreview: 'SQL preview',
+  guardrail: 'Guardrail result',
+  cost: 'Query cost',
+  next: 'After completion, export the masked result or hand it off to Report Copilot.',
+  cardDescription: 'Query operational data in natural language, review SQL and safety boundaries, then confirm execution.',
+  cardTag: 'Read only · Masked delivery',
+  examples: {
+    first: 'Show paid order revenue and month-over-month change by region last month.',
+    second: 'List the top 10 customers by revenue this quarter and their contribution.',
+    third: 'Which products declined in sales for two consecutive weeks?',
+  },
+}

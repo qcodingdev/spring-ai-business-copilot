@@ -23,11 +23,15 @@
   <a href="https://gitee.com/qcodingdev/spring-ai-business-copilot">Gitee mirror</a>
 </p>
 
-![Spring AI Business Copilot workbench](assets/workbench-demo.gif)
+![Spring AI Business Copilot 2.3 workbench](assets/workbench-v2.3-desktop-chromium.png)
 
 Most AI examples stop when the model returns text. A real business workflow must continue through evidence checks, deterministic policy, human confirmation, state transitions, audit, and failure diagnosis.
 
 Spring AI Business Copilot packages that complete path into a self-hosted reference application. It is not another chat UI, agent framework, or low-code platform: run the application, inspect five concrete workflows, and adapt the module that matches your business.
+
+The current source line is `2.3.0-SNAPSHOT`: it adds a same-origin Vue 3
+workbench, deterministic `zh-CN`/`en-US` operation, and fail-closed enterprise
+connection controls while preserving the 2.2.1 API, security, and deployment model.
 
 ## Five business workflows
 
@@ -109,17 +113,15 @@ Chat and embedding endpoints are intentionally independent because many OpenAI-c
 
 Selecting an example only fills the form; a model call starts after the user reviews and confirms. If a provider or quota is unavailable in `public-demo`, the UI may offer a separately labeled `PREGENERATED` example—it is never presented as live model output.
 
-## See the outputs
+## See the workbench
 
-| Confirmed Text-to-SQL result | Cited knowledge answer |
+| Desktop | Mobile |
 |---|---|
-| ![Data Copilot query result](assets/data-copilot-result.png) | ![Knowledge Copilot cited answer](assets/knowledge-copilot-result.png) |
-| Knowledge-backed support draft | Source-grounded report draft |
-| ![Support Copilot evidence and draft](assets/support-copilot-result.png) | ![Report Copilot grounded draft](assets/report-copilot-result.png) |
+| ![2.3 desktop workbench](assets/workbench-v2.3-desktop-chromium.png) | ![2.3 mobile workbench](assets/workbench-v2.3-mobile-chromium.png) |
 
-![HR Copilot evidence-based assessment](assets/resume-copilot-result.png)
-
-These visuals were captured from the runnable Docker Compose application with fictional sample data.
+These 2.3 visuals use a fictional operator session. The same browser suite checks
+desktop/mobile layout, both locales, the five primary flows, keyboard focus, and
+serious/critical accessibility violations.
 
 ## Architecture
 
@@ -127,7 +129,7 @@ The repository is a modular monolith: one deployable Spring Boot application, fi
 
 ```mermaid
 flowchart LR
-    UI["Thymeleaf + vanilla JS workbench"] --> APP["business-copilot-app"]
+    UI["Vue 3 + TypeScript workbench"] --> APP["business-copilot-app"]
     APP --> DATA["Data"] & KNOW["Knowledge"] & SUPPORT["Support"] & REPORT["Report"] & HR["HR"]
     KNOW & REPORT & HR --> DOC["document-processing"]
     DATA & KNOW & SUPPORT & REPORT & HR --> AI["ai-core"]
@@ -142,7 +144,7 @@ flowchart LR
 | Runtime | Java 21, Spring Boot 4.1 | One executable application with explicit module auto-configuration |
 | AI | Spring AI 2.0, Jackson 3 | Central Prompt templates, typed output, timeouts, retry, concurrency isolation, and circuit breakers |
 | Persistence | Spring JDBC, Flyway | Explicit repositories, conditional state transitions, migrations, batches, and pgvector access |
-| Web | Spring MVC, Thymeleaf, vanilla JavaScript | One responsive operational workbench without a frontend build toolchain |
+| Web | Vue 3, TypeScript, Vite, Spring MVC | Bilingual same-origin SPA packaged into the executable JAR |
 | Delivery | Docker Compose, GitHub Actions, CycloneDX | Reproducible startup, fixed evaluation gates, integration tests, and SBOM generation |
 
 ### Repository map
@@ -153,7 +155,8 @@ flowchart LR
 | [`modules`](modules) | The five business-owned Copilot modules |
 | [`platform/ai-core`](platform/ai-core) | Model calls, embeddings, observability, and Prompt templates |
 | [`platform/ai-guardrails`](platform/ai-guardrails) | Deterministic SQL, privacy, evidence, and business-policy checks |
-| [`platform/common-security`](platform/common-security) | Actor, role, object-policy, and confirmation-token primitives |
+| [`platform/common-security`](platform/common-security) | Actor, role, confirmation-token, secret-reference, and fail-closed external-network controls |
+| [`frontend`](frontend) | Vue workbench, domain-split translations, component tests, and Playwright flows |
 | [`platform/document-processing`](platform/document-processing) | Bounded TXT, Markdown, PDF, DOCX, XLSX, and HTML extraction |
 | [`examples`](examples) | Docker Compose stack and the environment-variable reference |
 
@@ -162,14 +165,16 @@ flowchart LR
 - For a shared or production-like deployment, set `SPRING_PROFILES_ACTIVE=prod`. Missing platform database credentials, role passwords, or the dedicated read-only business datasource then fail startup instead of falling back to demo values.
 - A custom Data Copilot target requires an independently provisioned least-privilege `SELECT` account plus explicit schema/table and fully qualified column allowlists. PostgreSQL and MySQL are supported as query targets; platform state remains in PostgreSQL with pgvector.
 - External SharePoint, Confluence, Notion, S3/MinIO, Jira, Zendesk, ServiceNow, Feishu, WeCom, and ATS adapters require deployment-owned credentials and sandbox validation. Their presence in the codebase is not a claim of vendor-certified production verification.
+- REST enterprise adapters require explicit HTTPS host allowlists and environment-only secret references; see [external connection security](docs/external-connection-security.md).
 - This is a reference application, not turnkey production security. Review identity, network isolation, secrets, retention, privacy, model-provider terms, and regional compliance for your environment. See [SECURITY.md](SECURITY.md).
 
 ## Develop and verify
 
-Local development requires Java 21 and PostgreSQL 16 with pgvector:
+Local development requires Java 21, Node 22/npm 10, and PostgreSQL 16 with pgvector. Maven installs its own pinned Node/npm for reproducible JAR builds:
 
 ```bash
 ./scripts/install-jdk21.sh       # optional project-local JDK
+./scripts/check-frontend-syntax.sh
 ./mvnw -q -DskipTests install
 ./mvnw -pl app/business-copilot-app spring-boot:run
 ```

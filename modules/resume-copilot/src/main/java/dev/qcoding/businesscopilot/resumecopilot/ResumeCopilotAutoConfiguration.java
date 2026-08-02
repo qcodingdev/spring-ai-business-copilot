@@ -6,6 +6,8 @@ import dev.qcoding.businesscopilot.commonsecurity.ConfirmationTokenService;
 import dev.qcoding.businesscopilot.commonsecurity.CurrentActorProvider;
 import dev.qcoding.businesscopilot.commonsecurity.ObjectAccessPolicy;
 import dev.qcoding.businesscopilot.commonsecurity.ExternalSecretResolver;
+import dev.qcoding.businesscopilot.commonsecurity.ExternalEndpointPolicy;
+import dev.qcoding.businesscopilot.commonsecurity.ExternalHttpClientFactory;
 import dev.qcoding.businesscopilot.documentprocessing.DocumentTextExtractor;
 import dev.qcoding.businesscopilot.resumecopilot.assessment.ResumeAssessmentGuardrail;
 import dev.qcoding.businesscopilot.resumecopilot.assessment.ResumeAssessmentService;
@@ -116,10 +118,12 @@ public class ResumeCopilotAutoConfiguration {
             CurrentActorProvider actorProvider,
             ExternalSecretResolver secretResolver,
             SensitiveTextMasker sensitiveTextMasker,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            ExternalEndpointPolicy endpointPolicy,
+            ExternalHttpClientFactory clientFactory) {
         return new HrEnterpriseService(
                 jdbcTemplate, assessmentService, actorProvider, secretResolver,
-                sensitiveTextMasker, objectMapper, RestClient.builder());
+                sensitiveTextMasker, objectMapper, endpointPolicy, clientFactory);
     }
 
     @Bean @ConditionalOnMissingBean(HrEnterpriseController.class)

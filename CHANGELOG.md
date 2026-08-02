@@ -6,6 +6,30 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- Replaced the Thymeleaf/vanilla-JavaScript workbench with a same-origin Vue 3,
+  TypeScript, and Vite SPA covering login, Admin, and all five business workflows.
+- Added deterministic `zh-CN` default and persistent `en-US` switching, including
+  `document.lang`, `Accept-Language`, AI output-language prompts, and low-cardinality
+  audit locale.
+- Added controlled enterprise UI surfaces for Data governance, Knowledge sources,
+  Support connections, Report delivery, and HR collaboration.
+
+### Changed
+
+- Pinned Node 22/npm 10 in the Maven build and packaged the production frontend in
+  the same executable JAR and non-Node runtime image.
+- Updated CI with TypeScript, lint, unit, i18n, production-build, desktop/mobile
+  Playwright, accessibility, and bundle checks.
+
+### Security
+
+- Added fail-closed HTTPS host allowlists, DNS/IP SSRF checks, disabled redirects,
+  same-origin revalidation, connection/read/task timeouts, byte/page/item/JSON
+  limits, environment-only secret references, and UI secret redaction for REST
+  enterprise connections.
+
 ## [2.2.1] - 2026-07-29
 
 ### Changed

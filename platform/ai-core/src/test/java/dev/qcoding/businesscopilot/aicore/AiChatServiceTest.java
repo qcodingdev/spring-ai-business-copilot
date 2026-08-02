@@ -84,7 +84,8 @@ class AiChatServiceTest {
 
         when(builder.build()).thenReturn(chatClient);
         when(chatClient.prompt()).thenReturn(requestSpec);
-        when(requestSpec.user("return a structured response")).thenReturn(requestSpec);
+        when(requestSpec.user(org.mockito.ArgumentMatchers.contains("return a structured response")))
+                .thenReturn(requestSpec);
         when(requestSpec.call()).thenReturn(responseSpec);
         when(entityParamSpec.validateSchema()).thenReturn(entityParamSpec);
         when(responseSpec.entity(
@@ -102,6 +103,7 @@ class AiChatServiceTest {
 
         assertThat(service.generateJson("return a structured response", StructuredOutput.class)).isEqualTo(expected);
         verify(entityParamSpec).validateSchema();
+        verify(requestSpec).user(org.mockito.ArgumentMatchers.contains("输出语言要求"));
     }
 
     private record StructuredOutput(String status) {

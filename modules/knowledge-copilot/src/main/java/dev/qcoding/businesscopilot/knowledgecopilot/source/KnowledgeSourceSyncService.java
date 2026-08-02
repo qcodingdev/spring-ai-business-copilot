@@ -2,6 +2,7 @@ package dev.qcoding.businesscopilot.knowledgecopilot.source;
 
 import dev.qcoding.businesscopilot.commonsecurity.CurrentActorProvider;
 import dev.qcoding.businesscopilot.commonsecurity.ExternalSecretResolver;
+import dev.qcoding.businesscopilot.commonsecurity.ExternalEndpointPolicy;
 import dev.qcoding.businesscopilot.commonweb.api.BusinessException;
 import dev.qcoding.businesscopilot.commonweb.api.ErrorCode;
 import dev.qcoding.businesscopilot.knowledgecopilot.document.DocumentUploadService;
@@ -34,6 +35,7 @@ public class KnowledgeSourceSyncService {
     private final CurrentActorProvider actorProvider;
     private final ExternalSecretResolver secretResolver;
     private final ObjectMapper objectMapper;
+    private final ExternalEndpointPolicy endpointPolicy;
 
     public KnowledgeSourceSyncService(
             JdbcTemplate jdbcTemplate,
@@ -41,18 +43,21 @@ public class KnowledgeSourceSyncService {
             DocumentUploadService uploadService,
             CurrentActorProvider actorProvider,
             ExternalSecretResolver secretResolver,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            ExternalEndpointPolicy endpointPolicy) {
         this.jdbcTemplate = jdbcTemplate;
         this.adapters = List.copyOf(adapters);
         this.uploadService = uploadService;
         this.actorProvider = actorProvider;
         this.secretResolver = secretResolver;
         this.objectMapper = objectMapper;
+        this.endpointPolicy = endpointPolicy;
     }
 
     public KnowledgeSourceConnection save(ConnectionCommand command) {
         if (command.provider() != KnowledgeSourceProvider.MOUNTED_DRIVE) {
             ExternalSecretResolver.validateRef(command.secretRef());
+            endpointPolicy.validateBaseUrl(command.baseUrl());
         }
         String actorId = actorProvider.currentActor().actorId();
         return jdbcTemplate.queryForObject("""
@@ -118,12 +123,24 @@ public class KnowledgeSourceSyncService {
         int conflicts = 0;
         boolean fullSnapshot = false;
         Set<String> seen = new HashSet<>();
+        long externalStarted = System.nanoTime();
         try {
-            for (int page = 0; page < 100; page++) {
+            int maxPages = endpointPolicy.properties().maxPages();
+            int maxItems = endpointPolicy.properties().maxItems();
+            for (int page = 0; page < maxPages; page++) {
+                if (System.nanoTime() - externalStarted
+                        > endpointPolicy.properties().taskTimeout().toNanos()) {
+                    throw new BusinessException(ErrorCode.VALIDATION_ERROR,
+                            "企业知识来源同步超过整体超时限制");
+                }
                 KnowledgeSourceAdapter.SourceBatch batch = adapter.fetch(connection, cursor);
                 fullSnapshot = fullSnapshot || batch.fullSnapshot();
                 for (KnowledgeSourceAdapter.SourceItem item : batch.items()) {
                     fetched++;
+                    if (fetched > maxItems) {
+                        throw new BusinessException(ErrorCode.VALIDATION_ERROR,
+                                "企业知识来源同步条目超过安全数量限制");
+                    }
                     seen.add(item.sourceItemId());
                     Change change = apply(connection, item);
                     created += change.created() ? 1 : 0;
@@ -133,6 +150,10 @@ public class KnowledgeSourceSyncService {
                 }
                 cursor = batch.nextCursor();
                 if (cursor == null || cursor.isBlank()) break;
+                if (page == maxPages - 1) {
+                    throw new BusinessException(ErrorCode.VALIDATION_ERROR,
+                            "企业知识来源同步分页超过安全限制");
+                }
             }
             if (fullSnapshot) {
                 deleted += markMissingDeleted(connectionId, seen);
