@@ -5,6 +5,8 @@ import dev.qcoding.businesscopilot.datacopilot.enterprise.DataGovernanceService;
 import dev.qcoding.businesscopilot.datacopilot.enterprise.DataQueryResultService;
 import dev.qcoding.businesscopilot.datacopilot.query.QueryExecutionService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpHeaders;
@@ -15,6 +17,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /** Data Copilot 企业治理与受控交付 API。 */
@@ -76,6 +79,20 @@ public class DataEnterpriseController {
     @GetMapping("/datasource-health")
     public ResponseEntity<ApiResponse<?>> health() {
         return ResponseEntity.ok(ApiResponse.ok(governanceService.health()));
+    }
+
+    @GetMapping("/query-results")
+    public ResponseEntity<ApiResponse<?>> results(
+            @RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
+            @RequestParam(name = "size", defaultValue = "20") @Min(1) @Max(100) int size) {
+        return ResponseEntity.ok(ApiResponse.ok(resultService.listOwned(page, size)));
+    }
+
+    @GetMapping("/report-handoffs")
+    public ResponseEntity<ApiResponse<?>> handoffs(
+            @RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
+            @RequestParam(name = "size", defaultValue = "20") @Min(1) @Max(100) int size) {
+        return ResponseEntity.ok(ApiResponse.ok(resultService.listHandoffs(page, size)));
     }
 
     @PostMapping("/schema-change-check")

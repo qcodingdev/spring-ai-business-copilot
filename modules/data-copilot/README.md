@@ -15,7 +15,18 @@ The 2.3 workbench exposes query, governance, records, and handoff tabs in both
 `zh-CN` and `en-US`. SQL and guardrail evidence are shown before the visually
 distinct high-risk confirmation; saving or executing keeps the user in the flow.
 
-API: `POST /api/data-copilot/sql-candidates`, `POST /api/data-copilot/sql-candidates/{id}/execute`, `GET /api/data-copilot/audit-logs`.
+API: `POST /api/data-copilot/sql-candidates`, `POST /api/data-copilot/sql-candidates/{id}/execute`,
+`GET /api/data-copilot/audit-logs`, `GET /api/data-copilot/query-results`,
+`GET /api/data-copilot/report-handoffs`, `GET/POST /api/data-copilot/query-templates`,
+`POST /api/data-copilot/query-templates/{id}/approve`,
+`POST /api/data-copilot/query-templates/{id}/launch`, and
+`POST /api/data-copilot/query-results/{id}/report-handoff`.
+
+The Vue workbench now keeps the three enterprise stages connected: administrators
+approve versioned templates; operators launch and confirm a template query; the
+result snapshot and audit record remain available under execution records; and a
+masked, actor-owned result can be handed to Report Copilot through a one-time
+`READY` reference that becomes `CONSUMED` only after report generation succeeds.
 
 Test: `./mvnw -pl modules/data-copilot -am test`
 
@@ -25,3 +36,12 @@ Test: `./mvnw -pl modules/data-copilot -am test`
 
 2.3 双语工作台覆盖查询、治理、记录和交接；SQL 与 Guardrail 证据在高风险确认前
 展示，执行后留在当前流程并提示下一步。
+
+API：`POST /api/data-copilot/sql-candidates`、`POST /api/data-copilot/sql-candidates/{id}/execute`、
+`GET /api/data-copilot/audit-logs`、`GET /api/data-copilot/query-results`、
+`GET /api/data-copilot/report-handoffs`、`GET/POST /api/data-copilot/query-templates`、
+`POST /api/data-copilot/query-templates/{id}/approve`、
+`POST /api/data-copilot/query-templates/{id}/launch` 和
+`POST /api/data-copilot/query-results/{id}/report-handoff`。
+
+Vue 工作台已把三个企业阶段串起来：管理员审批版本化模板；操作者启动并确认模板查询；执行记录同时保留结果快照和审计记录；脱敏且绑定操作者的结果可以通过一次性的 `READY` 引用交给 Report Copilot，报告生成成功后才变为 `CONSUMED`。

@@ -2,8 +2,10 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import { api, ApiError, jsonBody } from '@/api/client'
+import { AI_GENERATION_REQUEST_TIMEOUT_MS, api, ApiError, jsonBody } from '@/api/client'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import DataExecutionResult from '@/components/DataExecutionResult.vue'
+import DataEnterprisePanel from '@/components/DataEnterprisePanel.vue'
 import EnterprisePanel from '@/components/EnterprisePanel.vue'
 import EvidenceList from '@/components/EvidenceList.vue'
 import ModuleIcon from '@/components/ModuleIcon.vue'
@@ -52,6 +54,8 @@ const consentReference = ref('')
 const candidateReference = ref('')
 const consentPurpose = ref('仅用于本次候选人证据评估')
 const consentDays = ref(30)
+const reportHandoffs = ref<Record<string, any>[]>([])
+const selectedReportHandoffRefs = ref<string[]>([])
 
 const config = computed(() => ({
   data: { tabs: ['query', 'governance', 'records', 'handoff'], field: 'question', placeholder: 'questionPlaceholder', action: 'generate' },
@@ -76,6 +80,11 @@ const evidence = computed(() => {
 })
 const sql = computed(() => props.module === 'data' && isPrimaryTab.value ? String(result.value?.sql ?? '') : '')
 const executable = computed(() => props.module === 'data' && result.value?.executable === true)
+const dataExecution = computed<Record<string, any> | null>(() => props.module === 'data' ? result.value?.execution ?? null : null)
+const hasDataExecution = computed(() => dataExecution.value !== null)
+const hasBusinessResult = computed(() => props.module === 'data'
+  ? hasDataExecution.value
+  : processingVisible.value)
 const promptKey = computed(() => props.module === 'hr' && hrSection.value === 'employee' ? 'hr.employeeExamples' : `${props.module}.examples`)
 const quickPrompts = computed(() => [t(`${promptKey.value}.first`), t(`${promptKey.value}.second`), t(`${promptKey.value}.third`)])
 const formFieldLabel = computed(() => props.module === 'hr' && hrSection.value === 'employee' ? t('hr.employeeQuestion') : t(`${props.module}.${config.value.field}`))
@@ -117,6 +126,16 @@ async function selectTab(tab: string): Promise<void> {
   if (props.module === 'hr' && tab === 'assessment') await loadConfirmedJobs()
   if (props.module === 'hr' && tab === 'interview') await loadHrData('/api/resume-copilot/enterprise/question-bank')
   if (props.module === 'hr' && tab === 'onboarding') await loadHrData('/api/resume-copilot/enterprise/onboarding-checklists')
+  if (props.module === 'report' && tab === 'generate') await loadReportHandoffs()
+}
+
+async function loadReportHandoffs(): Promise<void> {
+  try {
+    const response = await api<Record<string, any>[]>('/api/data-copilot/report-handoffs')
+    reportHandoffs.value = response.data ?? []
+  } catch (error) {
+    showToast(errorText(error), 'danger')
+  }
 }
 
 function usePrompt(prompt: string, index: number): void {
@@ -133,7 +152,20 @@ function genericPayload(): { path: string; body: unknown } {
     case 'data': return { path: '/api/data-copilot/sql-candidates', body: { question: input.value } }
     case 'knowledge': return { path: '/api/knowledge-copilot/questions', body: { question: input.value, category: null } }
     case 'support': return { path: '/api/support-copilot/tickets/analyze', body: { customerMessage: input.value, channel: 'workbench' } }
-    case 'report': return { path: '/api/report-copilot/reports/generate', body: { reportType: 'TEAM_WEEKLY', period: { periodStart: startDate.toISOString().slice(0, 10), periodEnd: end }, title: secondary.value, metrics: [], tasks: [], meetingNotes: [{ title: secondary.value, content: input.value, recordedAt: new Date().toISOString() }], importedSources: [], templateId: null, templateVersion: null } }
+    case 'report': {
+      const period = { periodStart: startDate.toISOString().slice(0, 10), periodEnd: end }
+      if (selectedReportHandoffRefs.value.length) {
+        return {
+          path: '/api/report-copilot/enterprise/reports/generate',
+          body: {
+            reportType: 'TEAM_WEEKLY', period, title: secondary.value,
+            selection: { connectionIds: [], dataHandoffReferences: selectedReportHandoffRefs.value, includeSupportMetrics: false, previousDataHandoffReference: null },
+            templateId: 'business-weekly', templateVersion: 'v1',
+          },
+        }
+      }
+      return { path: '/api/report-copilot/reports/generate', body: { reportType: 'TEAM_WEEKLY', period, title: secondary.value, metrics: [], tasks: [], meetingNotes: [{ title: secondary.value, content: input.value, recordedAt: new Date().toISOString() }], importedSources: [], templateId: null, templateVersion: null } }
+    }
     case 'hr': return hrSection.value === 'employee'
       ? { path: '/api/knowledge-copilot/questions', body: { question: input.value, category: 'EMPLOYEE_SERVICE' } }
       : { path: '/api/resume-copilot/jobs/draft', body: { title: secondary.value, requirements: input.value } }
@@ -145,7 +177,13 @@ async function submit(): Promise<void> {
   resetTransient()
   try {
     const request = genericPayload()
-    const response = await api<Record<string, any>>(request.path, { method: 'POST', ...jsonBody(request.body) })
+    const response = await api<Record<string, any>>(request.path, {
+      method: 'POST',
+      ...jsonBody(request.body),
+      // Model calls may use the server's 120-second provider timeout. Do not
+      // let the former shared 30-second browser timeout cancel them first.
+      timeoutMs: AI_GENERATION_REQUEST_TIMEOUT_MS,
+    })
     requestId.value = response.requestId ?? response.data.requestId ?? null
     if (props.module === 'hr' && hrSection.value === 'recruiting') {
       jobDraft.value = response.data
@@ -154,6 +192,10 @@ async function submit(): Promise<void> {
     }
     if (props.module === 'support') supportDraftText.value = response.data.draft?.replyText ?? ''
     if (props.module === 'report') reportContent.value = structuredClone(response.data.content ?? {})
+    if (props.module === 'report' && selectedReportHandoffRefs.value.length) {
+      selectedReportHandoffRefs.value = []
+      await loadReportHandoffs()
+    }
   } catch (error) {
     showToast(errorText(error), 'danger')
   } finally {
@@ -208,7 +250,11 @@ async function extractCriteria(): Promise<void> {
   if (!jobDraft.value) return
   loading.value = true
   try {
-    const response = await api<Record<string, any>>('/api/resume-copilot/jobs/criteria', { method: 'POST', ...jsonBody({ title: secondary.value, jobDescription: jobDraft.value.jdDraft, logicalJobId: null }) })
+    const response = await api<Record<string, any>>('/api/resume-copilot/jobs/criteria', {
+      method: 'POST',
+      ...jsonBody({ title: secondary.value, jobDescription: jobDraft.value.jdDraft, logicalJobId: null }),
+      timeoutMs: AI_GENERATION_REQUEST_TIMEOUT_MS,
+    })
     criteriaDraft.value = response.data
     requestId.value = response.requestId
     showToast(t('hr.criteriaReady'), 'success')
@@ -250,9 +296,15 @@ async function assessCandidate(): Promise<void> {
     let response
     if (resumeFile.value) {
       const body = new FormData(); body.append('jobId', selectedJobId.value); body.append('file', resumeFile.value)
-      response = await api<Record<string, any>>('/api/resume-copilot/assessments/file', { method: 'POST', body })
+      response = await api<Record<string, any>>('/api/resume-copilot/assessments/file', {
+        method: 'POST', body, timeoutMs: AI_GENERATION_REQUEST_TIMEOUT_MS,
+      })
     } else {
-      response = await api<Record<string, any>>('/api/resume-copilot/assessments', { method: 'POST', ...jsonBody({ jobId: Number(selectedJobId.value), resumeText: resumeText.value }) })
+      response = await api<Record<string, any>>('/api/resume-copilot/assessments', {
+        method: 'POST',
+        ...jsonBody({ jobId: Number(selectedJobId.value), resumeText: resumeText.value }),
+        timeoutMs: AI_GENERATION_REQUEST_TIMEOUT_MS,
+      })
     }
     assessment.value = response.data
     requestId.value = response.requestId
@@ -333,7 +385,10 @@ watch(() => [props.module, route.query.section, route.query.tab], () => {
   input.value = ''; secondary.value = ''; jobDraft.value = null; criteriaDraft.value = null; resetTransient()
 }, { immediate: true })
 
-onMounted(() => { if (props.module === 'hr' && activeTab.value === 'assessment') void loadConfirmedJobs() })
+onMounted(() => {
+  if (props.module === 'hr' && activeTab.value === 'assessment') void loadConfirmedJobs()
+  if (props.module === 'report' && activeTab.value === 'generate') void loadReportHandoffs()
+})
 onUnmounted(() => { if (toastTimer) clearTimeout(toastTimer) })
 </script>
 
@@ -352,6 +407,13 @@ onUnmounted(() => { if (toastTimer) clearTimeout(toastTimer) })
         <label v-if="(module === 'hr' && hrSection === 'recruiting') || module === 'report'">{{ module === 'hr' ? t('hr.jobTitle') : t('report.reportTitle') }}<input v-model="secondary" required maxlength="300"></label>
         <label>{{ formFieldLabel }}<textarea v-model="input" :placeholder="formPlaceholder" required maxlength="4000" rows="7" /></label>
         <div class="quick-start"><div><strong>{{ t('common.quickStart') }}</strong><span>{{ t('common.chooseExample') }}</span></div><div class="prompt-chips"><button v-for="(prompt, index) in quickPrompts" :key="prompt" type="button" @click="usePrompt(prompt, index)">{{ prompt }}</button></div></div>
+        <section v-if="module === 'report'" class="workflow-card">
+          <div class="section-heading"><div><h3>{{ t('report.dataHandoffTitle') }}</h3><p>{{ t('report.dataHandoffDescription') }}</p></div><button class="button button--secondary" type="button" :disabled="loading" @click="loadReportHandoffs">{{ t('common.refresh') }}</button></div>
+          <div v-if="reportHandoffs.length" class="record-grid">
+            <label v-for="handoff in reportHandoffs.filter((item) => item.status === 'READY')" :key="handoff.id" class="checkbox-label"><input v-model="selectedReportHandoffRefs" type="checkbox" :value="handoff.sourceReference"> <span><strong>{{ handoff.title }}</strong><small>{{ handoff.sourceReference }} · {{ handoff.rowCount }} {{ t('data.rows') }}</small></span></label>
+          </div>
+          <p v-else class="empty-state">{{ t('report.noDataHandoffs') }}</p>
+        </section>
         <div class="form-actions"><button class="button button--primary button--large" type="submit" :disabled="loading">{{ loading ? t('common.loading') : submitLabel }} <span aria-hidden="true">→</span></button><small>{{ module === 'knowledge' || (module === 'hr' && hrSection === 'employee') ? t('knowledge.answerBoundary') : t('common.reviewBeforeConfirm') }}</small></div>
       </form>
 
@@ -367,16 +429,31 @@ onUnmounted(() => { if (toastTimer) clearTimeout(toastTimer) })
       <template v-else-if="module === 'hr' && activeTab === 'onboarding'">
         <section class="workflow-card"><div class="section-heading"><div><h3>{{ t('hr.onboardingPurpose') }}</h3><p>{{ t('hr.onboardingDescription') }}</p></div><button class="button button--secondary" type="button" @click="loadHrData('/api/resume-copilot/enterprise/onboarding-checklists')">{{ t('common.refresh') }}</button></div><div v-if="Array.isArray(hrData)" class="record-grid"><article v-for="item in hrData" :key="item.id"><h4>{{ item.title }}</h4><p>{{ item.roleScope || t('hr.allRoles') }} · v{{ item.version }}</p><ul><li v-for="(step, index) in item.items" :key="index">{{ typeof step === 'string' ? step : step.title ?? safeJson(step) }}</li></ul></article></div><p v-else class="empty-state">{{ t('common.noData') }}</p></section>
       </template>
-      <EnterprisePanel v-else :module="module" :tab="activeTab" />
+      <DataEnterprisePanel v-if="module === 'data' && !isPrimaryTab" :tab="activeTab" />
+      <EnterprisePanel v-else-if="!isPrimaryTab" :module="module" :tab="activeTab" />
 
-      <section v-if="processingVisible" class="business-result" aria-live="polite">
+      <section v-if="module === 'data' && isPrimaryTab && result" class="data-query-flow" aria-live="polite">
+        <div class="data-query-flow__heading">
+          <div><p class="panel-kicker">{{ t('common.stageReview') }}</p><h3>{{ t('data.candidateStage') }}</h3></div>
+          <StatusBadge :label="result.executable ? t('data.guardrailPassed') : t('data.guardrailBlocked')" :tone="result.executable ? 'success' : 'warning'" />
+        </div>
+        <p v-if="result.summary" class="data-query-flow__summary">{{ result.summary }}</p>
+        <SqlPreview :sql="sql" />
+        <div v-if="result.validation" class="validation-summary"><strong>{{ t('data.guardrail') }}</strong><span>{{ result.executable ? t('data.guardrailPassed') : t('data.guardrailBlocked') }}</span></div>
+        <div v-if="executable" class="data-query-flow__actions">
+          <div><strong>{{ t('data.candidateReady') }}</strong><p>{{ t('common.reviewBeforeConfirm') }}</p></div>
+          <button class="button button--primary button--large" type="button" @click="confirmAction = 'data-execute'">{{ t('data.confirmQuery') }} <span aria-hidden="true">→</span></button>
+        </div>
+      </section>
+
+      <section v-if="hasBusinessResult" class="business-result" aria-live="polite">
         <div class="business-result__heading"><div><span class="result-check">✓</span><h3>{{ t('common.processingResult') }}</h3></div><StatusBadge :label="resultStatus" tone="success" /></div>
 
-        <template v-if="module === 'knowledge' && result"><div class="answer-content"><h4>{{ t('knowledge.answer') }}</h4><p>{{ result.answer || t('knowledge.noGroundedAnswer') }}</p><p v-if="result.status && result.status !== 'ANSWERED'" class="field-hint">{{ t('knowledge.statusExplanation') }}</p></div></template>
+        <template v-if="module === 'data' && dataExecution"><DataExecutionResult :execution="dataExecution" /></template>
+        <template v-else-if="module === 'knowledge' && result"><div class="answer-content"><h4>{{ t('knowledge.answer') }}</h4><p>{{ result.answer || t('knowledge.noGroundedAnswer') }}</p><p v-if="result.status && result.status !== 'ANSWERED'" class="field-hint">{{ t('knowledge.statusExplanation') }}</p></div></template>
         <template v-else-if="module === 'support' && result"><div class="review-editor"><h4>{{ t('support.replyDraft') }}</h4><textarea v-model="supportDraftText" rows="9" :disabled="!result.draft || ['CONFIRMED','CANCELED'].includes(result.status)"></textarea><label>{{ t('support.editReason') }}<input v-model="supportEditReason" maxlength="500"></label><div class="button-row"><button class="button button--secondary" type="button" :disabled="!result.draft" @click="saveSupportEdit">{{ t('support.saveEdit') }}</button><button class="button button--primary" type="button" :disabled="!result.draft" @click="confirmAction = 'support-confirm'">{{ t('support.confirmDraft') }}</button><button class="button button--danger" type="button" :disabled="!result.draft" @click="confirmAction = 'support-cancel'">{{ t('common.cancel') }}</button></div><p v-if="result.needsHuman" class="alert alert--warning">{{ t('support.needsHumanExplanation') }}</p></div></template>
         <template v-else-if="module === 'report' && result"><div v-if="reportContent" class="review-editor"><h4>{{ t('report.reportContent') }}</h4><label>{{ t('report.executiveSummary') }}<textarea v-model="reportContent.executiveSummary" rows="5" :disabled="result.status !== 'DRAFTED'"></textarea><small v-if="reportContent.executiveSummarySourceIds?.length">{{ t('common.evidence') }}: {{ reportContent.executiveSummarySourceIds.join(', ') }}</small></label><div v-if="reportContent.metricHighlights?.length" class="report-edit-section"><h5>{{ t('report.metricHighlights') }}</h5><label v-for="(item, index) in reportContent.metricHighlights" :key="index"><span>{{ item.metricName }}: {{ item.metricValue }} {{ item.unit }}</span><textarea v-model="item.summary" rows="2" :disabled="result.status !== 'DRAFTED'"></textarea><small v-if="item.sourceIds?.length">{{ t('common.evidence') }}: {{ item.sourceIds.join(', ') }}</small></label></div><div v-for="section in ['completedItems','risks','actionItems','suggestions']" :key="section" class="report-edit-section"><h5>{{ t(`report.sections.${section}`) }}</h5><label v-for="(item, index) in reportContent[section] ?? []" :key="index"><textarea v-model="item.text" rows="3" :disabled="result.status !== 'DRAFTED'"></textarea><small v-if="item.sourceIds?.length">{{ t('common.evidence') }}: {{ item.sourceIds.join(', ') }}</small></label></div><div class="button-row"><button class="button button--secondary" type="button" :disabled="result.status !== 'DRAFTED'" @click="saveReportEdit">{{ t('report.saveEdit') }}</button><button class="button button--primary" type="button" :disabled="result.status !== 'DRAFTED'" @click="confirmAction = 'report-confirm'">{{ t('report.confirmReport') }}</button><button class="button button--danger" type="button" :disabled="result.status !== 'DRAFTED'" @click="confirmAction = 'report-cancel'">{{ t('common.cancel') }}</button></div><p class="field-hint">{{ t('report.confirmBoundary') }}</p></div><div v-else class="alert alert--warning">{{ (result.reviewReasons ?? []).join('；') || t('report.needsReview') }}</div></template>
         <template v-else-if="module === 'hr' && hrSection === 'recruiting'"><div v-if="jobDraft" class="review-editor"><h4>{{ t('hr.jdDraft') }}</h4><textarea v-model="jobDraft.jdDraft" rows="16"></textarea><div class="button-row"><button class="button button--primary" type="button" @click="extractCriteria">{{ t('hr.extractCriteria') }}</button></div></div><div v-if="criteriaDraft" class="criteria-editor"><h4>{{ t('hr.criteriaReview') }}</h4><label v-for="criterion in criteriaDraft.criteria" :key="criterion.criterionId"><span>{{ criterion.requirementType }} · {{ criterion.category }}</span><textarea v-model="criterion.description" rows="2" :disabled="criteriaDraft.status !== 'DRAFTED'"></textarea></label><div class="button-row"><button class="button button--secondary" type="button" :disabled="criteriaDraft.status !== 'DRAFTED'" @click="saveCriteriaEdits">{{ t('hr.saveCriteriaEdits') }}</button><button class="button button--primary" type="button" :disabled="criteriaDraft.status !== 'DRAFTED'" @click="confirmAction = 'criteria-confirm'">{{ t('hr.confirmCriteria') }}</button></div></div></template>
-        <template v-else-if="module === 'data' && result"><p class="business-result__summary">{{ result.summary }}</p><div v-if="result.validation" class="validation-summary"><strong>{{ t('data.guardrail') }}</strong><span>{{ result.executable ? t('data.guardrailPassed') : t('data.guardrailBlocked') }}</span></div></template>
         <template v-else-if="result"><p class="business-result__summary">{{ result.answer || result.summary || result.message }}</p></template>
 
         <template v-if="assessment"><div class="assessment-review"><h4>{{ t('hr.assessmentResult') }}</h4><p v-if="assessment.content?.anonymousSummary">{{ assessment.content.anonymousSummary }}</p><ul v-if="assessment.content?.criterionAssessments"><li v-for="item in assessment.content.criterionAssessments" :key="item.criterionId"><strong>{{ item.criterionId }} · {{ item.status }}</strong><span>{{ item.explanation }}</span></li></ul><div v-if="assessment.evidence?.length" class="assessment-evidence"><h5>{{ t('common.evidence') }}</h5><ul><li v-for="item in assessment.evidence.slice(0, 8)" :key="item.evidenceId"><strong>{{ item.evidenceId }} · {{ item.section }}</strong><span>{{ item.sanitizedText }}</span></li></ul></div><div v-if="assessment.reviewReasons?.length" class="alert alert--warning">{{ assessment.reviewReasons.join('；') }}</div><div class="button-row"><button v-if="assessment.status === 'DRAFTED'" class="button button--primary" type="button" @click="confirmAction = 'assessment-review'">{{ t('hr.confirmAssessmentReview') }}</button><button v-if="['DRAFTED','NEEDS_REVIEW'].includes(assessment.status)" class="button button--danger" type="button" @click="confirmAction = 'assessment-cancel'">{{ t('common.cancel') }}</button></div></div></template>
@@ -387,10 +464,9 @@ onUnmounted(() => { if (toastTimer) clearTimeout(toastTimer) })
     </section>
 
     <aside class="side-stack">
-      <SqlPreview v-if="module === 'data' && isPrimaryTab" :sql="sql" />
       <EvidenceList v-if="isPrimaryTab" :items="evidence" />
       <section class="panel"><h2>{{ t('common.risks') }}</h2><p>{{ t(`${module}.riskBoundary`) }}</p><ul class="boundary-list"><li><span>✓</span>{{ t('common.trustEvidence') }}</li><li><span>✓</span>{{ t('common.trustControl') }}</li><li><span>✓</span>{{ t('common.trustAudit') }}</li></ul></section>
-      <section class="panel next-step"><h2>{{ t('common.nextStep') }}</h2><p>{{ t(`${module}.next`) }}</p><button v-if="executable" class="button button--danger" type="button" @click="confirmAction = 'data-execute'">{{ t('data.execute') }}</button></section>
+      <section class="panel next-step"><h2>{{ t('common.nextStep') }}</h2><p>{{ t(`${module}.next`) }}</p></section>
     </aside>
   </div>
 

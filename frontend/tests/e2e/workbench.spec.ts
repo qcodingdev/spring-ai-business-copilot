@@ -43,6 +43,19 @@ async function mockSession(page: Page): Promise<void> {
       }),
     })
   })
+  await page.route('**/api/data-copilot/report-handoffs', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: [],
+        success: true,
+        errorCode: null,
+        message: null,
+        requestId: 'e2e-empty-data-handoffs',
+        timestamp: new Date().toISOString(),
+      }),
+    })
+  })
 }
 
 test('defaults to Chinese and exposes the five business copilots', async ({ page }, testInfo) => {
@@ -110,6 +123,33 @@ test('completes all five primary workflows in the default Chinese locale', async
     await page.getByRole('button', { name: action }).click()
     await expect(page.getByText(`e2e-zh-${path.slice(1)}`)).toBeVisible()
   }
+})
+
+test('keeps the SQL candidate and confirmed query result in the main data workflow', async ({ page }) => {
+  await mockSession(page)
+  await page.route('**/api/data-copilot/sql-candidates', async (route) => {
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({
+      data: { candidateId: 'candidate-42', confirmationToken: 'confirm-42', executable: true, sql: 'SELECT public.products.name FROM public.products LIMIT 1', summary: '查询一个商品名称。', validation: { passed: true }, assumptions: [], warnings: [] },
+      success: true, errorCode: null, message: null, requestId: 'e2e-data-candidate', timestamp: new Date().toISOString(),
+    }) })
+  })
+  await page.route('**/api/data-copilot/sql-candidates/candidate-42/execute', async (route) => {
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({
+      data: { table: { columns: [{ name: 'name' }], rows: [{ values: { name: '虚构商品' } }], rowCount: 1, truncated: false }, explanation: { explanation: '已返回一条脱敏结果。' } },
+      success: true, errorCode: null, message: null, requestId: 'e2e-data-execution', timestamp: new Date().toISOString(),
+    }) })
+  })
+
+  await page.goto('/data')
+  await page.getByLabel('业务问题').fill('查询一个商品名称。')
+  await page.getByRole('button', { name: '生成 SQL 候选' }).click()
+  await expect(page.locator('.task-panel').getByRole('heading', { name: 'SQL 预览' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '本次处理结果' })).toHaveCount(0)
+  await page.getByRole('button', { name: '确认查询' }).click()
+  await page.getByRole('dialog').getByRole('button', { name: '确认执行只读查询' }).click()
+  await expect(page.getByRole('heading', { name: '本次处理结果' })).toBeVisible()
+  await expect(page.getByText('虚构商品', { exact: true })).toBeVisible()
+  await expect(page.getByText('e2e-data-execution')).toBeVisible()
 })
 
 test('login and Admin expose the same persistent language switch', async ({ page }) => {
@@ -328,8 +368,16 @@ test('separates recruiting and employee service in the left navigation', async (
   if ((page.viewportSize()?.width ?? 1280) < 900) {
     await page.getByRole('button', { name: '打开导航' }).click()
   }
-  await expect(page.locator('.sidebar-subnav').getByRole('link', { name: '招聘协同' })).toBeVisible()
-  await page.locator('.sidebar-subnav').getByRole('link', { name: '员工服务' }).click()
+  const subnav = page.locator('.sidebar-subnav')
+  const recruiting = subnav.getByRole('link', { name: '招聘协同' })
+  const employee = subnav.getByRole('link', { name: '员工服务' })
+  await expect(recruiting).toBeVisible()
+  await expect(recruiting).toHaveAttribute('aria-current', 'page')
+  await expect(recruiting).toHaveClass(/active/)
+  await employee.click()
+  await expect(employee).toHaveAttribute('aria-current', 'page')
+  await expect(employee).toHaveClass(/active/)
+  await expect(recruiting).not.toHaveAttribute('aria-current', 'page')
   await expect(page.getByRole('tab', { name: '员工问答' })).toBeVisible()
   await expect(page.getByLabel('员工服务问题')).toBeVisible()
   await expect(page.getByRole('tab', { name: '岗位标准' })).toHaveCount(0)
