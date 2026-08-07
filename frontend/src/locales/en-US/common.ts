@@ -12,6 +12,7 @@ export default {
   retry: 'Retry',
   nextStep: 'Next step',
   evidence: 'Evidence and sources',
+  evidenceReference: 'Evidence item',
   risks: 'Risks and boundaries',
   audit: 'Audit trail',
   status: 'Current status',

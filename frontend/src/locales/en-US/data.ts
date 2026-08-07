@@ -3,7 +3,7 @@ export default {
   description: 'Generate and inspect SQL, guardrails, and cost before a human confirms execution.',
   tabs: { query: 'Ask and query', governance: 'Governance templates', records: 'Execution records', handoff: 'Result handoff' },
   question: 'Business question',
-  questionPlaceholder: 'For example: What was paid order revenue by region last month?',
+  questionPlaceholder: 'For example: What were the total value and count of completed orders in the past 30 days?',
   generate: 'Generate SQL candidate',
   execute: 'Confirm query execution',
   confirmQuery: 'Confirm query',
@@ -71,8 +71,8 @@ export default {
   cardDescription: 'Query operational data in natural language, review SQL and safety boundaries, then confirm execution.',
   cardTag: 'Read only · Masked delivery',
   examples: {
-    first: 'Show paid order revenue and month-over-month change by region last month.',
-    second: 'List the top 10 customers by revenue this quarter and their contribution.',
-    third: 'Which products declined in sales for two consecutive weeks?',
+    first: 'Show the total value and count of completed orders in the past 30 days.',
+    second: 'List the top 10 customers by order value this quarter and show the amount.',
+    third: 'Summarize historical sales value and quantity by product category, returning the top five by sales value.',
   },
 }

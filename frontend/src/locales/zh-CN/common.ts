@@ -12,6 +12,7 @@ export default {
   retry: '重试',
   nextStep: '下一步',
   evidence: '证据与来源',
+  evidenceReference: '证据条目',
   risks: '风险与边界',
   audit: '审计链路',
   status: '当前状态',

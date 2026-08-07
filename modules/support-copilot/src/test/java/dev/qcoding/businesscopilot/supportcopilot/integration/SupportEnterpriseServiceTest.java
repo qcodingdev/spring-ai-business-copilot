@@ -25,11 +25,26 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class SupportEnterpriseServiceTest {
+
+    @Test
+    void exposesWritebackOnlyForConfirmedExternalDrafts() {
+        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+        when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), eq(42L))).thenReturn(1);
+        SupportEnterpriseService service = new SupportEnterpriseService(
+                jdbcTemplate, mock(SupportTicketRepository.class), List.of(),
+                () -> new CurrentActor("operator-1", Set.of(BusinessRole.OPERATOR)),
+                new ConfirmationTokenService(), mock(ExternalSecretResolver.class),
+                new SensitiveTextMasker(), new ObjectMapper(),
+                mock(dev.qcoding.businesscopilot.commonsecurity.ExternalEndpointPolicy.class));
+
+        assertThat(service.writebackCapability(42L).eligible()).isTrue();
+    }
 
     @Test
     @SuppressWarnings("unchecked")

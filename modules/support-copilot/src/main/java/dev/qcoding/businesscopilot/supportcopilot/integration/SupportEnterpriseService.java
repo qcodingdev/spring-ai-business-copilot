@@ -200,6 +200,18 @@ public class SupportEnterpriseService {
                 rs.getLong("sla_breached")));
     }
 
+    /** Whether a confirmed draft can enter the external writeback flow. */
+    public WritebackCapability writebackCapability(long draftId) {
+        Integer count = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                FROM support_reply_drafts d
+                JOIN support_tickets t ON t.id = d.ticket_id
+                WHERE d.id = ? AND d.status = 'CONFIRMED'
+                  AND t.external_id IS NOT NULL AND t.external_connection_id IS NOT NULL
+                """, Integer.class, draftId);
+        return new WritebackCapability(count != null && count > 0);
+    }
+
     public WritebackIntent prepareWriteback(long draftId) {
         List<WritebackSource> sources = jdbcTemplate.query("""
                 SELECT d.id, COALESCE(d.edited_draft_text, d.original_draft_text) AS draft_text,
@@ -368,6 +380,7 @@ public class SupportEnterpriseService {
                                 String status, String category, double similarity) { }
     public record QualityMetrics(long accepted, long editedAccepted, long rejected,
                                  long handedOff, long slaAtRisk, long slaBreached) { }
+    public record WritebackCapability(boolean eligible) { }
     public record WritebackIntent(Long id, String confirmationToken, Instant expiresAt) { }
     public record WritebackResult(long id, String status) { }
 }

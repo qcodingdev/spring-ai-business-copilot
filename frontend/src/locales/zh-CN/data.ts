@@ -3,7 +3,7 @@ export default {
   description: '把业务问题转换为只读查询，先预览口径和影响范围，再由你确认执行。',
   tabs: { query: '提问与查询', governance: '治理模板', records: '执行记录', handoff: '结果交接' },
   question: '业务问题',
-  questionPlaceholder: '例如：上个月各区域的已支付订单金额是多少？',
+  questionPlaceholder: '例如：过去 30 天已完成订单的总金额和订单数是多少？',
   generate: '生成 SQL 候选',
   execute: '确认执行查询',
   confirmQuery: '确认查询',
@@ -71,8 +71,8 @@ export default {
   cardDescription: '用自然语言查询经营数据，先核对 SQL 和安全边界，再确认执行。',
   cardTag: '只读查询 · 脱敏交付',
   examples: {
-    first: '上个月各区域已支付订单金额和环比是多少？',
-    second: '列出本季度销售额最高的 10 个客户及贡献占比。',
-    third: '哪些商品连续两周销量下降，需要重点关注？',
+    first: '过去 30 天已完成订单的总金额和订单数是多少？',
+    second: '列出本季度订单金额最高的 10 个客户及订单金额。',
+    third: '按商品分类统计历史销售金额和销量，按销售金额倒序返回前 5 项。',
   },
 }

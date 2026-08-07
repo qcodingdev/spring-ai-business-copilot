@@ -71,6 +71,11 @@ public class SupportEnterpriseController {
         return ResponseEntity.ok(ApiResponse.ok(service.prepareWriteback(draftId)));
     }
 
+    @GetMapping("/drafts/{draftId}/writeback-capability")
+    public ResponseEntity<ApiResponse<?>> writebackCapability(@PathVariable long draftId) {
+        return ResponseEntity.ok(ApiResponse.ok(service.writebackCapability(draftId)));
+    }
+
     @PostMapping("/writebacks/{writebackId}/confirm")
     public ResponseEntity<ApiResponse<?>> confirmWriteback(
             @PathVariable long writebackId, @Valid @RequestBody TokenRequest request) {

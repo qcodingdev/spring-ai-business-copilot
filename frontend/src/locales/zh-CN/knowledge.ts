@@ -13,6 +13,7 @@ export default {
   answerBoundary: '回答只使用当前账号可见且已索引的知识；证据不足时会明确拒答。',
   riskBoundary: '回答必须绑定引用原文；证据不足、过期或冲突时不得编造结论。',
   next: '核对引用；有问题时提交反馈进入质量复核。',
+  feedbackTitle: '这条回答是否有帮助？', helpful: '有帮助', notHelpful: '没有帮助', feedbackReason: '问题原因', feedbackComment: '补充说明（可选）', submitFeedback: '提交反馈', feedbackSaved: '反馈已记录，已进入质量闭环。', qualityDescription: '处理证据不足、拒答和负反馈，并留下人工处置结论。', reviewIssue: '开始人工复核', reviewDecision: '处置结论', reviewNote: '复核说明', reviewSaved: '质量问题已完成处置。', qualityNoComment: '该问答没有足够依据，需要人工核查。',
   cardDescription: '从企业制度和业务资料中找到依据，给出带原文引用的可靠回答。',
   cardTag: '证据引用 · 权限可见',
   examples: {

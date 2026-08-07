@@ -13,6 +13,7 @@ export default {
   answerBoundary: 'Answers use only currently visible indexed knowledge and explicitly refuse when evidence is insufficient.',
   riskBoundary: 'Every answer must cite source text. The system must not invent conclusions from missing, stale, or conflicting evidence.',
   next: 'Review citations and submit feedback for quality review when needed.',
+  feedbackTitle: 'Was this answer helpful?', helpful: 'Helpful', notHelpful: 'Not helpful', feedbackReason: 'Reason', feedbackComment: 'Additional note (optional)', submitFeedback: 'Submit feedback', feedbackSaved: 'Feedback recorded and added to the quality loop.', qualityDescription: 'Resolve evidence gaps, refusals, and negative feedback with an auditable human outcome.', reviewIssue: 'Review issue', reviewDecision: 'Decision', reviewNote: 'Review note', reviewSaved: 'The quality issue was handled.', qualityNoComment: 'This answer needs a human evidence check.',
   cardDescription: 'Find evidence in company policies and business documents and return reliable answers with source excerpts.',
   cardTag: 'Cited evidence · Access aware',
   examples: {

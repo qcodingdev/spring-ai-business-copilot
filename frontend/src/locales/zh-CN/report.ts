@@ -2,6 +2,7 @@ export default {
   title: '证据化报告生成与导出',
   description: '先预览来源与新鲜度，再生成可人工确认的报告草稿；系统不会自动发布。',
   tabs: { generate: '报告生成', records: '报告记录', sources: '来源管理', schedules: '调度与导出' },
+  recordsDescription: '查看当前账号创建的报告草稿、状态和确认后的办公格式导出。', schedulesDescription: '保存周期任务并查看下一次运行时间；任务只生成待人工确认草稿。', createdAt: '创建时间', createSchedule: '新建报告排期', scheduleKey: '排期标识', scheduleTitle: '报告标题模板', reportType: '报告类型', cronExpression: 'Cron 表达式', zoneId: '时区', scheduleHint: '例如每周一 09:00：0 0 9 ? * MON。排期生成的报告仍需人工复核确认。', nextRun: '下次运行', lastRun: '上次运行', scheduleSaved: '报告排期已保存。',
   dataHandoffTitle: '接入 Data 查询结果',
   dataHandoffDescription: '选择 Data Copilot 已准备好的结果，报告会读取其脱敏快照并在成功生成后消费交接。',
   noDataHandoffs: '暂无可用的 Data 结果交接。先在 Data Copilot 的“结果交接”中创建。',

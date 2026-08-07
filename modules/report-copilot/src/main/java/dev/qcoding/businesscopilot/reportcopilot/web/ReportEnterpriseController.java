@@ -61,6 +61,11 @@ public class ReportEnterpriseController {
         return ResponseEntity.ok(ApiResponse.ok(service.schedules()));
     }
 
+    @GetMapping("/reports")
+    public ResponseEntity<ApiResponse<?>> records() {
+        return ResponseEntity.ok(ApiResponse.ok(service.records()));
+    }
+
     @PostMapping("/schedules")
     public ResponseEntity<ApiResponse<?>> saveSchedule(
             @Valid @RequestBody ScheduleRequest request) {

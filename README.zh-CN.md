@@ -69,7 +69,8 @@ docker compose up --build
 SPRING_AI_MODEL_CHAT=openai
 SPRING_AI_OPENAI_CHAT_API_KEY=your-chat-key
 SPRING_AI_OPENAI_CHAT_BASE_URL=https://api.deepseek.com
-SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL=deepseek-v4-flash
+SPRING_AI_OPENAI_CHAT_MODEL=deepseek-v4-flash
+SPRING_AI_OPENAI_CHAT_TIMEOUT=120s
 ```
 
 Knowledge Copilot 的文档向量化和语义检索还需要兼容的 Embedding 端点：
@@ -89,10 +90,10 @@ Chat 和 Embedding 有意分开配置，因为很多 OpenAI 兼容 Chat 服务�
 ### 首次体验顺序
 
 1. **Data：** 输入业务问题，检查 SQL 候选，再确认执行受限只读查询。
-2. **Knowledge：** 上传虚构文档，等待索引完成，进行带可检查引用的问答。
-3. **Support：** 分析虚构工单，检查证据和风险，再编辑、确认或取消草稿。
-4. **Report：** 预览手工或 CSV/JSON 来源，生成证据化草稿，确认后导出。
-5. **HR：** 生成并确认岗位标准，复核一份虚构简历，记录绑定证据的人工反馈。
+2. **Knowledge：** 首次本地体验可由管理员初始化虚构演示数据；上传文档时需等待索引完成，再进行带可检查引用的问答和质量反馈。
+3. **Support：** 分析虚构工单，检查证据和风险，再编辑、确认或取消草稿；只有从已配置外部连接导入的工单才会开放内部备注回写。
+4. **Report：** 预览手工或 CSV/JSON 来源，或接收 Data 的脱敏结果交接，生成证据化草稿，人工确认后导出；未通过证据校验的草稿不会消费交接数据。
+5. **HR：** 生成并确认岗位标准，复核一份虚构简历，记录绑定证据的人工反馈；“员工服务”从 `HR_POLICY` 知识分类检索制度依据。
 
 ## 为什么它是可控的
 
@@ -184,9 +185,14 @@ flowchart LR
 ```bash
 ./scripts/check-frontend-syntax.sh
 ./scripts/check-evaluation-datasets.sh
+cd frontend && npm run check
+cd frontend && npm run test:e2e -- --workers=1 --timeout=60000
 ./mvnw --batch-mode --no-transfer-progress verify -Psbom
 bash scripts/smoke-test.sh       # 应用启动后执行
 ```
+
+直接运行前端命令时使用 Node 22（当前验证版本为 22.22.3）；模型生成请求的浏览器预算为
+130 秒，用于覆盖服务端最长 120 秒的供应商超时，普通管理 API 仍保持 30 秒快速失败。
 
 每个业务模块的 README 都包含流程、API、边界和定向测试命令。版本演进统一记录在 [CHANGELOG.md](CHANGELOG.md) 和 [GitHub Releases](https://github.com/qcodingdev/spring-ai-business-copilot/releases)。
 

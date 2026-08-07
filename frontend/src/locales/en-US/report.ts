@@ -2,6 +2,7 @@ export default {
   title: 'Evidence-grounded report generation and export',
   description: 'Preview source freshness before generating a human-confirmed draft. Reports are never auto-published.',
   tabs: { generate: 'Generate report', records: 'Report records', sources: 'Source management', schedules: 'Schedules and export' },
+  recordsDescription: 'Review reports created by the current account, their lifecycle status, and exports available after confirmation.', schedulesDescription: 'Save recurring jobs and see the next run. Scheduled runs still create drafts for human review.', createdAt: 'Created', createSchedule: 'Create report schedule', scheduleKey: 'Schedule key', scheduleTitle: 'Report title template', reportType: 'Report type', cronExpression: 'Cron expression', zoneId: 'Time zone', scheduleHint: 'For Monday at 09:00, for example: 0 0 9 ? * MON. Scheduled reports still require human confirmation.', nextRun: 'Next run', lastRun: 'Last run', scheduleSaved: 'The report schedule was saved.',
   dataHandoffTitle: 'Use Data query results',
   dataHandoffDescription: 'Select a prepared Data Copilot result. Report generation reads its masked snapshot and consumes the handoff only after success.',
   noDataHandoffs: 'No Data result handoffs are available. Create one in Data Copilot first.',

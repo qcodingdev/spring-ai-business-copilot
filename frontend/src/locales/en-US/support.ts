@@ -15,6 +15,7 @@ export default {
   cancelled: 'The reply draft was cancelled.',
   needsHumanExplanation: 'This ticket requires human review. Check risk and evidence, edit, then confirm. High-risk cases may intentionally have no AI draft.',
   writeback: 'Confirm external writeback',
+  writebackBoundary: 'Internal confirmation does not send a customer message. Drafts imported from an external ticket system can prepare a separately confirmed writeback.', prepareWriteback: 'Preview external writeback', confirmWriteback: 'Confirm and write to external system', writebackPrepared: 'The external writeback intent is ready for review.', writebackCompleted: 'The external support system completed the writeback.', writebackUnavailable: 'This ticket was created directly in the workbench and has no external target. Its workflow safely ends at internal confirmation.',
   next: 'Edit and confirm the draft. External writes require a new second confirmation.',
   riskBoundary: 'Confirming a draft completes internal review; it does not send a customer message. External writeback requires a separate preview and confirmation.',
   cardDescription: 'Understand customer needs, retrieve policy evidence, draft a reply, and route it to an agent for review.',

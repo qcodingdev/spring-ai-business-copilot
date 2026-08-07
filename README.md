@@ -69,7 +69,8 @@ Configure any compatible chat endpoint:
 SPRING_AI_MODEL_CHAT=openai
 SPRING_AI_OPENAI_CHAT_API_KEY=your-chat-key
 SPRING_AI_OPENAI_CHAT_BASE_URL=https://api.deepseek.com
-SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL=deepseek-v4-flash
+SPRING_AI_OPENAI_CHAT_MODEL=deepseek-v4-flash
+SPRING_AI_OPENAI_CHAT_TIMEOUT=120s
 ```
 
 Knowledge ingestion and semantic retrieval additionally require a compatible embedding endpoint:
@@ -89,10 +90,10 @@ Chat and embedding endpoints are intentionally independent because many OpenAI-c
 ### First-run walkthrough
 
 1. **Data:** ask a business question, inspect the SQL candidate, then confirm the bounded read-only query.
-2. **Knowledge:** upload a fictional document, wait for indexing, and ask a question with inspectable citations.
-3. **Support:** analyze a fictional ticket, review the evidence and risk, then edit, confirm, or cancel the draft.
-4. **Report:** preview typed or CSV/JSON sources, generate a grounded draft, confirm it, and export it.
-5. **HR:** draft and confirm job criteria, review one fictional resume, and record evidence-bound human feedback.
+2. **Knowledge:** initialize the fictional demo data as an administrator for a first local run, or upload a document and wait for indexing; then ask a cited question and submit quality feedback.
+3. **Support:** analyze a fictional ticket, review the evidence and risk, then edit, confirm, or cancel the draft. Internal-note writeback is offered only for tickets imported through a configured external connection.
+4. **Report:** preview typed or CSV/JSON sources, or accept a masked Data handoff; generate a grounded draft, confirm it, and export it. A handoff is not consumed when grounding validation fails.
+5. **HR:** draft and confirm job criteria, review one fictional resume, and record evidence-bound human feedback. Employee service retrieves policy evidence from the `HR_POLICY` knowledge category.
 
 ## What makes it controlled
 
@@ -184,9 +185,16 @@ Run the delivery gates before submitting a change:
 ```bash
 ./scripts/check-frontend-syntax.sh
 ./scripts/check-evaluation-datasets.sh
+cd frontend && npm run check
+cd frontend && npm run test:e2e -- --workers=1 --timeout=60000
 ./mvnw --batch-mode --no-transfer-progress verify -Psbom
 bash scripts/smoke-test.sh       # after the application starts
 ```
+
+Use Node 22 for direct frontend commands (22.22.3 is the currently validated
+version). Model-generation requests have a 130-second browser budget to cover the
+server's 120-second provider timeout; ordinary management APIs still fail fast at
+30 seconds.
 
 Each business module README documents its flow, APIs, boundaries, and focused test command. Release history belongs in [CHANGELOG.md](CHANGELOG.md) and [GitHub Releases](https://github.com/qcodingdev/spring-ai-business-copilot/releases).
 

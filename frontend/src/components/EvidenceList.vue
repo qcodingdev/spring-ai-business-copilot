@@ -10,7 +10,18 @@ const visibleItems = computed(() => expanded.value ? props.items : props.items.s
 watch(() => props.items, () => { expanded.value = false })
 
 function displayEvidence(item: unknown): string {
-  return typeof item === 'string' ? item : JSON.stringify(item, null, 2)
+  if (typeof item === 'string') return item
+  if (!item || typeof item !== 'object') return String(item ?? '')
+  const evidence = item as Record<string, unknown>
+  const reference = evidence.sourceTitle ?? evidence.title ?? evidence.source
+    ?? evidence.citationId ?? evidence.evidenceId
+    ?? (evidence.chunkId == null ? null : `${t('common.evidenceReference')} #${evidence.chunkId}`)
+  const detail = evidence.excerpt ?? evidence.snippet ?? evidence.sanitizedText
+    ?? evidence.text ?? evidence.description ?? evidence.summary
+  if (reference && detail) return `${String(reference)}\n${String(detail)}`
+  if (detail) return String(detail)
+  if (reference) return String(reference)
+  return JSON.stringify(item, null, 2)
 }
 </script>
 

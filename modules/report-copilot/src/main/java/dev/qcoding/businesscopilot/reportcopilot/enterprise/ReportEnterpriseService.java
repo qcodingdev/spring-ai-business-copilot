@@ -25,6 +25,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import java.sql.Timestamp;
+import java.time.DateTimeException;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -105,14 +106,26 @@ public class ReportEnterpriseService {
                 List.of(), List.of(), List.of(), sources,
                 command.templateId(), command.templateVersion());
         ReportDraftResponse response = generationService.generate(request);
-        consumeHandoffs(command.selection().dataHandoffReferences());
+        if ("DRAFTED".equals(response.status()) && response.content() != null) {
+            consumeHandoffs(command.selection().dataHandoffReferences());
+        }
         return response;
     }
 
     public Schedule saveSchedule(ScheduleCommand command) {
-        CronExpression cron = CronExpression.parse(command.cronExpression());
-        ZoneId zone = ZoneId.of(command.zoneId());
-        Instant next = cron.next(ZonedDateTime.now(zone)).toInstant();
+        Instant next;
+        try {
+            CronExpression cron = CronExpression.parse(command.cronExpression().trim());
+            ZoneId zone = ZoneId.of(command.zoneId().trim());
+            ZonedDateTime nextRun = cron.next(ZonedDateTime.now(zone));
+            if (nextRun == null) {
+                throw new IllegalArgumentException("cron expression has no future execution time");
+            }
+            next = nextRun.toInstant();
+        } catch (IllegalArgumentException | DateTimeException ex) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR,
+                    "定时表达式或时区无效，请检查 Cron 与 IANA 时区。", ex);
+        }
         String actorId = actorProvider.currentActor().actorId();
         return jdbcTemplate.queryForObject("""
                 INSERT INTO report_schedules (
@@ -149,6 +162,27 @@ public class ReportEnterpriseService {
                        last_run_at, next_run_at
                 FROM report_schedules ORDER BY schedule_key
                 """, this::mapSchedule);
+    }
+
+    /** Returns report drafts owned by the current actor so the record tab can continue the lifecycle. */
+    public List<ReportRecord> records() {
+        String actorId = actorProvider.currentActor().actorId();
+        return jdbcTemplate.query("""
+                SELECT r.id AS request_id, r.report_type, r.period_start, r.period_end,
+                       r.title, r.created_at, d.id AS draft_id, d.status,
+                       d.review_reasons, d.expires_at, d.updated_at
+                FROM report_requests r
+                JOIN report_drafts d ON d.request_id = r.id
+                WHERE r.owner_actor_id = ?
+                ORDER BY r.created_at DESC
+                LIMIT 100
+                """, (rs, rowNum) -> new ReportRecord(
+                rs.getLong("request_id"), rs.getLong("draft_id"),
+                rs.getString("report_type"), rs.getObject("period_start", java.time.LocalDate.class),
+                rs.getObject("period_end", java.time.LocalDate.class), rs.getString("title"),
+                rs.getString("status"), rs.getString("review_reasons"),
+                rs.getTimestamp("expires_at") == null ? null : rs.getTimestamp("expires_at").toInstant(),
+                rs.getTimestamp("created_at").toInstant(), rs.getTimestamp("updated_at").toInstant()), actorId);
     }
 
     @Scheduled(fixedDelayString = "${business-copilot.report-copilot.schedule-poll-delay:PT1M}")
@@ -223,7 +257,7 @@ public class ReportEnterpriseService {
         }
         sources.addAll(loadDataHandoffs(selection.dataHandoffReferences()));
         if (selection.includeSupportMetrics()) {
-            sources.add(loadSupportMetrics());
+            sources.addAll(loadSupportMetrics());
         }
         if (selection.previousDataHandoffReference() != null
                 && !selection.dataHandoffReferences().isEmpty()) {
@@ -278,28 +312,54 @@ public class ReportEnterpriseService {
     private List<RawReportSource> loadDataHandoffs(List<String> references) {
         List<RawReportSource> sources = new ArrayList<>();
         for (String reference : references) {
-            List<RawReportSource> rows = jdbcTemplate.query("""
+            List<DataHandoffRow> rows = jdbcTemplate.query("""
                     SELECT handoff.title, handoff.source_reference, result.rows_json::text,
                            result.created_at, result.row_count
                     FROM data_report_handoffs handoff
                     JOIN data_query_results result ON result.id = handoff.query_result_id
                     WHERE handoff.source_reference = ? AND handoff.status = 'READY'
                       AND result.expires_at > now()
-                    """, (rs, rowNum) -> new RawReportSource(
-                    ReportSourceType.METRIC, rs.getString("title"),
-                    rs.getString("rows_json"),
-                    Map.of("rowCount", String.valueOf(rs.getInt("row_count"))),
-                    "data-copilot", rs.getString("source_reference"),
-                    rs.getTimestamp("created_at").toInstant(),
-                    "Asia/Shanghai", "query-result",
-                    rs.getTimestamp("created_at").toInstant().plus(java.time.Duration.ofDays(1))),
-                    reference);
-            sources.addAll(rows);
+                    """, (rs, rowNum) -> new DataHandoffRow(
+                    rs.getString("title"), rs.getString("source_reference"),
+                    rs.getString("rows_json"), rs.getInt("row_count"),
+                    rs.getTimestamp("created_at").toInstant()), reference);
+            rows.forEach(row -> sources.addAll(normalizeDataHandoff(row)));
         }
         return sources;
     }
 
-    private RawReportSource loadSupportMetrics() {
+    private List<RawReportSource> normalizeDataHandoff(DataHandoffRow row) {
+        List<RawReportSource> sources = new ArrayList<>();
+        Instant validUntil = row.createdAt().plus(java.time.Duration.ofDays(1));
+        sources.add(new RawReportSource(
+                ReportSourceType.KNOWLEDGE, row.title(), row.rowsJson(),
+                Map.of("rowCount", String.valueOf(row.rowCount())),
+                "data-copilot", row.sourceReference(), row.createdAt(),
+                "Asia/Shanghai", "query-result", validUntil));
+        try {
+            JsonNode root = objectMapper.readTree(row.rowsJson());
+            if (!root.isArray() || root.size() != 1 || !root.get(0).isObject()) return sources;
+            root.get(0).properties().stream()
+                    .filter(entry -> entry.getValue().isNumber())
+                    .limit(20)
+                    .forEach(entry -> {
+                        String metricName = row.title() + "." + entry.getKey();
+                        String metricValue = entry.getValue().asText();
+                        String unit = "query-result";
+                        sources.add(new RawReportSource(
+                                ReportSourceType.METRIC, metricName,
+                                "name=" + metricName + "\nvalue=" + metricValue + "\nunit=" + unit,
+                                Map.of("name", metricName, "value", metricValue, "unit", unit),
+                                "data-copilot", row.sourceReference(), row.createdAt(),
+                                "Asia/Shanghai", unit, validUntil));
+                    });
+        } catch (JacksonException ignored) {
+            // The sanitized full result remains available as KNOWLEDGE evidence.
+        }
+        return sources;
+    }
+
+    private List<RawReportSource> loadSupportMetrics() {
         Map<String, Object> metrics = jdbcTemplate.queryForMap("""
                 SELECT
                     COUNT(*) AS total,
@@ -309,8 +369,12 @@ public class ReportEnterpriseService {
                     COUNT(*) FILTER (WHERE sla_status = 'BREACHED') AS sla_breached
                 FROM support_tickets
                 """);
-        return raw(ReportSourceType.METRIC, "客服质量统计", json(metrics),
-                "support-copilot", Instant.now().toString(), "tickets");
+        Instant observedAt = Instant.now();
+        return metrics.entrySet().stream()
+                .map(entry -> metric("客服质量统计 · " + entry.getKey(),
+                        "support." + entry.getKey(), entry.getValue(), "tickets",
+                        "support-copilot", observedAt))
+                .toList();
     }
 
     private RawReportSource compareDataHandoffs(String current, String previous) {
@@ -319,11 +383,15 @@ public class ReportEnterpriseService {
         double change = previousRows == null || previousRows == 0
                 ? 0 : ((double) currentRows - previousRows) / previousRows * 100;
         String severity = Math.abs(change) >= 20 ? "需要复核" : "正常";
-        return raw(ReportSourceType.METRIC, "环比差异与来源异常",
+        Instant observedAt = Instant.now();
+        return new RawReportSource(ReportSourceType.METRIC, "环比差异与来源异常",
                 "当前结果行数=" + currentRows + "，对比期行数=" + previousRows
                         + "，变化=" + String.format(java.util.Locale.ROOT, "%.2f%%", change)
                         + "，状态=" + severity,
-                "report-difference", Instant.now().toString(), "percent");
+                Map.of("name", "data.rowCount.change", "value",
+                        String.format(java.util.Locale.ROOT, "%.2f", change), "unit", "percent"),
+                "report-difference", observedAt.toString(), observedAt,
+                "Asia/Shanghai", "percent", observedAt.plus(java.time.Duration.ofDays(7)));
     }
 
     private Integer handoffRows(String reference) {
@@ -351,6 +419,16 @@ public class ReportEnterpriseService {
         return new RawReportSource(type, title, content, Map.of(),
                 provider, version, Instant.now(), "Asia/Shanghai", unit,
                 Instant.now().plus(java.time.Duration.ofDays(7)));
+    }
+
+    private RawReportSource metric(String title, String name, Object value, String unit,
+                                   String provider, Instant observedAt) {
+        String metricValue = String.valueOf(value);
+        return new RawReportSource(ReportSourceType.METRIC, title,
+                "name=" + name + "\nvalue=" + metricValue + "\nunit=" + unit,
+                Map.of("name", name, "value", metricValue, "unit", unit),
+                provider, observedAt.toString(), observedAt,
+                "Asia/Shanghai", unit, observedAt.plus(java.time.Duration.ofDays(7)));
     }
 
     private Connection requireConnection(long id) {
@@ -438,8 +516,14 @@ public class ReportEnterpriseService {
     public record Schedule(long id, String scheduleKey, ReportType reportType, String titleTemplate,
                            String cronExpression, String zoneId, boolean enabled,
                            String ownerActorId, Instant lastRunAt, Instant nextRunAt) { }
+    public record ReportRecord(long requestId, long draftId, String reportType,
+                               java.time.LocalDate periodStart, java.time.LocalDate periodEnd,
+                               String title, String status, String reviewReasons,
+                               Instant expiresAt, Instant createdAt, Instant updatedAt) { }
     private record DueSchedule(long id, String scheduleKey, ReportType reportType,
                                String titleTemplate, String cronExpression, String zoneId,
                                String templateId, String templateVersion,
                                SourceSelection selection, String ownerActorId) { }
+    private record DataHandoffRow(String title, String sourceReference, String rowsJson,
+                                  int rowCount, Instant createdAt) { }
 }

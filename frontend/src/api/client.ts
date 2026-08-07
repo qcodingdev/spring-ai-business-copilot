@@ -9,6 +9,19 @@ export interface ApiEnvelope<T> {
   timestamp: string
 }
 
+/**
+ * Ordinary same-origin API calls should fail fast. Model-backed generation has a
+ * separate, explicit budget so that it can wait for the server-side provider
+ * timeout without making every management request wait that long.
+ */
+export const DEFAULT_REQUEST_TIMEOUT_MS = 30_000
+export const AI_GENERATION_REQUEST_TIMEOUT_MS = 130_000
+
+export interface ApiRequestInit extends RequestInit {
+  /** Local browser-side request budget; this is intentionally not sent as an HTTP header. */
+  timeoutMs?: number
+}
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -30,10 +43,11 @@ function requestId(): string {
   return globalThis.crypto?.randomUUID?.().replaceAll('-', '') ?? `${Date.now()}frontend`
 }
 
-export async function api<T>(path: string, init: RequestInit = {}): Promise<ApiEnvelope<T>> {
+export async function api<T>(path: string, init: ApiRequestInit = {}): Promise<ApiEnvelope<T>> {
   if (!path.startsWith('/api/')) throw new Error('API path must remain same-origin under /api/')
-  const method = (init.method ?? 'GET').toUpperCase()
-  const headers = new Headers(init.headers)
+  const { timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS, signal: callerSignal, ...requestInit } = init
+  const method = (requestInit.method ?? 'GET').toUpperCase()
+  const headers = new Headers(requestInit.headers)
   headers.set('Accept', 'application/json')
   headers.set('Accept-Language', currentLocale())
   headers.set('X-Request-Id', requestId())
@@ -45,13 +59,13 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<ApiE
     if (token) headers.set('X-XSRF-TOKEN', token)
   }
 
-  const timeout = AbortSignal.timeout(30_000)
+  const timeout = AbortSignal.timeout(timeoutMs)
   let response: Response
   try {
     response = await fetch(path, {
-      ...init,
+      ...requestInit,
       headers,
-      signal: init.signal ? AbortSignal.any([init.signal, timeout]) : timeout,
+      signal: callerSignal ? AbortSignal.any([callerSignal, timeout]) : timeout,
       credentials: 'same-origin',
       redirect: 'error',
     })

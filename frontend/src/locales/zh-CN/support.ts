@@ -15,6 +15,7 @@ export default {
   cancelled: '回复草稿已取消。',
   needsHumanExplanation: '该工单需要人工复核。请检查风险和证据，修改后再确认；高风险场景可能不提供 AI 草稿。',
   writeback: '确认外部回写',
+  writebackBoundary: '内部确认不会发送客户消息；来自外部工单系统的草稿可另行生成回写意图并二次确认。', prepareWriteback: '预览外部回写', confirmWriteback: '确认并写入外部系统', writebackPrepared: '外部回写意图已生成，请核对后确认。', writebackCompleted: '外部客服系统已完成回写。', writebackUnavailable: '当前工单由工作台直接创建，没有外部工单目标；流程已在内部确认处安全结束。',
   next: '人工编辑并确认草稿；外部写入需要新的二次确认。',
   riskBoundary: '确认草稿只完成内部复核，不等于已向客户发送；外部回写必须另行预览和确认。',
   cardDescription: '理解客户诉求、检索处理依据、起草回复，并交给客服人员复核发送。',

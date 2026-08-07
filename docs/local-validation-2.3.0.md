@@ -69,3 +69,39 @@ Thymeleaf/原生 JavaScript，继续由 Spring Boot 同域、同镜像交付；�
 - 正式版 `2.3.0`、发布提交、双远端推送、标签和 Release；均需用户另行授权。
 
 发布授权前必须继续保持 `2.3.0-SNAPSHOT`，重新执行正式版本门禁后才能创建 `v2.3.0`。
+
+## 5. 2026-08-06 全项目闭环复核补充
+
+本次在不改变 `2.3.0-SNAPSHOT` 发布边界的前提下，重新检查前端、API、数据库、
+模型调用与五模块状态流转。确认并修复了以下可复现问题：
+
+- Data 快捷问题与示例 schema 不一致；已改为可通过白名单的已完成订单问题，并补齐
+  `orders`/`refunds` 字段语义和 schema Prompt 容量。
+- Knowledge 引用对象直接显示 JSON；已改为“来源/分片 + 摘要”，员工服务统一使用
+  `HR_POLICY` 分类并复用知识答案、引用和反馈闭环。
+- Support 本地工单确认后错误展示外部回写入口；已增加服务端资格查询，仅外部导入工单
+  进入一次性 token 回写流程，已确认/取消草稿的编辑与决策按钮同步禁用。
+- Report 导航切换后没有及时加载 Data 交接，证据校验失败仍会提前消费交接；已修复
+  Tab 生命周期，并将单行 Data/Support 聚合规范化为精确指标证据，只有 `DRAFTED`
+  才消费交接。无效 Cron 或时区现在返回稳定的 `VALIDATION_ERROR`，不再泄漏为 500。
+- HR 标准提取实际返回 `CRITERIA_DRAFTED`，前端却不可编辑；已统一状态判断，并在
+  Assessment/Authorization/Interview/Onboarding Tab 进入时加载对应数据。
+- Admin 最近任务 SQL 字段名与前端 camelCase 契约不一致；已在查询层显式别名。
+
+浏览器真实环境已完成登录，以及 Data SQL 候选/人工确认/查询结果、Knowledge 初始化/
+带引用问答/反馈、Support 编辑/确认与终态禁用、Report 交接/校验失败反馈/定时任务、
+HR 岗位草稿/标准提取、员工知识问答和 Admin 诊断页面检查。修复后的本地自动化门禁为：
+
+- Node `22.22.3`：`npm run check` 通过（5 个 Vitest 文件、9 个测试和生产构建）。
+- Chromium：开发服务器与打包后 `http://127.0.0.1:8080` 各完成 32/32，通过桌面/
+  移动端、双语、五模块主流程、人工确认、无横向溢出及 serious/critical 无障碍检查。
+- Java：`./mvnw --batch-mode --no-transfer-progress verify -Psbom` 13 模块全部
+  `SUCCESS`；MySQL 8.4、PostgreSQL 16/pgvector、V1→V29 与 v2.2.1→V29 升级、
+  Spring Security 和 199 组件 CycloneDX XML/JSON SBOM 均通过。
+- 运行态：Compose 的 app/PostgreSQL 健康，`scripts/smoke-test.sh` 通过健康、CSRF、
+  登录、同源工作台和 Data schema；最终容器启动后的日志未发现 WARN/ERROR。
+
+真实模型的首次五模块浏览器链路使用虚构演示数据完成；修复后的再次外部模型调用因无法
+确认具体数据接收方授权而未绕过安全审查，
+对应分支由 Mock/单元/集成测试回归。远端 CI、镜像漏洞扫描、厂商沙箱和生产环境仍不在
+本地验收结论内。
