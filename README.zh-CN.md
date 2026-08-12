@@ -1,13 +1,13 @@
 <h1 align="center">Spring AI Business Copilot</h1>
 
 <p align="center">
-  <strong>一个 Java 应用，五个可运行、可控制的 AI 业务闭环。</strong><br>
-  Text-to-SQL · 带引用知识问答 · 客服协同 · 证据化报告 · 证据化 HR
+  <strong>面向 Java 团队的可运行 AI 业务闭环。</strong><br>
+  Text-to-SQL · 带引用知识问答 · 客户服务 · 证据化报告 · 证据化 HR
 </p>
 
 <p align="center">
-  <a href="https://github.com/qcodingdev/spring-ai-business-copilot/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/qcodingdev/spring-ai-business-copilot/actions/workflows/ci.yml/badge.svg"></a>
-  <a href="https://github.com/qcodingdev/spring-ai-business-copilot/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/qcodingdev/spring-ai-business-copilot?display_name=tag&amp;sort=semver"></a>
+  <a href="https://github.com/qcodingdev/spring-ai-business-copilot/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/qcodingdev/spring-ai-business-copilot/actions/workflows/ci.yml/badge.svg?branch=main"></a>
+  <a href="https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.2.1"><img alt="稳定版 v2.2.1" src="https://img.shields.io/badge/Stable-v2.2.1-2563EB"></a>
   <a href="https://openjdk.org/projects/jdk/21/"><img alt="Java 21" src="https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&amp;logoColor=white"></a>
   <a href="https://spring.io/projects/spring-boot"><img alt="Spring Boot 4.1" src="https://img.shields.io/badge/Spring%20Boot-4.1-6DB33F?logo=springboot&amp;logoColor=white"></a>
   <a href="https://spring.io/projects/spring-ai"><img alt="Spring AI 2.0" src="https://img.shields.io/badge/Spring%20AI-2.0-6DB33F"></a>
@@ -19,32 +19,41 @@
   <a href="#快速开始">快速开始</a> ·
   <a href="#五个业务闭环">业务模块</a> ·
   <a href="#总体架构">总体架构</a> ·
-  <a href="CHANGELOG.md">更新日志</a> ·
-  <a href="https://gitee.com/qcodingdev/spring-ai-business-copilot">Gitee 镜像</a>
+  <a href="https://github.com/qcodingdev/spring-ai-business-copilot/tree/2.3.0-SNAPSHOT">预览版 2.3</a> ·
+  <a href="https://gitee.com/qcodingdev/spring-ai-business-copilot">Gitee</a>
 </p>
 
 ![Spring AI Business Copilot 业务工作台](assets/workbench-demo.gif)
 
-多数 AI 示例在模型返回一段文字后就结束了。真实业务还必须继续完成证据核验、确定性规则、人工确认、状态流转、审计和故障诊断。
+> **稳定通道：** `main` 对应当前稳定源码 `2.2.1`。需要可复现体验时请使用不可变的 [v2.2.1 Release](https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.2.1)。[`2.3.0-SNAPSHOT` 分支](https://github.com/qcodingdev/spring-ai-business-copilot/tree/2.3.0-SNAPSHOT)属于预览版本，并非正式 Release。
 
-Spring AI Business Copilot 把这条完整路径放进一个可自行部署的参考应用。它不是另一个聊天 UI、Agent 框架或低代码平台：先运行并检查五个具体业务闭环，再选择与自己业务最接近的模块进行改造。
+## 从模型输出走到业务结果
+
+多数 AI 示例在生成一段文字后就结束了。真实业务软件还必须继续完成证据核验、确定性规则、人工复核、状态流转、审计和可操作的异常反馈。
+
+Spring AI Business Copilot 是一个可自行部署的模块化应用，用可运行代码展示这条完整路径。它面向 Java 开发者、解决方案架构师和企业内部平台团队，让你直接改造一个完整业务流程，而不是从聊天 Demo 重新拼装。
+
+- **按产品直接运行：** 一个 Spring Boot 应用、一套响应式工作台、Docker Compose 启动和虚构样例数据。
+- **按业务模块改造：** 每个 Copilot 独立拥有 API、持久化、Prompt、Guardrails、状态生命周期和定向测试。
+- **人工始终可控：** AI 结果周围持续展示证据、风险、状态、确认、审计和下一步动作。
 
 ## 五个业务闭环
 
-| 业务模块 | 可以直接运行的结果 | 明确边界 |
+| 业务模块 | 可以直接运行的结果 | 人工控制点 |
 |---|---|---|
-| [Data Copilot](modules/data-copilot/README.md) | 治理指标和模板，检查生成 SQL，确认只读查询，再导出或交接脱敏结果 | 不开放任意 SQL，不写业务数据库 |
-| [Knowledge Copilot](modules/knowledge-copilot/README.md) | 同步受控来源，进行带引用问答，复核过期、冲突或低质量知识 | 没有当前可访问证据就不回答，ACL 映射失败关闭 |
-| [Support Copilot](modules/support-copilot/README.md) | 导入工单，检查上下文、SLA 和相似案例，再确认可编辑的内部备注草稿 | 不自动发送客户消息、退款或修改账号 |
-| [Report Copilot](modules/report-copilot/README.md) | 聚合受控来源，定时生成待复核草稿并确定性导出办公格式 | 不自动发布，不做通用 BI 或工作流平台 |
-| [HR Copilot](modules/resume-copilot/README.md) | 生成岗位画像，管理授权和面试证据，只读导入 ATS 数据，复核一份脱敏简历 | 不评分排名、不做录用/淘汰决策、不推断受保护属性、不写 ATS |
+| [Data Copilot](modules/data-copilot/README.md) | 治理指标和模板，检查生成 SQL，执行受限只读查询，再导出或交接脱敏结果 | 执行前展示 SQL 和风险，业务数据源保持只读 |
+| [Knowledge Copilot](modules/knowledge-copilot/README.md) | 上传受控文档，完成持久化索引，进行带引用问答并记录质量反馈 | 答案必须保持在当前可访问证据范围内 |
+| [Support Copilot](modules/support-copilot/README.md) | 分析工单，检查证据和风险，再编辑、确认或取消回复草稿 | 客户回复、退款和账号操作继续由人工负责 |
+| [Report Copilot](modules/report-copilot/README.md) | 预览手工或 CSV/JSON 证据，生成报告草稿，确认后导出 | 草稿完成证据核验后再确认，永不自动发布 |
+| [HR Copilot](modules/resume-copilot/README.md) | 生成岗位标准，复核脱敏简历，记录绑定证据的人工反馈 | 不自动评分、排名、录用/淘汰或推断受保护属性 |
 
 ## 快速开始
 
-需要本机已启动 Docker，并支持 Compose。
+需要本机已安装 Docker，并支持 Compose。
 
 ```bash
-git clone https://github.com/qcodingdev/spring-ai-business-copilot.git
+git clone --branch v2.2.1 --depth 1 \
+  https://github.com/qcodingdev/spring-ai-business-copilot.git
 cd spring-ai-business-copilot/examples
 cp .env.example .env
 docker compose up --build
@@ -52,14 +61,18 @@ docker compose up --build
 
 打开 [http://localhost:8080](http://localhost:8080)，点击“登录体验”，使用 `admin / admin-change-me` 登录。
 
-默认关闭 Chat 和 Embedding 模型。不配置 API Key 也能检查产品页面、角色、虚构样例和非 AI 路径；要运行模型流程，请编辑复制后的 `examples/.env`，完整配置参考 [`examples/.env.example`](examples/.env.example)。
+| 配置模式 | 可以体验的内容 |
+|---|---|
+| 不配置模型密钥 | 产品页面、角色、虚构业务记录、治理页面和确定性非 AI 流程 |
+| 配置 Chat 模型 | Data、Support、Report 和 HR 的模型生成流程 |
+| 同时配置 Chat 与 Embedding | 完整 Knowledge 文档索引、语义检索和带引用问答 |
 
 > 内置账号和数据只用于本地评估。共享环境部署前必须修改全部 `BUSINESS_COPILOT_*` 密码；不要向演示环境粘贴真实客户数据、内部文档、凭据或简历。
 
 <details>
-<summary><strong>启用 Chat 与 Embedding 模型</strong></summary>
+<summary><strong>配置 Chat 与 Embedding 模型</strong></summary>
 
-配置任意兼容的 Chat 端点：
+在 `examples/.env` 中配置任意兼容的 Chat 端点：
 
 ```dotenv
 SPRING_AI_MODEL_CHAT=openai
@@ -68,7 +81,7 @@ SPRING_AI_OPENAI_CHAT_BASE_URL=https://api.deepseek.com
 SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL=deepseek-v4-flash
 ```
 
-Knowledge Copilot 的文档向量化和语义检索还需要兼容的 Embedding 端点：
+Knowledge 文档索引和语义检索还需要 Embedding 端点：
 
 ```dotenv
 SPRING_AI_MODEL_EMBEDDING=openai
@@ -78,56 +91,48 @@ SPRING_AI_OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 SPRING_AI_OPENAI_EMBEDDING_DIMENSION=1536
 ```
 
-Chat 和 Embedding 有意分开配置，因为很多 OpenAI 兼容 Chat 服务并不提供 Embedding。配置维度必须等于模型实际输出维度；更换 Embedding 模型或维度后，需要重新索引已启用文档。
+Chat 与 Embedding 端点相互独立，因为很多 OpenAI 兼容 Chat 服务并不提供 Embedding。更换 Embedding 模型或维度后，需要重新索引已启用文档。
 
 </details>
 
-### 首次体验顺序
+### 首次体验路线
 
 1. **Data：** 输入业务问题，检查 SQL 候选，再确认执行受限只读查询。
-2. **Knowledge：** 上传虚构文档，等待索引完成，进行带可检查引用的问答。
-3. **Support：** 分析虚构工单，检查证据和风险，再编辑、确认或取消草稿。
-4. **Report：** 预览手工或 CSV/JSON 来源，生成证据化草稿，确认后导出。
-5. **HR：** 生成并确认岗位标准，复核一份虚构简历，记录绑定证据的人工反馈。
+2. **Knowledge：** 上传虚构文档并等待索引，进行带可检查引用的知识问答。
+3. **Support：** 分析虚构工单，检查证据和风险，再编辑并确认或取消草稿。
+4. **Report：** 预览手工或 CSV/JSON 证据，生成草稿，确认后导出。
+5. **HR：** 生成并确认岗位标准，复核虚构简历，记录绑定证据的人工反馈。
 
-## 为什么它是可控的
-
-- **模型输出没有最终决定权：** 结构化响应必须通过模块级确定性 Guardrails，才能影响业务状态。
-- **答案始终携带证据：** 知识引用、报告来源 ID、客服证据版本和 HR 证据都可以直接检查。
-- **风险会改变流程：** 查询执行、内部备注回写、报告确认和 HR 复核都有显式状态，并使用绑定操作者的一次性确认。
-- **数据库是第二道边界：** Data Copilot 除应用 Guardrails 外，还使用独立收缩权限的只读账号，并校验 schema、表、列、函数、LIMIT 和结果大小。
-- **失败可以诊断：** 持久任务、重试状态、请求/调用 ID、actor、model、Prompt、policy、latency 和受限审计保留让问题可以追踪。
-- **样例适合公开使用：** Docker Compose 内置客户、文档、工单、指标、JD 和简历全部是虚构数据。
-
-## 运行模式
-
-| 模式 | 适用场景 | 边界 |
-|---|---|---|
-| `development` | 本地编码与调试 | 完整模块 API 和开发默认值 |
-| `self-hosted` | 开源评估与自行部署 | 可配置模型、上传、集成和私有管理能力 |
-| `public-demo` | 长期受控产品体验 | 15 个服务端场景、虚构只读数据、额度限制，不允许真实上传和外部动作 |
-
-选择范例只会填充表单，用户检查并确认后才会调用模型。`public-demo` 的供应商或额度不可用时，页面可以单独展示明确标记为 `PREGENERATED` 的示例结果，不会把它伪装成实时模型输出。
-
-## 直接看运行结果
+## 产品页面
 
 | 已确认的 Text-to-SQL 结果 | 带引用知识答案 |
 |---|---|
-| ![Data Copilot 查询结果](assets/data-copilot-result.png) | ![Knowledge Copilot 引用答案](assets/knowledge-copilot-result.png) |
-| 有知识依据的客服草稿 | 基于来源证据的报告草稿 |
-| ![Support Copilot 证据与草稿](assets/support-copilot-result.png) | ![Report Copilot 证据化草稿](assets/report-copilot-result.png) |
+| ![Data Copilot 查询结果](assets/data-copilot-result.png) | ![Knowledge Copilot 带引用答案](assets/knowledge-copilot-result.png) |
+
+| 有证据的客服草稿 | 来源可追溯的报告 |
+|---|---|
+| ![Support Copilot 证据与草稿](assets/support-copilot-result.png) | ![Report Copilot 报告草稿](assets/report-copilot-result.png) |
 
 ![HR Copilot 证据化评估](assets/resume-copilot-result.png)
 
-以上图片均从当前 Docker Compose 应用实测获取，使用的全部是虚构样例数据。
+以上画面均来自可运行的 Docker Compose 应用，只使用虚构数据。
+
+## 内建于业务流程的可信控制
+
+- 结构化模型输出必须通过模块级确定性 Guardrails，才能影响业务状态。
+- 知识引用、报告来源 ID、客服证据版本和 HR 证据始终可以检查。
+- 绑定操作者的一次性确认保护高风险状态变化，并检测过期、重放和状态冲突。
+- Data Copilot 同时使用应用 Guardrails 和独立收缩权限的数据库只读账号。
+- request ID、模型和策略元数据、延迟、生命周期状态和受限审计保留让失败可诊断。
+- Docker Compose 只加载虚构客户、文档、工单、指标、岗位描述和简历。
 
 ## 总体架构
 
-仓库采用模块化单体：一个可部署的 Spring Boot 应用、五个可独立自动装配的业务模块，以及只从真实模块复用需求中沉淀的平台层。
+仓库采用模块化单体：一个可部署的 Spring Boot 应用、五个独立自动装配的业务模块，以及只从真实复用中沉淀的平台层。
 
 ```mermaid
 flowchart LR
-    UI["Thymeleaf + 原生 JS 工作台"] --> APP["business-copilot-app"]
+    UI["Thymeleaf + 原生 JavaScript 工作台"] --> APP["business-copilot-app"]
     APP --> DATA["Data"] & KNOW["Knowledge"] & SUPPORT["Support"] & REPORT["Report"] & HR["HR"]
     KNOW & REPORT & HR --> DOC["document-processing"]
     DATA & KNOW & SUPPORT & REPORT & HR --> AI["ai-core"]
@@ -141,60 +146,42 @@ flowchart LR
 |---|---|---|
 | 运行时 | Java 21、Spring Boot 4.1 | 单一可执行应用，各业务模块显式自动装配 |
 | AI | Spring AI 2.0、Jackson 3 | 集中 Prompt、结构化输出、超时、重试、并发隔离和熔断 |
-| 持久层 | Spring JDBC、Flyway | 显式 Repository、条件状态更新、迁移、批处理和 pgvector |
-| Web | Spring MVC、Thymeleaf、原生 JavaScript | 一个响应式业务工作台，不引入前端构建工具链 |
-| 交付 | Docker Compose、GitHub Actions、CycloneDX | 可复现启动、固定评测门禁、集成测试和 SBOM |
+| 持久层 | Spring JDBC、Flyway | 显式 Repository、条件状态更新、迁移和 pgvector |
+| Web | Spring MVC、Thymeleaf、原生 JavaScript | 无前端构建链的响应式业务工作台 |
+| 交付 | Docker Compose、GitHub Actions、CycloneDX | 可复现启动、评测门禁、集成测试和 SBOM |
 
-### 仓库结构
+## 部署与集成状态
 
-| 路径 | 职责 |
-|---|---|
-| [`app/business-copilot-app`](app/business-copilot-app) | 可执行应用、迁移、安全、工作台、演示和诊断 |
-| [`modules`](modules) | 五个归属清晰的业务 Copilot 模块 |
-| [`platform/ai-core`](platform/ai-core) | 模型调用、向量、可观测性和 Prompt 模板 |
-| [`platform/ai-guardrails`](platform/ai-guardrails) | SQL、隐私、证据和业务策略的确定性校验 |
-| [`platform/common-security`](platform/common-security) | actor、角色、对象策略和确认 token 基础能力 |
-| [`platform/document-processing`](platform/document-processing) | 受限 TXT、Markdown、PDF、DOCX、XLSX 和 HTML 提取 |
-| [`examples`](examples) | Docker Compose 与环境变量参考 |
+| 能力 | 当前状态 | 部署方责任 |
+|---|---|---|
+| 本地 Docker Compose | 可运行样例 | 进入共享环境前修改全部演示密码 |
+| 自行部署应用 | 支持的参考部署 | 配置身份、网络、密钥、保留策略、隐私和供应商条款 |
+| 外部 PostgreSQL/MySQL 查询目标 | 已实现并通过集成测试 | 创建独立最小权限 `SELECT` 账号和显式白名单 |
+| SharePoint、Confluence、Notion、S3/MinIO、Jira、客服和 ATS 适配器 | 可配置集成点 | 提供凭据、对象权限、网络控制和供应商沙箱验证 |
+| 公网演示模式 | 受控的虚构数据体验 | 禁止上传和外部动作，配置额度与模型预算 |
 
-## 部署边界
+代码中存在适配器不代表获得厂商认证。类生产或生产部署前请阅读 [SECURITY.md](SECURITY.md)。
 
-- 共享环境或类生产部署应设置 `SPRING_PROFILES_ACTIVE=prod`。平台数据库凭据、角色密码或独立只读业务数据源缺失时，应用会启动失败，不会回退到演示值。
-- 自定义 Data Copilot 查询目标必须独立创建最小权限 `SELECT` 账号，并配置显式 schema/表白名单和完整限定列白名单。查询目标支持 PostgreSQL 和 MySQL；平台状态仍保存在 PostgreSQL + pgvector。
-- SharePoint、Confluence、Notion、S3/MinIO、Jira、Zendesk、ServiceNow、飞书、企微和 ATS 适配器需要部署方凭据与真实沙箱验收。代码中存在适配器不等于已经获得厂商认证或通过生产验证。
-- 本项目是参考应用，不是开箱即用的生产安全方案。部署方仍需评审身份认证、网络隔离、密钥、保留策略、隐私、模型供应商条款和地域合规，详见 [SECURITY.md](SECURITY.md)。
+## 开发与贡献
 
-## 本地开发与验证
-
-本地开发需要 Java 21、PostgreSQL 16 和 pgvector：
-
-```bash
-./scripts/install-jdk21.sh       # 可选：项目内 JDK
-./mvnw -q -DskipTests install
-./mvnw -pl app/business-copilot-app spring-boot:run
-```
-
-提交变更前运行交付门禁：
+本地源码开发使用 Java 21、PostgreSQL 16 和 pgvector。
 
 ```bash
 ./scripts/check-frontend-syntax.sh
 ./scripts/check-evaluation-datasets.sh
 ./mvnw --batch-mode --no-transfer-progress verify -Psbom
-bash scripts/smoke-test.sh       # 应用启动后执行
 ```
 
-每个业务模块的 README 都包含流程、API、边界和定向测试命令。版本演进统一记录在 [CHANGELOG.md](CHANGELOG.md) 和 [GitHub Releases](https://github.com/qcodingdev/spring-ai-business-copilot/releases)。
+完整开发流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。Issue、测试、截图和 PR 只能使用虚构、脱敏数据。
 
-## 明确不做
+## 项目资源
 
-- 不增加第六个 Copilot，不做多租户 IAM、工作流编排平台、商业 BI 套件或模型市场；
-- 不执行任意模型生成的工具调用；
-- 不自动发送客户消息、退款、发布报告、做招聘决策或改变外部业务流程；
-- 不做候选人评分、排名、比较或受保护属性推断；
-- 不宣称演示默认配置或未经真实验证的第三方适配器已经可以直接用于生产。
-
-## 贡献、安全与许可证
-
-欢迎贡献。提交 PR 前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)，Issue、测试、截图和 PR 只能使用虚构、脱敏数据；安全问题请按 [SECURITY.md](SECURITY.md) 中的私有流程报告。
+| 资源 | 链接 |
+|---|---|
+| 稳定版本 | [v2.2.1](https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.2.1) |
+| 版本记录 | [CHANGELOG.md](CHANGELOG.md) · [GitHub Releases](https://github.com/qcodingdev/spring-ai-business-copilot/releases) |
+| 问题与建议 | [GitHub Issues](https://github.com/qcodingdev/spring-ai-business-copilot/issues) |
+| 参与贡献 | [CONTRIBUTING.md](CONTRIBUTING.md) |
+| 安全报告 | [SECURITY.md](SECURITY.md) |
 
 Spring AI Business Copilot 使用 [MIT License](LICENSE)。
