@@ -29,7 +29,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Updated CI with TypeScript, lint, unit, i18n, production-build, desktop/mobile
   Playwright, accessibility, and bundle checks.
 - Refined the grouped recruiting/employee-service navigation and refreshed the
-  README visuals from the running `2.3.0-SNAPSHOT` workbench.
+  README animated GIF and workflow screenshots from the running
+  `2.3.0-SNAPSHOT` workbench.
 
 ### Security
 

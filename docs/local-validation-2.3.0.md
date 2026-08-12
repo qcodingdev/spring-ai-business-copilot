@@ -1,7 +1,7 @@
 # 2.3.0-SNAPSHOT 完整本地验证报告
 
 > 最近验证日期：2026-08-12
-> 分支：`feature/v2.3-frontend-enterprise-upgrade`  
+> 分支：`2.3.0-SNAPSHOT`
 > 版本：全部 13 个 Maven POM 为 `2.3.0-SNAPSHOT`  
 > Git 边界：只发布 Snapshot 功能分支；不合并主干，不创建正式标签或 Release
 
@@ -146,9 +146,9 @@ HR 岗位草稿/标准提取、员工知识问答和 Admin 诊断页面检查。
 ## 7. 2026-08-12 Snapshot 分支发布门禁
 
 本次交付继续保持 `2.3.0-SNAPSHOT`，只发布
-`feature/v2.3-frontend-enterprise-upgrade` 分支，不合并 `main`，不创建 `v2.3.0`
-标签或正式 Release。中英文 README 已明确此边界，并从当前运行实例重新生成 Data、
-Knowledge、Support、Report、HR 五张业务页面图；截图只包含虚构演示数据。
+`2.3.0-SNAPSHOT` 分支，不合并 `main`，不创建 `v2.3.0`
+标签或正式 Release。中英文 README 已明确此边界，并从当前运行实例重新生成首屏动态 GIF
+以及 Data、Knowledge、Support、Report、HR 五张业务页面图；图片只包含虚构演示数据。
 
 发布提交前重新执行的门禁如下：
 

@@ -23,7 +23,7 @@
   <a href="https://gitee.com/qcodingdev/spring-ai-business-copilot">Gitee mirror</a>
 </p>
 
-![Spring AI Business Copilot 2.3 workbench](assets/workbench-v2.3-desktop-chromium.png)
+![Spring AI Business Copilot 2.3 workbench](assets/workbench-demo.gif)
 
 Most AI examples stop when the model returns text. A real business workflow must continue through evidence checks, deterministic policy, human confirmation, state transitions, audit, and failure diagnosis.
 
@@ -32,9 +32,9 @@ Spring AI Business Copilot packages that complete path into a self-hosted refere
 The current source line is `2.3.0-SNAPSHOT`: it adds a same-origin Vue 3
 workbench, deterministic `zh-CN`/`en-US` operation, and fail-closed enterprise
 connection controls while preserving the 2.2.1 API, security, and deployment model.
-This Snapshot is published from `feature/v2.3-frontend-enterprise-upgrade` for
-evaluation and stabilization; it is not merged into `main` and is not an official
-`v2.3.0` release.
+This Snapshot is published from the `2.3.0-SNAPSHOT` branch for evaluation and
+stabilization; it is not merged into `main` and is not an official `v2.3.0`
+release.
 
 ## Five business workflows
 

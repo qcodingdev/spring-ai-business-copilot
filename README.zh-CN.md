@@ -23,7 +23,7 @@
   <a href="https://gitee.com/qcodingdev/spring-ai-business-copilot">Gitee 镜像</a>
 </p>
 
-![Spring AI Business Copilot 2.3 业务工作台](assets/workbench-v2.3-desktop-chromium.png)
+![Spring AI Business Copilot 2.3 业务工作台](assets/workbench-demo.gif)
 
 多数 AI 示例在模型返回一段文字后就结束了。真实业务还必须继续完成证据核验、确定性规则、人工确认、状态流转、审计和故障诊断。
 
@@ -32,8 +32,8 @@ Spring AI Business Copilot 把这条完整路径放进一个可自行部署的�
 当前源码开发线为 `2.3.0-SNAPSHOT`：在保持 2.2.1 API、安全和部署模型兼容的
 前提下，增加同源 Vue 3 工作台、确定性的 `zh-CN`/`en-US` 双语能力和失败关闭的
 企业连接控制。
-当前 Snapshot 从 `feature/v2.3-frontend-enterprise-upgrade` 分支提供给用户评估和
-稳定性验证；暂不合并 `main`，也不作为正式 `v2.3.0` Release 发布。
+当前 Snapshot 从 `2.3.0-SNAPSHOT` 分支提供给用户评估和稳定性验证；暂不合并
+`main`，也不作为正式 `v2.3.0` Release 发布。
 
 ## 五个业务闭环
 
