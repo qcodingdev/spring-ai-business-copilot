@@ -27,6 +27,8 @@ export default {
   no: '否',
   noData: '暂无数据',
   unknown: '未知',
+  search: '搜索',
+  all: '全部',
   account: '当前账号',
   runtimeMode: '运行模式',
   menu: '打开导航',

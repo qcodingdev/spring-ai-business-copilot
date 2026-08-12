@@ -78,7 +78,7 @@ onUnmounted(() => { if (toastTimer) clearTimeout(toastTimer) })
 <template>
   <section class="panel enterprise-panel">
     <div class="section-heading">
-      <div><h2>{{ t(`report.tabs.${tab}`) }}</h2><p class="enterprise-panel__description">{{ tab === 'records' ? t('report.recordsDescription') : t('report.schedulesDescription') }}</p></div>
+      <div><p class="enterprise-panel__description">{{ tab === 'records' ? t('report.recordsDescription') : t('report.schedulesDescription') }}</p></div>
       <button class="button button--secondary" type="button" :disabled="loading" @click="load">{{ loading ? t('common.loading') : t('common.refresh') }}</button>
     </div>
 

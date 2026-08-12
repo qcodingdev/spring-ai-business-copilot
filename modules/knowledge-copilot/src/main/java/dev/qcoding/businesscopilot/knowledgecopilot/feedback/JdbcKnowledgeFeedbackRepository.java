@@ -34,6 +34,9 @@ public class JdbcKnowledgeFeedbackRepository implements KnowledgeFeedbackReposit
                 SELECT audit.id AS answer_id,
                        audit.request_id,
                        audit.question,
+                       audit.answer_preview,
+                       audit.retrieved_chunk_ids,
+                       audit.cited_chunk_ids,
                        audit.answer_status,
                        audit.refusal_reason,
                        feedback.rating,
@@ -78,12 +81,15 @@ public class JdbcKnowledgeFeedbackRepository implements KnowledgeFeedbackReposit
             INSERT INTO knowledge_quality_reviews (
                 audit_log_id,
                 decision,
+                evidence_assessment,
+                answer_assessment,
+                remediation_action,
                 review_note,
                 reviewer_actor_id,
                 reviewed_issue_version,
                 reviewed_issue_at
             )
-            SELECT issue.answer_id, ?, ?, ?, issue.issue_version, issue.issue_updated_at
+            SELECT issue.answer_id, ?, ?, ?, ?, ?, ?, issue.issue_version, issue.issue_updated_at
             FROM quality_issues issue
             WHERE issue.answer_id = ?
               AND issue.issue_version = ?
@@ -91,6 +97,9 @@ public class JdbcKnowledgeFeedbackRepository implements KnowledgeFeedbackReposit
             ON CONFLICT (audit_log_id)
             DO UPDATE SET
                 decision = EXCLUDED.decision,
+                evidence_assessment = EXCLUDED.evidence_assessment,
+                answer_assessment = EXCLUDED.answer_assessment,
+                remediation_action = EXCLUDED.remediation_action,
                 review_note = EXCLUDED.review_note,
                 reviewer_actor_id = EXCLUDED.reviewer_actor_id,
                 reviewed_issue_version = EXCLUDED.reviewed_issue_version,
@@ -98,7 +107,8 @@ public class JdbcKnowledgeFeedbackRepository implements KnowledgeFeedbackReposit
                 updated_at = now()
             WHERE knowledge_quality_reviews.reviewed_issue_version
                   < EXCLUDED.reviewed_issue_version
-            RETURNING id, audit_log_id, decision, review_note, reviewer_actor_id,
+            RETURNING id, audit_log_id, decision, evidence_assessment, answer_assessment,
+                      remediation_action, review_note, reviewer_actor_id,
                       reviewed_issue_version, reviewed_issue_at, created_at, updated_at
             """;
 
@@ -140,6 +150,9 @@ public class JdbcKnowledgeFeedbackRepository implements KnowledgeFeedbackReposit
                     rs.getLong("answer_id"),
                     rs.getString("request_id"),
                     rs.getString("question"),
+                    rs.getString("answer_preview"),
+                    rs.getString("retrieved_chunk_ids"),
+                    rs.getString("cited_chunk_ids"),
                     rs.getString("answer_status"),
                     rs.getString("refusal_reason"),
                     rs.getString("rating") == null
@@ -158,6 +171,9 @@ public class JdbcKnowledgeFeedbackRepository implements KnowledgeFeedbackReposit
                     rs.getLong("id"),
                     rs.getLong("audit_log_id"),
                     KnowledgeQualityReviewDecision.valueOf(rs.getString("decision")),
+                    KnowledgeEvidenceAssessment.valueOf(rs.getString("evidence_assessment")),
+                    KnowledgeAnswerAssessment.valueOf(rs.getString("answer_assessment")),
+                    KnowledgeRemediationAction.valueOf(rs.getString("remediation_action")),
                     rs.getString("review_note"),
                     rs.getString("reviewer_actor_id"),
                     rs.getLong("reviewed_issue_version"),
@@ -206,6 +222,9 @@ public class JdbcKnowledgeFeedbackRepository implements KnowledgeFeedbackReposit
     public Optional<KnowledgeQualityReview> review(
             Long answerId,
             KnowledgeQualityReviewDecision decision,
+            KnowledgeEvidenceAssessment evidenceAssessment,
+            KnowledgeAnswerAssessment answerAssessment,
+            KnowledgeRemediationAction remediationAction,
             String reviewNote,
             String reviewerActorId,
             long expectedIssueVersion,
@@ -214,6 +233,9 @@ public class JdbcKnowledgeFeedbackRepository implements KnowledgeFeedbackReposit
                 REVIEW_SQL,
                 REVIEW_ROW_MAPPER,
                 decision.name(),
+                evidenceAssessment.name(),
+                answerAssessment.name(),
+                remediationAction.name(),
                 reviewNote,
                 reviewerActorId,
                 answerId,

@@ -225,7 +225,6 @@ onUnmounted(() => { if (toastTimer) clearTimeout(toastTimer) })
   <section class="panel data-enterprise-panel">
     <div class="section-heading">
       <div>
-        <h2>{{ t(`data.tabs.${tab}`) }}</h2>
         <p class="enterprise-panel__description">{{ t(`data.${tab}Description`) }}</p>
       </div>
       <button class="button button--secondary" type="button" :disabled="loading" @click="load">

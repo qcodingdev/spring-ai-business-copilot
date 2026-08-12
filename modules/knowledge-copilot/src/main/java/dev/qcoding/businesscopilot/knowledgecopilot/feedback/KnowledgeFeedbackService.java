@@ -63,6 +63,9 @@ public class KnowledgeFeedbackService {
         return repository.review(
                         answerId,
                         request.decision(),
+                        request.evidenceAssessment(),
+                        request.answerAssessment(),
+                        request.remediationAction(),
                         reviewNote,
                         actorId,
                         request.expectedIssueVersion(),

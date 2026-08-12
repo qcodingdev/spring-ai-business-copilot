@@ -15,6 +15,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   audit locale.
 - Added controlled enterprise UI surfaces for Data governance, Knowledge sources,
   Support connections, Report delivery, and HR collaboration.
+- Added a filterable Support human-review queue with token-bound draft review,
+  explicit manual-channel completion, and independently confirmed external writeback.
+- Added structured Knowledge quality review dimensions for evidence, answer quality,
+  remediation, disposition, and reviewer notes, persisted through Flyway V30.
+- Added Report entry from prepared Data handoffs, quick-start title/source filling,
+  and bounded CSV/JSON source upload while retaining fully manual generation.
 
 ### Changed
 
@@ -22,6 +28,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   the same executable JAR and non-Node runtime image.
 - Updated CI with TypeScript, lint, unit, i18n, production-build, desktop/mobile
   Playwright, accessibility, and bundle checks.
+- Refined the grouped recruiting/employee-service navigation and refreshed the
+  README visuals from the running `2.3.0-SNAPSHOT` workbench.
 
 ### Security
 

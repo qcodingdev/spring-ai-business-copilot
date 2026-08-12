@@ -20,6 +20,9 @@ public interface KnowledgeFeedbackRepository {
     Optional<KnowledgeQualityReview> review(
             Long answerId,
             KnowledgeQualityReviewDecision decision,
+            KnowledgeEvidenceAssessment evidenceAssessment,
+            KnowledgeAnswerAssessment answerAssessment,
+            KnowledgeRemediationAction remediationAction,
             String reviewNote,
             String reviewerActorId,
             long expectedIssueVersion,

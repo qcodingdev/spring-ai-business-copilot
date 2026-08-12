@@ -266,7 +266,6 @@ onUnmounted(() => { if (toastTimer) clearTimeout(toastTimer) })
   <section class="panel">
     <div class="section-heading">
       <div>
-        <h2>{{ t(`${module}.tabs.${tab}`) }}</h2>
         <p class="enterprise-panel__description">{{ t(`${module}.next`) }}</p>
       </div>
       <button v-if="readEndpoint" class="button button--secondary" type="button" :disabled="loading" @click="load">

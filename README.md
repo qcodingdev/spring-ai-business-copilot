@@ -32,6 +32,9 @@ Spring AI Business Copilot packages that complete path into a self-hosted refere
 The current source line is `2.3.0-SNAPSHOT`: it adds a same-origin Vue 3
 workbench, deterministic `zh-CN`/`en-US` operation, and fail-closed enterprise
 connection controls while preserving the 2.2.1 API, security, and deployment model.
+This Snapshot is published from `feature/v2.3-frontend-enterprise-upgrade` for
+evaluation and stabilization; it is not merged into `main` and is not an official
+`v2.3.0` release.
 
 ## Five business workflows
 
@@ -90,9 +93,9 @@ Chat and embedding endpoints are intentionally independent because many OpenAI-c
 ### First-run walkthrough
 
 1. **Data:** ask a business question, inspect the SQL candidate, then confirm the bounded read-only query.
-2. **Knowledge:** initialize the fictional demo data as an administrator for a first local run, or upload a document and wait for indexing; then ask a cited question and submit quality feedback.
-3. **Support:** analyze a fictional ticket, review the evidence and risk, then edit, confirm, or cancel the draft. Internal-note writeback is offered only for tickets imported through a configured external connection.
-4. **Report:** preview typed or CSV/JSON sources, or accept a masked Data handoff; generate a grounded draft, confirm it, and export it. A handoff is not consumed when grounding validation fails.
+2. **Knowledge:** initialize fictional demo data or upload a document and wait for indexing; then ask a cited question. Quality review records separate evidence, answer, remediation, disposition, and reviewer-note judgments.
+3. **Support:** analyze a fictional ticket, then work the filterable human-review queue. A reviewer can reopen a token-bound session, edit, confirm/cancel, and record that the customer reply was completed through the business channel. Internal-note writeback remains a separate confirmation available only to imported tickets.
+4. **Report:** start from a prepared Data handoff at the top of the page, typed evidence, or CSV/JSON upload. Data and quick-start selections fill the title and source preview before generation; failed grounding does not consume a handoff.
 5. **HR:** draft and confirm job criteria, review one fictional resume, and record evidence-bound human feedback. Employee service retrieves policy evidence from the `HR_POLICY` knowledge category.
 
 ## What makes it controlled
@@ -123,6 +126,18 @@ Selecting an example only fills the form; a model call starts after the user rev
 These 2.3 visuals use a fictional operator session. The same browser suite checks
 desktop/mobile layout, both locales, the five primary flows, keyboard focus, and
 serious/critical accessibility violations.
+
+### Current 2.3 workflow screens
+
+| Data result handoff | Knowledge quality review |
+|---|---|
+| ![Data result handoff](assets/data-copilot-result.png) | ![Knowledge quality review](assets/knowledge-copilot-result.png) |
+
+| Support human-review queue | Report from a Data handoff |
+|---|---|
+| ![Support human-review queue](assets/support-copilot-result.png) | ![Report generation from a Data handoff](assets/report-copilot-result.png) |
+
+![Grouped recruiting and employee-service navigation](assets/resume-copilot-result.png)
 
 ## Architecture
 

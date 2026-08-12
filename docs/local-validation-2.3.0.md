@@ -1,9 +1,9 @@
 # 2.3.0-SNAPSHOT 完整本地验证报告
 
-> 验证日期：2026-07-29  
+> 最近验证日期：2026-08-12
 > 分支：`feature/v2.3-frontend-enterprise-upgrade`  
 > 版本：全部 13 个 Maven POM 为 `2.3.0-SNAPSHOT`  
-> Git 边界：未暂存、未提交、未推送、未创建 PR/标签/Release
+> Git 边界：只发布 Snapshot 功能分支；不合并主干，不创建正式标签或 Release
 
 ## 1. 本地交付结论
 
@@ -105,3 +105,61 @@ HR 岗位草稿/标准提取、员工知识问答和 Admin 诊断页面检查。
 确认具体数据接收方授权而未绕过安全审查，
 对应分支由 Mock/单元/集成测试回归。远端 CI、镜像漏洞扫描、厂商沙箱和生产环境仍不在
 本地验收结论内。
+
+## 6. 2026-08-09 人工复核与报告入口复验
+
+本轮针对客服人工复核、知识质量复核、报告来源入口和招聘二级导航继续补齐闭环：
+
+- Support 人工复核队列改为可筛选业务待办，展示风险、分类、情绪、紧急度、证据和草稿；
+  支持重新签发绑定凭证、修订、确认/驳回，以及记录客户回复或人工渠道已完成。
+- Knowledge 质量复核改为结构化判断，持久化证据评估、答案评估、后续动作、处置结论和
+  复核说明；队列同时展示脱敏回答预览、检索证据和实际引用，历史拒答状态已本地化。
+- Report 把 Data 结果交接放在生成页首位，选择结果或快捷开始时自动填写标题和来源；
+  同时保留手工输入与受限 CSV/JSON 上传，不选择 Data 也能完成生成流程。
+- HR 左侧二级菜单改为紧凑分组导航，招聘协同与员工服务的层级、选中态和响应式布局统一。
+
+最终回归证据：
+
+- Node `22.22.3`：`npm run check` 通过，包含类型检查、零警告 Lint、5 个 Vitest 文件/
+  9 个测试和生产构建。
+- Playwright Chromium：桌面与移动端共 38/38 通过，覆盖四项新增流程、中英文界面、
+  五模块主流程、无横向溢出及 serious/critical 无障碍检查。
+- Maven：`./mvnw --batch-mode --no-transfer-progress verify -Psbom` 的 13 模块 Reactor
+  全部 `SUCCESS`；MySQL 8.4 与 PostgreSQL 16/pgvector 集成测试无跳过，空库 V1→V30、
+  V7→V30 和 v2.2.1 V28→V30 升级均保留既有数据，CycloneDX SBOM 包含 199 个组件。
+- 运行态：最终镜像 `sha256:6fe44832716ba934fc8f19dc24da55fdb627878e29ac0244eb87ed3398ae1e6a`
+  已由 Compose 重建；app/PostgreSQL 均为 `healthy`，Flyway 当前版本为 V30。最终镜像上再次
+  执行桌面/移动端 38/38 E2E，浏览器控制台无错误，应用日志未发现 WARN、ERROR 或 5xx。
+
+最终闭环复查还完成了 25 个业务子页面与系统管理四个子菜单的浏览器遍历，并在本地虚构
+数据上实际执行三笔可审计状态变更：Data 查询结果创建 `READY` 报告交接并在报告页自动
+填充标题和来源；Knowledge 将一笔证据不足问题持久化为 `KNOWLEDGE_UPDATE_REQUIRED`，
+同时保存证据/答案评估和更新知识动作；Support 将 `DEMO-SUPPORT-002` 经二次确认从
+`NEEDS_HUMAN` 流转到 `CLOSED`，审计事件记录操作者 `admin`。另外去除了非主任务页外层
+标题与内部面板的重复标题，保留说明、刷新动作和完整内容层级。
+
+本轮没有再次调用外部模型，也未向外部系统写入数据：真实模型脚本会使用本地密钥并向
+外部供应商发送五模块虚构请求，在未明确获知供应商/数据接收方授权前未绕过安全门禁。
+报告生成模型和企业连接仍需部署方提供已授权的密钥/沙箱后做真实供应商验收；远端 CI、
+镜像漏洞扫描和生产环境结论保持未验证。
+
+## 7. 2026-08-12 Snapshot 分支发布门禁
+
+本次交付继续保持 `2.3.0-SNAPSHOT`，只发布
+`feature/v2.3-frontend-enterprise-upgrade` 分支，不合并 `main`，不创建 `v2.3.0`
+标签或正式 Release。中英文 README 已明确此边界，并从当前运行实例重新生成 Data、
+Knowledge、Support、Report、HR 五张业务页面图；截图只包含虚构演示数据。
+
+发布提交前重新执行的门禁如下：
+
+- Node `22.22.3`：类型检查、零警告 Lint、5 个 Vitest 文件/9 个测试和生产构建通过。
+- Playwright：最终 Compose 应用上桌面/移动端 38/38 通过；标准桌面与 Pixel 7 工作台图
+  重新生成，五张模块业务图完成逐张视觉检查。
+- Maven：`verify -Psbom` 的 13 模块全部 `SUCCESS`，MySQL 8.4、PostgreSQL 16/pgvector、
+  Flyway V1→V30、V7→V30、V28→V30 和包含 199 个组件的 CycloneDX SBOM 均通过。
+- 五模块固定评测 67 条、Shell 语法、Compose 配置、Git 空白检查全部通过。
+- 运行态 smoke 通过健康、CSRF、登录、认证工作台和 Data schema；app 与 PostgreSQL
+  容器均健康。
+
+外部真实模型、真实 Jira/Notion/ServiceNow/ATS 租户、镜像漏洞扫描和生产环境仍不属于
+本次 Snapshot 分支发布声明；稳定后冻结正式 `2.3.0` 时应重新完成这些正式发布门禁。

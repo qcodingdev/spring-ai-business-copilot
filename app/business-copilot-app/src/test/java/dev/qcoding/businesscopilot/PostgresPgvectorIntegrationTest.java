@@ -23,6 +23,9 @@ import dev.qcoding.businesscopilot.knowledgecopilot.feedback.JdbcKnowledgeFeedba
 import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeFeedbackRating;
 import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeFeedbackReason;
 import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeQualityReviewDecision;
+import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeEvidenceAssessment;
+import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeAnswerAssessment;
+import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeRemediationAction;
 import dev.qcoding.businesscopilot.datacopilot.schema.DataCopilotSchemaProperties;
 import dev.qcoding.businesscopilot.datacopilot.schema.JdbcSchemaMetadataRepository;
 import dev.qcoding.businesscopilot.demo.DemoModule;
@@ -145,7 +148,7 @@ class PostgresPgvectorIntegrationTest {
         assertThat(actorColumns).isEqualTo(5);
         assertThat(httpRequestColumns).isEqualTo(5);
         assertThat(localeColumns).isEqualTo(5);
-        assertThat(latestMigration).isEqualTo("29");
+        assertThat(latestMigration).isEqualTo("30");
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT format_type(atttypid, atttypmod) "
                         + "FROM pg_attribute "
@@ -198,7 +201,7 @@ class PostgresPgvectorIntegrationTest {
                 """, Integer.class)).isEqualTo(10);
         assertThat(upgradeJdbcTemplate.queryForObject(
                 "SELECT version FROM flyway_schema_history WHERE success = TRUE ORDER BY installed_rank DESC LIMIT 1",
-                String.class)).isEqualTo("29");
+                String.class)).isEqualTo("30");
         assertThat(upgradeJdbcTemplate.queryForObject("""
                 SELECT COUNT(*)
                 FROM information_schema.columns
@@ -240,7 +243,7 @@ class PostgresPgvectorIntegrationTest {
         assertThat(upgradeJdbcTemplate.queryForObject(
                 "SELECT version FROM flyway_schema_history WHERE success = TRUE "
                         + "ORDER BY installed_rank DESC LIMIT 1",
-                String.class)).isEqualTo("29");
+                String.class)).isEqualTo("30");
         assertThat(upgradeJdbcTemplate.queryForObject(
                 "SELECT locale FROM query_audit_logs WHERE id = ?",
                 String.class, auditId)).isEqualTo("zh-CN");
@@ -491,14 +494,16 @@ class PostgresPgvectorIntegrationTest {
     void knowledgeFeedbackAndHumanDispositionFormAConcurrencySafeQualityLoop() {
         Long answerId = jdbcTemplate.queryForObject("""
                 INSERT INTO knowledge_qa_audit_logs (
-                    request_id, actor_id, creator_actor_id, question, answer_status
-                ) VALUES (?, ?, ?, ?, 'ANSWERED')
+                    request_id, actor_id, creator_actor_id, question, answer_preview,
+                    retrieved_chunk_ids, cited_chunk_ids, answer_status
+                ) VALUES (?, ?, ?, ?, ?, '11,12', '11', 'ANSWERED')
                 RETURNING id
                 """, Long.class,
                 "knowledge-feedback-" + System.nanoTime(),
                 "operator-feedback",
                 "operator-feedback",
-                "差旅报销上限是多少？");
+                "差旅报销上限是多少？",
+                "旧制度中的上限为 2000 元。");
         JdbcKnowledgeFeedbackRepository repository =
                 new JdbcKnowledgeFeedbackRepository(jdbcTemplate);
 
@@ -527,6 +532,9 @@ class PostgresPgvectorIntegrationTest {
                 .filter(item -> item.answerId().equals(answerId))
                 .findFirst()
                 .orElseThrow();
+        assertThat(pendingIssue.answerPreview()).isEqualTo("旧制度中的上限为 2000 元。");
+        assertThat(pendingIssue.retrievedChunkIds()).isEqualTo("11,12");
+        assertThat(pendingIssue.citedChunkIds()).isEqualTo("11");
         assertThat(repository.findQualityQueue(0, 100))
                 .extracting(item -> item.answerId())
                 .contains(answerId);
@@ -544,17 +552,26 @@ class PostgresPgvectorIntegrationTest {
         var review = repository.review(
                 answerId,
                 KnowledgeQualityReviewDecision.KNOWLEDGE_UPDATE_REQUIRED,
+                KnowledgeEvidenceAssessment.OUTDATED,
+                KnowledgeAnswerAssessment.PARTIALLY_ACCURATE,
+                KnowledgeRemediationAction.UPDATE_KNOWLEDGE,
                 "需要补充最新报销制度",
                 "reviewer-1",
                 pendingIssue.issueVersion(),
                 pendingIssue.issueUpdatedAt()).orElseThrow();
         assertThat(review.answerId()).isEqualTo(answerId);
+        assertThat(review.evidenceAssessment()).isEqualTo(KnowledgeEvidenceAssessment.OUTDATED);
+        assertThat(review.answerAssessment()).isEqualTo(KnowledgeAnswerAssessment.PARTIALLY_ACCURATE);
+        assertThat(review.remediationAction()).isEqualTo(KnowledgeRemediationAction.UPDATE_KNOWLEDGE);
         assertThat(repository.findQualityQueue(0, 100))
                 .extracting(item -> item.answerId())
                 .doesNotContain(answerId);
         assertThat(repository.review(
                 answerId,
                 KnowledgeQualityReviewDecision.DISMISSED,
+                KnowledgeEvidenceAssessment.NOT_APPLICABLE,
+                KnowledgeAnswerAssessment.NOT_VERIFIABLE,
+                KnowledgeRemediationAction.NONE,
                 "并发旧页面不应覆盖",
                 "reviewer-2",
                 pendingIssue.issueVersion(),

@@ -9,6 +9,7 @@ import DataEnterprisePanel from '@/components/DataEnterprisePanel.vue'
 import EnterprisePanel from '@/components/EnterprisePanel.vue'
 import KnowledgeQualityPanel from '@/components/KnowledgeQualityPanel.vue'
 import ReportEnterprisePanel from '@/components/ReportEnterprisePanel.vue'
+import SupportReviewPanel from '@/components/SupportReviewPanel.vue'
 import EvidenceList from '@/components/EvidenceList.vue'
 import ModuleIcon from '@/components/ModuleIcon.vue'
 import PageHeader from '@/components/PageHeader.vue'
@@ -65,6 +66,9 @@ const consentPurpose = ref('仅用于本次候选人证据评估')
 const consentDays = ref(30)
 const reportHandoffs = ref<Record<string, any>[]>([])
 const selectedReportHandoffRefs = ref<string[]>([])
+const reportSourceFile = ref<File | null>(null)
+const reportDataSummary = ref('')
+const reportDataTitle = ref('')
 const readyReportHandoffs = computed(() => reportHandoffs.value.filter((item) => item.status === 'READY'))
 const reportEnterpriseTab = computed<'records' | 'schedules'>(() => activeTab.value === 'schedules' ? 'schedules' : 'records')
 const criteriaEditable = computed(() => ['DRAFTED', 'CRITERIA_DRAFTED'].includes(String(criteriaDraft.value?.status ?? '')))
@@ -160,8 +164,45 @@ async function loadReportHandoffs(): Promise<void> {
 }
 
 function usePrompt(prompt: string, index: number): void {
+  if (props.module === 'report') {
+    selectedReportHandoffRefs.value = []
+    reportSourceFile.value = null
+    reportDataSummary.value = ''
+    reportDataTitle.value = ''
+    secondary.value = t(`report.exampleTitles.${['first', 'second', 'third'][index]}`)
+    input.value = t(`report.exampleSources.${['first', 'second', 'third'][index]}`)
+    return
+  }
   input.value = prompt
   if (props.module === 'hr' && !secondary.value) secondary.value = t(`hr.exampleTitles.${['first', 'second', 'third'][index]}`)
+}
+
+function toggleReportHandoff(handoff: Record<string, any>): void {
+  const reference = String(handoff.sourceReference)
+  const previousSummary = reportDataSummary.value
+  const previousTitle = reportDataTitle.value
+  selectedReportHandoffRefs.value = selectedReportHandoffRefs.value.includes(reference)
+    ? selectedReportHandoffRefs.value.filter((item) => item !== reference)
+    : [...selectedReportHandoffRefs.value, reference]
+  reportSourceFile.value = null
+  const selected = readyReportHandoffs.value.filter((item) => selectedReportHandoffRefs.value.includes(String(item.sourceReference)))
+  reportDataSummary.value = selected.map((item) => t('report.dataHandoffSourceSummary', {
+    title: item.title,
+    reference: item.sourceReference,
+    rows: item.rowCount,
+  })).join('\n')
+  reportDataTitle.value = selected.length === 1 ? String(selected[0]?.title ?? '') : selected.map((item) => item.title).join(' / ')
+  if (!input.value.trim() || input.value === previousSummary) input.value = reportDataSummary.value
+  if (!secondary.value.trim() || secondary.value === previousTitle) secondary.value = reportDataTitle.value
+}
+
+function chooseReportSource(event: Event): void {
+  reportSourceFile.value = (event.target as HTMLInputElement).files?.[0] ?? null
+  if (reportSourceFile.value) {
+    selectedReportHandoffRefs.value = []
+    reportDataSummary.value = ''
+    reportDataTitle.value = ''
+  }
 }
 
 function genericPayload(): { path: string; body: unknown } {
@@ -197,6 +238,27 @@ async function submit(): Promise<void> {
   loading.value = true
   resetTransient()
   try {
+    if (props.module === 'report' && reportSourceFile.value) {
+      const today = new Date()
+      const startDate = new Date(today)
+      startDate.setDate(today.getDate() - 7)
+      const query = new URLSearchParams({
+        reportType: 'TEAM_WEEKLY',
+        periodStart: startDate.toISOString().slice(0, 10),
+        periodEnd: today.toISOString().slice(0, 10),
+        title: secondary.value,
+      })
+      const body = new FormData()
+      body.append('file', reportSourceFile.value)
+      const response = await api<Record<string, any>>(`/api/report-copilot/reports/generate-from-file?${query.toString()}`, {
+        method: 'POST', body, timeoutMs: AI_GENERATION_REQUEST_TIMEOUT_MS,
+      })
+      requestId.value = response.requestId ?? response.data.requestId ?? null
+      result.value = response.data
+      reportContent.value = response.data.content && typeof response.data.content === 'object'
+        ? structuredClone(response.data.content) : null
+      return
+    }
     const request = genericPayload()
     const response = await api<Record<string, any>>(request.path, {
       method: 'POST',
@@ -499,16 +561,24 @@ onUnmounted(() => { if (toastTimer) clearTimeout(toastTimer) })
       <div class="task-panel__heading"><div><p class="panel-kicker">{{ t('common.currentTask') }}</p><h2>{{ t(`${module}.tabs.${activeTab}`) }}</h2></div><div v-if="isPrimaryTab" class="workflow-stages" :aria-label="t('common.taskFlow')" tabindex="0"><span class="active"><b>1</b>{{ t('common.stageInput') }}</span><span :class="{ active: processingVisible }"><b>2</b>{{ t('common.stageReview') }}</span><span :class="{ active: executable || criteriaDraft || assessment || result?.draft || result?.draftId }"><b>3</b>{{ t('common.stageConfirm') }}</span></div></div>
 
       <form v-if="isPrimaryTab" class="primary-workflow-form" @submit.prevent="submit">
-        <label v-if="(module === 'hr' && hrSection === 'recruiting') || module === 'report'">{{ module === 'hr' ? t('hr.jobTitle') : t('report.reportTitle') }}<input v-model="secondary" required maxlength="300"></label>
-        <label>{{ formFieldLabel }}<textarea v-model="input" :placeholder="formPlaceholder" required maxlength="4000" rows="7" /></label>
-        <div class="quick-start"><div><strong>{{ t('common.quickStart') }}</strong><span>{{ t('common.chooseExample') }}</span></div><div class="prompt-chips"><button v-for="(prompt, index) in quickPrompts" :key="prompt" type="button" @click="usePrompt(prompt, index)">{{ prompt }}</button></div></div>
-        <section v-if="module === 'report'" class="workflow-card">
-          <div class="section-heading"><div><h3>{{ t('report.dataHandoffTitle') }}</h3><p>{{ t('report.dataHandoffDescription') }}</p></div><button class="button button--secondary" type="button" :disabled="loading" @click="loadReportHandoffs">{{ t('common.refresh') }}</button></div>
-          <div v-if="readyReportHandoffs.length" class="record-grid">
-            <label v-for="handoff in readyReportHandoffs" :key="handoff.id" class="checkbox-label"><input v-model="selectedReportHandoffRefs" type="checkbox" :value="handoff.sourceReference"> <span><strong>{{ handoff.title }}</strong><small>{{ handoff.sourceReference }} · {{ handoff.rowCount }} {{ t('data.rows') }}</small></span></label>
-          </div>
-          <p v-else class="empty-state">{{ t('report.noDataHandoffs') }}</p>
-        </section>
+        <template v-if="module === 'report'">
+          <section class="workflow-card report-source-picker">
+            <div class="section-heading"><div><h3>{{ t('report.dataHandoffTitle') }}</h3><p>{{ t('report.dataHandoffDescription') }}</p></div><button class="button button--secondary" type="button" :disabled="loading" @click="loadReportHandoffs">{{ t('common.refresh') }}</button></div>
+            <div v-if="readyReportHandoffs.length" class="data-handoff-picker">
+              <button v-for="handoff in readyReportHandoffs" :key="handoff.id" class="data-handoff-option" :class="{ active: selectedReportHandoffRefs.includes(handoff.sourceReference) }" type="button" :aria-pressed="selectedReportHandoffRefs.includes(handoff.sourceReference)" @click="toggleReportHandoff(handoff)"><span class="data-handoff-option__check">{{ selectedReportHandoffRefs.includes(handoff.sourceReference) ? '✓' : '+' }}</span><span><strong>{{ handoff.title }}</strong><small>{{ handoff.sourceReference }} · {{ handoff.rowCount }} {{ t('data.rows') }}</small></span></button>
+            </div>
+            <p v-else class="empty-state">{{ t('report.noDataHandoffs') }}</p>
+          </section>
+          <label>{{ t('report.reportTitle') }}<input v-model="secondary" required maxlength="300"></label>
+          <label>{{ formFieldLabel }}<textarea v-model="input" :placeholder="formPlaceholder" :required="!reportSourceFile" maxlength="4000" rows="7" /></label>
+          <label class="report-file-field">{{ t('report.uploadSource') }}<input type="file" accept=".csv,.json,text/csv,application/json" @change="chooseReportSource"><small>{{ t('report.uploadSourceHint') }}</small></label>
+          <div class="quick-start"><div><strong>{{ t('common.quickStart') }}</strong><span>{{ t('report.quickStartHint') }}</span></div><div class="prompt-chips"><button v-for="(prompt, index) in quickPrompts" :key="prompt" type="button" @click="usePrompt(prompt, index)">{{ prompt }}</button></div></div>
+        </template>
+        <template v-else>
+          <label v-if="module === 'hr' && hrSection === 'recruiting'">{{ t('hr.jobTitle') }}<input v-model="secondary" required maxlength="300"></label>
+          <label>{{ formFieldLabel }}<textarea v-model="input" :placeholder="formPlaceholder" required maxlength="4000" rows="7" /></label>
+          <div class="quick-start"><div><strong>{{ t('common.quickStart') }}</strong><span>{{ t('common.chooseExample') }}</span></div><div class="prompt-chips"><button v-for="(prompt, index) in quickPrompts" :key="prompt" type="button" @click="usePrompt(prompt, index)">{{ prompt }}</button></div></div>
+        </template>
         <div class="form-actions"><button class="button button--primary button--large" type="submit" :disabled="loading">{{ loading ? t('common.loading') : submitLabel }} <span aria-hidden="true">→</span></button><small>{{ module === 'knowledge' || (module === 'hr' && hrSection === 'employee') ? t('knowledge.answerBoundary') : t('common.reviewBeforeConfirm') }}</small></div>
       </form>
 
@@ -525,6 +595,7 @@ onUnmounted(() => { if (toastTimer) clearTimeout(toastTimer) })
         <section class="workflow-card"><div class="section-heading"><div><h3>{{ t('hr.onboardingPurpose') }}</h3><p>{{ t('hr.onboardingDescription') }}</p></div><button class="button button--secondary" type="button" @click="loadHrData('/api/resume-copilot/enterprise/onboarding-checklists')">{{ t('common.refresh') }}</button></div><div v-if="Array.isArray(hrData)" class="record-grid"><article v-for="item in hrData" :key="item.id"><h4>{{ item.title }}</h4><p>{{ item.roleScope || t('hr.allRoles') }} · v{{ item.version }}</p><StatusBadge :label="item.active ? t('statuses.ACTIVE') : t('statuses.PENDING_REVIEW')" :tone="item.active ? 'success' : 'warning'" /><ul><li v-for="(step, index) in item.items" :key="index">{{ typeof step === 'string' ? step : step.title ?? safeJson(step) }}</li></ul><button v-if="isAdmin && !item.active" class="button button--secondary" type="button" @click="approveChecklist(item)">{{ t('hr.approveChecklist') }}</button></article></div><p v-else class="empty-state">{{ t('common.noData') }}</p></section>
       </template>
       <KnowledgeQualityPanel v-if="module === 'knowledge' && activeTab === 'quality'" />
+      <SupportReviewPanel v-else-if="module === 'support' && activeTab === 'review'" />
       <ReportEnterprisePanel v-else-if="module === 'report' && (activeTab === 'records' || activeTab === 'schedules')" :tab="reportEnterpriseTab" />
       <DataEnterprisePanel v-else-if="module === 'data' && !isPrimaryTab" :tab="activeTab" />
       <EnterprisePanel v-else-if="!isPrimaryTab" :module="module" :tab="activeTab" />

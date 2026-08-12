@@ -146,6 +146,9 @@ class KnowledgeCopilotControllerWebTest {
         String body = """
                 {
                   "decision":"RESOLVED",
+                  "evidenceAssessment":"SUFFICIENT",
+                  "answerAssessment":"ACCURATE",
+                  "remediationAction":"NONE",
                   "reviewNote":" ",
                   "expectedIssueVersion":1,
                   "expectedIssueUpdatedAt":"2026-07-28T11:30:00Z"
@@ -163,7 +166,7 @@ class KnowledgeCopilotControllerWebTest {
     @DisplayName("POST /quality-queue/{answerId}/review requires issue version")
     void qualityReviewRequiresExpectedIssueTime() throws Exception {
         String body = """
-                {"decision":"DISMISSED","reviewNote":"确认无需处理","expectedIssueVersion":1}
+                {"decision":"DISMISSED","evidenceAssessment":"NOT_APPLICABLE","answerAssessment":"NOT_VERIFIABLE","remediationAction":"NONE","reviewNote":"确认无需处理","expectedIssueVersion":1}
                 """;
 
         mockMvc.perform(post("/api/knowledge-copilot/quality-queue/17/review")
@@ -179,6 +182,9 @@ class KnowledgeCopilotControllerWebTest {
         String body = """
                 {
                   "decision":"DISMISSED",
+                  "evidenceAssessment":"NOT_APPLICABLE",
+                  "answerAssessment":"NOT_VERIFIABLE",
+                  "remediationAction":"NONE",
                   "reviewNote":"确认无需处理",
                   "expectedIssueUpdatedAt":"2026-07-28T11:30:00Z"
                 }

@@ -27,6 +27,8 @@ export default {
   no: 'No',
   noData: 'No data yet',
   unknown: 'Unknown',
+  search: 'Search',
+  all: 'All',
   account: 'Current account',
   runtimeMode: 'Runtime mode',
   menu: 'Open navigation',

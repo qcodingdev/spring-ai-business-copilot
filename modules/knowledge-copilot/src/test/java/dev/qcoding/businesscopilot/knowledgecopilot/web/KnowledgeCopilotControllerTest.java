@@ -23,6 +23,9 @@ import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeQualityQue
 import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeQualityReview;
 import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeQualityReviewDecision;
 import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeQualityReviewRequest;
+import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeEvidenceAssessment;
+import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeAnswerAssessment;
+import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeRemediationAction;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -244,7 +247,8 @@ class KnowledgeCopilotControllerTest {
     void getQualityQueueReturnsPagination() {
         Instant issueUpdatedAt = Instant.now();
         var item = new KnowledgeQualityQueueItem(
-                17L, "req-17", "报销上限是多少？", "ANSWERED", null,
+                17L, "req-17", "报销上限是多少？", "旧制度中的上限为 2000 元。",
+                "11,12", "11", "ANSWERED", null,
                 KnowledgeFeedbackRating.NOT_HELPFUL,
                 KnowledgeFeedbackReason.MISSING_EVIDENCE,
                 "缺少上限", Instant.now(), issueUpdatedAt, 1L, issueUpdatedAt);
@@ -263,12 +267,18 @@ class KnowledgeCopilotControllerTest {
         Instant issueUpdatedAt = Instant.now();
         var request = new KnowledgeQualityReviewRequest(
                 KnowledgeQualityReviewDecision.KNOWLEDGE_UPDATE_REQUIRED,
+                KnowledgeEvidenceAssessment.OUTDATED,
+                KnowledgeAnswerAssessment.PARTIALLY_ACCURATE,
+                KnowledgeRemediationAction.UPDATE_KNOWLEDGE,
                 "需要补充最新报销制度",
                 1L,
                 issueUpdatedAt);
         var review = new KnowledgeQualityReview(
                 8L, 17L,
                 KnowledgeQualityReviewDecision.KNOWLEDGE_UPDATE_REQUIRED,
+                KnowledgeEvidenceAssessment.OUTDATED,
+                KnowledgeAnswerAssessment.PARTIALLY_ACCURATE,
+                KnowledgeRemediationAction.UPDATE_KNOWLEDGE,
                 "需要补充最新报销制度",
                 "reviewer",
                 1L,

@@ -237,6 +237,7 @@ public class KnowledgeCopilotController {
                 null,
                 UUID.randomUUID().toString(),
                 question,
+                boundedAnswerPreview(response.answer()),
                 invocation.retrievedChunkIds(),
                 citedIds,
                 response.status().name(),
@@ -257,6 +258,14 @@ public class KnowledgeCopilotController {
                 aiMetadata != null ? aiMetadata.finishReason() : null,
                 null,
                 null);
+    }
+
+    private String boundedAnswerPreview(String answer) {
+        if (answer == null || answer.isBlank()) {
+            return null;
+        }
+        String normalized = answer.trim();
+        return normalized.length() <= 2000 ? normalized : normalized.substring(0, 2000);
     }
 
     // ═══════════════════════════════════════════════════════════════
