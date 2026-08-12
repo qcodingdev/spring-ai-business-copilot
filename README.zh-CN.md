@@ -1,8 +1,8 @@
 <h1 align="center">Spring AI Business Copilot</h1>
 
 <p align="center">
-  <strong>面向 Java 团队的可运行 AI 业务闭环。</strong><br>
-  Text-to-SQL · 带引用知识问答 · 客户服务 · 证据化报告 · 证据化 HR
+  <strong>面向企业真实流程的开源 AI 业务协同工作台。</strong><br>
+  安全数据分析 · 企业知识治理 · 客户工单协同 · 经营报告 · 招聘与员工服务
 </p>
 
 <p align="center">
@@ -16,7 +16,7 @@
 <p align="center">
   <a href="README.md">English</a> ·
   <a href="#快速开始">快速开始</a> ·
-  <a href="#五个业务闭环">业务模块</a> ·
+  <a href="#当前业务能力">业务能力</a> ·
   <a href="#总体架构">总体架构</a> ·
   <a href="https://github.com/qcodingdev/spring-ai-business-copilot/tree/v2.2.1">稳定版 v2.2.1</a> ·
   <a href="https://gitee.com/qcodingdev/spring-ai-business-copilot">Gitee</a>
@@ -26,25 +26,26 @@
 
 > **预览通道：** 当前分支为 `2.3.0-SNAPSHOT`，用于体验和稳定性验证；尚未合并 `main`，也不是正式 `v2.3.0` Release。面向生产的评估请优先从[最新稳定版 v2.2.1](https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.2.1)开始。
 
-## 从模型输出走到业务结果
+## 一个工作台，连接五类企业业务
 
-多数 AI 示例在生成一段文字后就结束了。真实业务软件还必须继续完成证据核验、确定性规则、人工复核、状态流转、审计和可操作的异常反馈。
+Spring AI Business Copilot 已经从最初的 Data Copilot，发展为覆盖数据分析、企业知识、客户服务、经营报告、招聘与员工服务的统一业务工作台。五个模块既可以独立使用，也通过数据交接、知识证据、人工复核和状态记录形成协同流程。
 
-Spring AI Business Copilot 是一个可自行部署的模块化应用，用可运行代码展示这条完整路径。它面向 Java 开发者、解决方案架构师和企业内部平台团队，让你直接改造一个完整业务流程，而不是从聊天 Demo 重新拼装。
+`2.3.0-SNAPSHOT` 当前重点是把已有能力进一步产品化，而不是继续增加模块：
 
-- **按产品直接运行：** 一个 Spring Boot 应用、一套双语工作台、Docker Compose 启动和虚构样例数据。
-- **按业务模块改造：** 每个 Copilot 独立拥有 API、持久化、Prompt、Guardrails、状态生命周期和定向测试。
-- **人工始终可控：** AI 结果周围持续展示证据、风险、状态、确认、审计和下一步动作。
+- **统一企业工作台：** Vue 3 + TypeScript 双语界面统一承载工作总览、五个业务域和系统管理，并根据 `ADMIN`、`OPERATOR`、`REVIEWER` 展示可执行动作。
+- **跨模块业务协同：** Data 查询结果可以直接交给 Report；Knowledge 为客服和员工制度问答提供证据；外部工单、知识源、报告来源和 ATS 数据进入各自受控流程。
+- **完整人工复核：** SQL 执行、知识质量处置、客服草稿、报告确认、招聘评估等关键动作都保留证据、风险、状态、人工编辑和确认记录。
+- **可诊断、可交付：** 系统管理提供运行状态、AI 调用链、Token/延迟、知识文档和体验数据管理；Docker Compose、自动化测试、SBOM 和安全门禁覆盖交付链路。
 
-## 五个业务闭环
+## 当前业务能力
 
-| 业务模块 | 可以直接运行的结果 | 人工控制点 |
+| 业务域 | 当前可操作流程 | 关键控制点 |
 |---|---|---|
-| [Data Copilot](modules/data-copilot/README.md) | 治理指标和模板，检查生成 SQL，执行受限只读查询，再导出或交接脱敏结果 | 执行前展示 SQL 和风险，业务数据源保持只读 |
-| [Knowledge Copilot](modules/knowledge-copilot/README.md) | 同步受控来源，进行带引用问答，复核过期、冲突或低质量知识 | 分别判断证据、答案质量、后续动作和处置结论 |
-| [Support Copilot](modules/support-copilot/README.md) | 分析工单，检查 SLA 和相似案例，在人工复核队列中处理可编辑草稿 | 客户回复和外部回写保持为两个独立确认动作 |
-| [Report Copilot](modules/report-copilot/README.md) | 从 Data 交接、手工证据或 CSV/JSON 生成、复核、确认和导出报告 | 草稿完成证据核验后再确认，永不自动发布 |
-| [HR Copilot](modules/resume-copilot/README.md) | 生成岗位标准，管理授权和面试证据，只读导入 ATS 数据，复核脱敏简历 | 不自动评分、排名、录用/淘汰或写入 ATS |
+| [数据分析](modules/data-copilot/README.md) | 自然语言生成 SQL 候选；维护指标词典和审批模板；查看结果快照与审计；把脱敏结果交接给经营报告 | 查询只读且受 Schema、字段、函数、行数、耗时和结果大小约束，执行前必须确认 |
+| [企业知识](modules/knowledge-copilot/README.md) | 上传和管理文档；同步受控知识源；进行带引用问答；处理包含证据、答案、后续动作和结论的质量复核队列 | 无当前可见证据时拒答，引用必须能回溯到当前文档版本 |
+| [客户服务](modules/support-copilot/README.md) | 工单分析、SLA 与相似案例辅助；在人工复核队列中修订和确认草稿；管理外部连接与处理记录 | 确认草稿不等于发送客户消息，外部内部备注回写需要独立预览和二次确认 |
+| [经营报告](modules/report-copilot/README.md) | 优先接入 Data 结果并自动填充标题和来源，也可手工输入或上传 CSV/JSON；生成、编辑、确认、排期和导出报告 | 报告事实绑定不可变来源快照，定时任务只生成待复核草稿，不自动发布 |
+| [招聘与员工服务](modules/resume-copilot/README.md) | 招聘协同覆盖岗位标准、简历证据评估、面试、候选人授权和 ATS 只读导入；员工服务覆盖制度问答和入职清单 | 不生成总分、排名或录用/淘汰结论，不执行 ATS 写操作 |
 
 ## 快速开始
 

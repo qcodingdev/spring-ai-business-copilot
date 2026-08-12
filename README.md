@@ -1,8 +1,8 @@
 <h1 align="center">Spring AI Business Copilot</h1>
 
 <p align="center">
-  <strong>Ready-to-run AI business workflows for Java teams.</strong><br>
-  Text-to-SQL · Cited knowledge · Customer service · Grounded reports · Evidence-based HR
+  <strong>An open-source AI operations workbench for real enterprise workflows.</strong><br>
+  Governed data analysis · Enterprise knowledge · Customer operations · Business reporting · Recruiting and employee services
 </p>
 
 <p align="center">
@@ -16,7 +16,7 @@
 <p align="center">
   <a href="README.zh-CN.md">简体中文</a> ·
   <a href="#quick-start">Quick start</a> ·
-  <a href="#five-business-workflows">Workflows</a> ·
+  <a href="#current-business-capabilities">Capabilities</a> ·
   <a href="#architecture">Architecture</a> ·
   <a href="https://github.com/qcodingdev/spring-ai-business-copilot/tree/v2.2.1">Stable v2.2.1</a> ·
   <a href="https://gitee.com/qcodingdev/spring-ai-business-copilot">Gitee</a>
@@ -26,25 +26,26 @@
 
 > **Preview channel:** this branch is `2.3.0-SNAPSHOT`, intended for evaluation and stabilization. It is not merged into `main` and is not an official `v2.3.0` release. For production-oriented evaluation, start with the [latest stable release, v2.2.1](https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.2.1).
 
-## From model output to a business outcome
+## One workbench for five enterprise domains
 
-Most AI examples stop after generating text. Business software must continue through evidence checks, deterministic policy, human review, state transitions, audit, and actionable failure feedback.
+Spring AI Business Copilot has grown from the original Data Copilot into a unified workbench for data analysis, enterprise knowledge, customer operations, business reporting, recruiting, and employee services. Each domain can run independently, while data handoffs, grounded knowledge, human review, and persisted state connect them into operational workflows.
 
-Spring AI Business Copilot is a self-hosted modular application that demonstrates that complete path. It is designed for Java developers, solution architects, and internal-platform teams that want to adapt a working business flow instead of assembling another chat demo.
+The focus of `2.3.0-SNAPSHOT` is productizing these existing capabilities rather than adding more modules:
 
-- **Run it as a product:** one Spring Boot application, one bilingual workbench, Docker Compose startup, and fictional sample data.
-- **Adapt one complete workflow:** each Copilot owns its API, persistence, AI prompts, guardrails, lifecycle, and focused tests.
-- **Keep people in control:** evidence, risk, status, confirmation, audit, and next actions stay visible around every AI-assisted result.
+- **Unified enterprise workbench:** a bilingual Vue 3 + TypeScript interface brings together the overview, five business domains, and system administration, with actions scoped to `ADMIN`, `OPERATOR`, and `REVIEWER` roles.
+- **Cross-domain collaboration:** Data results flow into Report; Knowledge grounds support and employee-policy answers; external tickets, knowledge sources, report inputs, and ATS records enter controlled module workflows.
+- **Complete human review:** SQL execution, knowledge-quality disposition, support drafts, report confirmation, and recruiting assessments retain evidence, risk, state, human edits, and confirmation records.
+- **Diagnosable delivery:** administration covers runtime health, AI call chains, token/latency visibility, knowledge documents, and experience data; Docker Compose, automated tests, SBOM, and security gates cover delivery.
 
-## Five business workflows
+## Current business capabilities
 
-| Workflow | What you can run | Human control point |
+| Domain | Operational flow available today | Key control |
 |---|---|---|
-| [Data Copilot](modules/data-copilot/README.md) | Govern metrics and templates, inspect generated SQL, execute a bounded read-only query, then export or hand off masked results | SQL and risk are shown before confirmation; the datasource remains read-only |
-| [Knowledge Copilot](modules/knowledge-copilot/README.md) | Sync governed sources, ask cited questions, and review stale, conflicting, or low-quality knowledge | Reviewers assess evidence, answer quality, remediation, and disposition separately |
-| [Support Copilot](modules/support-copilot/README.md) | Analyze tickets, inspect SLA and similar cases, then work an editable human-review queue | Customer response and external writeback remain explicit, independently confirmed actions |
-| [Report Copilot](modules/report-copilot/README.md) | Start from Data handoffs, typed evidence, or CSV/JSON; generate, review, confirm, and export a grounded report | Drafts are grounded before confirmation and are never auto-published |
-| [HR Copilot](modules/resume-copilot/README.md) | Draft job criteria, manage consent and interview evidence, import ATS data read-only, and review a sanitized resume | No automated score, ranking, hire/reject decision, or ATS write action |
+| [Data analysis](modules/data-copilot/README.md) | Generate SQL candidates from natural language; govern metric definitions and approved templates; inspect result snapshots and audits; hand masked results to Report | Queries are read-only and bounded by schema, columns, functions, rows, time, and result size, with confirmation before execution |
+| [Enterprise knowledge](modules/knowledge-copilot/README.md) | Upload and manage documents; synchronize governed sources; ask cited questions; process a quality queue with separate evidence, answer, remediation, and disposition fields | The system refuses to answer without current accessible evidence, and every citation resolves to the current document version |
+| [Customer operations](modules/support-copilot/README.md) | Analyze tickets with SLA and similar-case context; revise and confirm drafts in a human-review queue; manage external connections and outcome records | Confirming a draft does not send a customer message; external internal-note writeback requires a separate preview and confirmation |
+| [Business reporting](modules/report-copilot/README.md) | Start from a Data handoff that fills title and source automatically, or use typed/CSV/JSON input; generate, edit, confirm, schedule, and export reports | Facts remain bound to immutable source snapshots; schedules create reviewable drafts and never auto-publish |
+| [Recruiting and employee services](modules/resume-copilot/README.md) | Recruiting covers job criteria, evidence-based resume review, interviews, candidate consent, and read-only ATS import; employee services cover cited policy Q&A and onboarding checklists | No score, ranking, hire/reject conclusion, or ATS write action is produced |
 
 ## Quick start
 
