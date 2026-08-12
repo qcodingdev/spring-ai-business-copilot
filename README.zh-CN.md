@@ -179,7 +179,7 @@ flowchart LR
 - 共享环境或类生产部署应设置 `SPRING_PROFILES_ACTIVE=prod`。平台数据库凭据、角色密码或独立只读业务数据源缺失时，应用会启动失败，不会回退到演示值。
 - 自定义 Data Copilot 查询目标必须独立创建最小权限 `SELECT` 账号，并配置显式 schema/表白名单和完整限定列白名单。查询目标支持 PostgreSQL 和 MySQL；平台状态仍保存在 PostgreSQL + pgvector。
 - SharePoint、Confluence、Notion、S3/MinIO、Jira、Zendesk、ServiceNow、飞书、企微和 ATS 适配器需要部署方凭据与真实沙箱验收。代码中存在适配器不等于已经获得厂商认证或通过生产验证。
-- REST 企业适配器必须配置显式 HTTPS 域名白名单，并且只引用环境变量密钥；详见[外部连接安全边界](docs/external-connection-security.md)。
+- REST 企业适配器必须配置显式 HTTPS 域名白名单，并且只引用环境变量密钥。
 - 本项目是参考应用，不是开箱即用的生产安全方案。部署方仍需评审身份认证、网络隔离、密钥、保留策略、隐私、模型供应商条款和地域合规，详见 [SECURITY.md](SECURITY.md)。
 
 ## 本地开发与验证

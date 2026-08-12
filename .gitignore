@@ -19,9 +19,8 @@ AGENTS.md
 .codex/
 .change-evidence.yml
 
-# 正式规划、模块说明和运维文档属于交付物；临时草稿仍需使用其它目录。
-/docs/*
-!/docs/**
+# Internal planning, design notes, and local validation evidence stay local.
+/docs/
 
 # Unpublished screenshot sources; README uses the generated GIF only
 img.png

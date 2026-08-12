@@ -181,7 +181,7 @@ flowchart LR
 - For a shared or production-like deployment, set `SPRING_PROFILES_ACTIVE=prod`. Missing platform database credentials, role passwords, or the dedicated read-only business datasource then fail startup instead of falling back to demo values.
 - A custom Data Copilot target requires an independently provisioned least-privilege `SELECT` account plus explicit schema/table and fully qualified column allowlists. PostgreSQL and MySQL are supported as query targets; platform state remains in PostgreSQL with pgvector.
 - External SharePoint, Confluence, Notion, S3/MinIO, Jira, Zendesk, ServiceNow, Feishu, WeCom, and ATS adapters require deployment-owned credentials and sandbox validation. Their presence in the codebase is not a claim of vendor-certified production verification.
-- REST enterprise adapters require explicit HTTPS host allowlists and environment-only secret references; see [external connection security](docs/external-connection-security.md).
+- REST enterprise adapters require explicit HTTPS host allowlists and environment-only secret references.
 - This is a reference application, not turnkey production security. Review identity, network isolation, secrets, retention, privacy, model-provider terms, and regional compliance for your environment. See [SECURITY.md](SECURITY.md).
 
 ## Develop and verify
