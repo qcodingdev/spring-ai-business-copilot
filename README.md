@@ -1,8 +1,8 @@
 <h1 align="center">Spring AI Business Copilot</h1>
 
 <p align="center">
-  <strong>Ready-to-run AI business workflows for Java teams.</strong><br>
-  Text-to-SQL · Cited knowledge · Customer service · Grounded reports · Evidence-based HR
+  <strong>An open-source AI operations application for real enterprise workflows.</strong><br>
+  Governed data analysis · Enterprise knowledge · Customer operations · Business reporting · Recruiting and employee services
 </p>
 
 <p align="center">
@@ -17,7 +17,7 @@
 <p align="center">
   <a href="README.zh-CN.md">简体中文</a> ·
   <a href="#quick-start">Quick start</a> ·
-  <a href="#five-business-workflows">Workflows</a> ·
+  <a href="#current-business-capabilities">Capabilities</a> ·
   <a href="#architecture">Architecture</a> ·
   <a href="https://github.com/qcodingdev/spring-ai-business-copilot/tree/2.3.0-SNAPSHOT">Preview 2.3</a> ·
   <a href="https://gitee.com/qcodingdev/spring-ai-business-copilot">Gitee</a>
@@ -27,25 +27,24 @@
 
 > **Stable channel:** `main` tracks the current stable source line, `2.2.1`. Use the immutable [v2.2.1 release](https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.2.1) for reproducible evaluation. The [2.3.0-SNAPSHOT branch](https://github.com/qcodingdev/spring-ai-business-copilot/tree/2.3.0-SNAPSHOT) is a preview and is not an official release.
 
-## From model output to a business outcome
+## Operational workflows, not just conversations
 
-Most AI examples stop after generating text. Business software must continue through evidence checks, deterministic policy, human review, state transitions, audit, and actionable failure feedback.
+Spring AI Business Copilot is a self-hosted, modular enterprise AI application. The stable release provides five business modules—Data, Knowledge, Support, Report, and HR—with a complete path from business input, AI generation, and deterministic validation to human confirmation, persisted state, result review, and audit diagnostics.
 
-Spring AI Business Copilot is a self-hosted modular application that demonstrates that complete path. It is designed for Java developers, solution architects, and internal-platform teams that want to adapt a working business flow instead of assembling another chat demo.
+- **Run one complete application:** a modular Spring Boot monolith, responsive business workbench, Docker Compose environment, and fictional sample data.
+- **Connect five business domains:** Data results flow into Report; Knowledge grounds support and policy answers; enterprise connections cover knowledge sources, tickets, report inputs, and read-only ATS imports.
+- **Keep critical decisions human-owned:** SQL execution, support drafts, report confirmation, knowledge-quality disposition, and recruiting assessment all retain explicit review points.
+- **Built for delivery:** roles and object authorization, single-use confirmation, audit, resilience, retention, tests, SBOM, and container hardening share the same baseline.
 
-- **Run it as a product:** one Spring Boot application, one responsive workbench, Docker Compose startup, and fictional sample data.
-- **Adapt one complete workflow:** each Copilot owns its API, persistence, AI prompts, guardrails, lifecycle, and focused tests.
-- **Keep people in control:** evidence, risk, status, confirmation, audit, and next actions stay visible around every AI-assisted result.
+## Current business capabilities
 
-## Five business workflows
-
-| Workflow | What you can run | Human control point |
+| Domain | Operational flow available today | Key control |
 |---|---|---|
-| [Data Copilot](modules/data-copilot/README.md) | Govern metrics and templates, inspect generated SQL, execute a bounded read-only query, then export or hand off masked results | SQL and risk are shown before confirmation; the datasource remains read-only |
-| [Knowledge Copilot](modules/knowledge-copilot/README.md) | Upload governed documents, complete durable indexing, ask cited questions, and record quality feedback | Answers must remain grounded in accessible evidence |
-| [Support Copilot](modules/support-copilot/README.md) | Analyze a ticket, inspect evidence and risk, then edit, confirm, or cancel a reply draft | Customer response, refund, and account actions remain human-owned |
-| [Report Copilot](modules/report-copilot/README.md) | Preview typed or CSV/JSON evidence, generate a grounded draft, confirm it, and export the result | Drafts are grounded before confirmation and are never auto-published |
-| [HR Copilot](modules/resume-copilot/README.md) | Draft job criteria, review a sanitized resume, and record evidence-bound human feedback | No automated score, ranking, hire/reject decision, or protected-attribute inference |
+| [Data analysis](modules/data-copilot/README.md) | Generate SQL candidates from natural language; govern metrics and query templates; execute bounded read-only queries; retain masked results and audits; hand results to Report | SQL is shown and confirmed before execution, with schema, column, function, row, time, and result-size bounds |
+| [Enterprise knowledge](modules/knowledge-copilot/README.md) | Upload and version documents; run hybrid text/vector retrieval; ask cited questions; collect answer feedback and process quality reviews | The system refuses to answer without current accessible evidence, and citations must resolve to current knowledge chunks |
+| [Customer operations](modules/support-copilot/README.md) | Classify tickets, retrieve knowledge evidence, identify risk, edit reply drafts, and confirm or cancel them; integrate read-only enterprise tickets and internal-note writeback | The system never sends customer messages, issues refunds, or changes accounts automatically; external writeback requires confirmation |
+| [Business reporting](modules/report-copilot/README.md) | Generate reports from typed input, CSV/JSON, Jira, meeting notes, Data handoffs, and Support metrics; retain source snapshots, schedules, and office exports | Reports must pass evidence validation; schedules create reviewable drafts and never auto-publish |
+| [Recruiting and employee services](modules/resume-copilot/README.md) | Manage job criteria, sanitized resume evidence, candidate consent, interview collaboration, read-only ATS import, policy Q&A, and onboarding checklists | No score, ranking, hire/reject recommendation, protected-attribute inference, or ATS write action |
 
 ## Quick start
 
