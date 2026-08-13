@@ -2,6 +2,7 @@ package dev.qcoding.businesscopilot.resumecopilot.web;
 
 import dev.qcoding.businesscopilot.commonweb.api.ApiResponse;
 import dev.qcoding.businesscopilot.resumecopilot.assessment.ResumeAssessmentService;
+import dev.qcoding.businesscopilot.resumecopilot.enterprise.HrEnterpriseService;
 import dev.qcoding.businesscopilot.resumecopilot.ResumeModels;
 import dev.qcoding.businesscopilot.resumecopilot.job.JobCriteriaService;
 import dev.qcoding.businesscopilot.resumecopilot.job.JobDraftService;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -33,13 +35,16 @@ public class ResumeCopilotController {
     private final JobCriteriaService criteriaService;
     private final ResumeAssessmentService assessmentService;
     private final JobDraftService jobDraftService;
+    private final HrEnterpriseService hrEnterpriseService;
 
     public ResumeCopilotController(JobCriteriaService criteriaService,
                                    ResumeAssessmentService assessmentService,
-                                   JobDraftService jobDraftService) {
+                                   JobDraftService jobDraftService,
+                                   HrEnterpriseService hrEnterpriseService) {
         this.criteriaService = criteriaService;
         this.assessmentService = assessmentService;
         this.jobDraftService = jobDraftService;
+        this.hrEnterpriseService = hrEnterpriseService;
     }
 
     @PostMapping("/jobs/draft")
@@ -85,15 +90,20 @@ public class ResumeCopilotController {
     @PostMapping("/assessments")
     public ResponseEntity<ApiResponse<ResumeAssessmentService.AssessmentResponse>> assess(
             @Valid @RequestBody AssessmentRequest request) {
-        return ResponseEntity.ok(ApiResponse.ok(assessmentService.assess(request.jobId(), request.resumeText())));
+        return ResponseEntity.ok(ApiResponse.ok(hrEnterpriseService.assessAuthorized(
+                request.jobId(), request.candidateReference(),
+                request.consentReference(), request.resumeText())));
     }
 
     @PostMapping(path = "/assessments/file", consumes = "multipart/form-data")
     public ResponseEntity<ApiResponse<ResumeAssessmentService.AssessmentResponse>> assessFile(
             @RequestPart("jobId") Long jobId,
+            @RequestPart("candidateReference") String candidateReference,
+            @RequestPart("consentReference") String consentReference,
             @RequestPart("file") MultipartFile file) throws IOException {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(
-                assessmentService.assessFile(jobId, file.getOriginalFilename(),
+                hrEnterpriseService.assessAuthorizedFile(jobId, candidateReference,
+                        consentReference, file.getOriginalFilename(),
                         file.getContentType(), file.getBytes())));
     }
 
@@ -101,6 +111,18 @@ public class ResumeCopilotController {
     public ResponseEntity<ApiResponse<ResumeAssessmentService.ReviewView>> reviewView(
             @PathVariable long assessmentId) {
         return ResponseEntity.ok(ApiResponse.ok(assessmentService.reviewView(assessmentId)));
+    }
+
+    @GetMapping("/assessments/review-queue")
+    public ResponseEntity<ApiResponse<List<ResumeAssessmentService.ReviewQueueItem>>> reviewQueue(
+            @RequestParam(defaultValue = "50") int limit) {
+        return ResponseEntity.ok(ApiResponse.ok(assessmentService.reviewQueue(limit)));
+    }
+
+    @PostMapping("/assessments/{assessmentId}/review-session")
+    public ResponseEntity<ApiResponse<ResumeAssessmentService.ReviewSession>> openReviewSession(
+            @PathVariable long assessmentId) {
+        return ResponseEntity.ok(ApiResponse.ok(assessmentService.openReviewSession(assessmentId)));
     }
 
     @PostMapping("/assessments/{assessmentId}/review")
@@ -119,7 +141,8 @@ public class ResumeCopilotController {
     @DeleteMapping("/submissions/{submissionId}")
     public ResponseEntity<ApiResponse<Void>> deleteSubmission(@PathVariable long submissionId) {
         if (!assessmentService.deleteSubmission(submissionId)) {
-            return ResponseEntity.notFound().build();
+            throw new dev.qcoding.businesscopilot.commonweb.api.BusinessException(
+                    dev.qcoding.businesscopilot.commonweb.api.ErrorCode.NOT_FOUND);
         }
         return ResponseEntity.ok(ApiResponse.ok(null, "脱敏简历提交记录已删除"));
     }
@@ -140,6 +163,8 @@ public class ResumeCopilotController {
             List<ResumeModels.JobCriterion> criteria) { }
     public record AssessmentRequest(
             @NotNull(message = "职位编号不能为空。") Long jobId,
+            @NotBlank(message = "候选人业务编号不能为空。") String candidateReference,
+            @NotBlank(message = "授权凭据编号不能为空。") String consentReference,
             @NotBlank(message = "简历内容不能为空。") String resumeText) { }
     public record TokenRequest(@NotBlank(message = "确认凭证不能为空。") String token) { }
     public record ReviewRequest(@NotBlank(message = "复核凭证不能为空。") String token,

@@ -86,9 +86,11 @@ if [[ "$healthy" != "true" ]]; then
 fi
 
 curl --fail --silent --show-error --cookie-jar "$cookie_file" "$base_url/login" >"$login_page"
-login_csrf_token="$(sed -n 's/.*name="_csrf"[^>]*value="\([^"]*\)".*/\1/p' "$login_page" | head -n 1)"
+curl --fail --silent --show-error --cookie "$cookie_file" --cookie-jar "$cookie_file" \
+  "$base_url/api/session" >/dev/null
+login_csrf_token="$(awk '$6 == "XSRF-TOKEN" { token = $7 } END { print token }' "$cookie_file")"
 if [[ -z "$login_csrf_token" ]]; then
-  echo "发布 AI 冒烟测试失败：登录页未生成 CSRF token。" >&2
+  echo "发布 AI 冒烟测试失败：匿名会话未签发 CSRF Cookie。" >&2
   exit 1
 fi
 
@@ -107,7 +109,7 @@ if [[ "$login_status" != "302" ]]; then
 fi
 
 curl --fail --silent --show-error --cookie "$cookie_file" --cookie-jar "$cookie_file" \
-  "$base_url/" >/dev/null
+  "$base_url/api/session" >/dev/null
 csrf_token="$(awk '$6 == "XSRF-TOKEN" { token = $7 } END { print token }' "$cookie_file")"
 if [[ -z "$csrf_token" ]]; then
   echo "发布 AI 冒烟测试失败：应用未签发 API CSRF Cookie。" >&2
@@ -220,10 +222,21 @@ criteria_confirmation="$(api_json POST "/api/resume-copilot/jobs/$job_id/criteri
   "$(jq -nc --arg token "$criteria_token" '{token:$token}')")"
 assert_json "$criteria_confirmation" '.data.status == "CRITERIA_CONFIRMED"' \
   'Resume Copilot 未完成职位标准确认'
+candidate_reference="release-smoke-candidate-$(date +%s)"
+consent_reference="release-smoke-consent-$(date +%s)"
+granted_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+expires_at="$(date -u -v+1d +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d '+1 day' +%Y-%m-%dT%H:%M:%SZ)"
+consent="$(api_json POST "/api/resume-copilot/enterprise/consents" \
+  "$(jq -nc --arg reference "$consent_reference" --arg candidate "$candidate_reference" \
+    --arg granted "$granted_at" --arg expires "$expires_at" \
+    '{consentReference:$reference,candidateReference:$candidate,purpose:"ASSESSMENT",grantedAt:$granted,expiresAt:$expires}')")"
+assert_json "$consent" '.data.purpose == "ASSESSMENT"' \
+  'Resume Copilot 未记录评估用途的候选人授权'
 assessment="$(api_json POST "/api/resume-copilot/assessments" \
-  "$(jq -nc --argjson jobId "$job_id" --arg resume \
+  "$(jq -nc --argjson jobId "$job_id" --arg candidate "$candidate_reference" \
+    --arg consent "$consent_reference" --arg resume \
     '候选人简介：五年 Java 和 Spring Boot 服务开发经验，使用 Java 21、PostgreSQL 和自动化集成测试。' \
-    '{jobId:$jobId,resumeText:$resume}')")"
+    '{jobId:$jobId,candidateReference:$candidate,consentReference:$consent,resumeText:$resume}')")"
 assert_json "$assessment" \
   '.data.status == "DRAFTED" and (.data.evidence | length > 0) and (.data.reviewToken | length > 0)' \
   'Resume Copilot 未生成可复核的证据化评估'

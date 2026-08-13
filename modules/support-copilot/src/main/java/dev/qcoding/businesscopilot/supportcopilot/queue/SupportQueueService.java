@@ -33,7 +33,7 @@ public class SupportQueueService {
             String status, String category, String urgency, String riskLevel, int limit) {
         int boundedLimit = Math.max(1, Math.min(limit, 100));
         return jdbcTemplate.query("""
-                SELECT t.external_id, t.customer_message, t.category, t.sentiment,
+                SELECT t.id AS ticket_id, t.external_id, t.customer_message, t.category, t.sentiment,
                        t.urgency, t.status, t.created_at,
                        d.id AS draft_id, d.status AS draft_status, d.risk_level,
                        d.risk_reasons, d.original_draft_text, d.edited_draft_text,
@@ -58,6 +58,7 @@ public class SupportQueueService {
                     t.created_at DESC
                 LIMIT ?
                 """, (rs, rowNum) -> new QueueItem(
+                rs.getLong("ticket_id"),
                 rs.getString("external_id"),
                 rs.getString("customer_message"),
                 rs.getString("category"),
@@ -86,7 +87,7 @@ public class SupportQueueService {
      * Records that a high-risk ticket without an AI reply draft was handled through the real support channel.
      * This deliberately does not send a message or call any external system.
      */
-    public ManualResolutionResult recordManualReply(String externalReference) {
+    public ManualResolutionResult recordManualReply(long ticketId) {
         if (auditService == null) {
             throw new IllegalStateException("Support audit service is required for manual ticket resolution");
         }
@@ -94,23 +95,23 @@ public class SupportQueueService {
         List<Long> ticketIds = jdbcTemplate.query("""
                 SELECT id
                 FROM support_tickets
-                WHERE external_id = ?
+                WHERE id = ?
                   AND (system_managed = TRUE OR owner_actor_id = ?)
-                """, (rs, rowNum) -> rs.getLong("id"), externalReference, actorId);
+                """, (rs, rowNum) -> rs.getLong("id"), ticketId, actorId);
         if (ticketIds.isEmpty()) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
-        Long ticketId = ticketIds.getFirst();
+        Long resolvedTicketId = ticketIds.getFirst();
         int updated = jdbcTemplate.update("""
                 UPDATE support_tickets
                 SET status = 'CLOSED', updated_at = ?
                 WHERE id = ? AND status = 'NEEDS_HUMAN'
-                """, java.sql.Timestamp.from(Instant.now()), ticketId);
+                """, java.sql.Timestamp.from(Instant.now()), resolvedTicketId);
         if (updated != 1) {
             throw new BusinessException(ErrorCode.STATE_CONFLICT);
         }
         auditService.recordRequired(new SupportAuditLog(
-                null, UUID.randomUUID().toString(), ticketId, "CUSTOMER_REPLY_RECORDED",
+                null, UUID.randomUUID().toString(), resolvedTicketId, "CUSTOMER_REPLY_RECORDED",
                 null, null, null, null, null,
                 null, null, actorId, actorId,
                 null, null, null, null, null, null,
@@ -128,6 +129,7 @@ public class SupportQueueService {
     }
 
     public record QueueItem(
+            long ticketId,
             String externalReference,
             String customerQuestion,
             String category,

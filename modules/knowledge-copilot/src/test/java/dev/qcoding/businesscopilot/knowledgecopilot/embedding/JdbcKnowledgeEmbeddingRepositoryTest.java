@@ -28,6 +28,6 @@ class JdbcKnowledgeEmbeddingRepositoryTest {
 
         verify(jdbcTemplate).query(anyString(), any(RowMapper.class),
                 eq("[0.1,0.2]"), eq("embedding-model"),
-                eq(true), eq(true), isNull(), isNull(), eq(0.70d), eq(5));
+                eq(false), eq(false), isNull(), isNull(), eq(0.70d), eq(5));
     }
 }

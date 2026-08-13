@@ -22,12 +22,12 @@ public final class KnowledgeAccessContext {
 
     public static boolean reviewerAllowed() {
         BusinessRequestContext context = BusinessRequestContextHolder.current();
-        return context == null || context.roles().contains("ADMIN") || context.roles().contains("REVIEWER");
+        return context != null && (context.roles().contains("ADMIN") || context.roles().contains("REVIEWER"));
     }
 
     public static boolean adminAllowed() {
         BusinessRequestContext context = BusinessRequestContextHolder.current();
-        return context == null || context.roles().contains("ADMIN");
+        return context != null && context.roles().contains("ADMIN");
     }
 
     public static void clear() {

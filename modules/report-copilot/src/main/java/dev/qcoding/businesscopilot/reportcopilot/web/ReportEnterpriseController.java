@@ -61,6 +61,16 @@ public class ReportEnterpriseController {
         return ResponseEntity.ok(ApiResponse.ok(service.schedules()));
     }
 
+    @GetMapping("/schedules/{scheduleId}/runs")
+    public ResponseEntity<ApiResponse<?>> scheduleRuns(@PathVariable long scheduleId) {
+        return ResponseEntity.ok(ApiResponse.ok(service.scheduleRuns(scheduleId)));
+    }
+
+    @GetMapping("/reports")
+    public ResponseEntity<ApiResponse<?>> records() {
+        return ResponseEntity.ok(ApiResponse.ok(service.records()));
+    }
+
     @PostMapping("/schedules")
     public ResponseEntity<ApiResponse<?>> saveSchedule(
             @Valid @RequestBody ScheduleRequest request) {

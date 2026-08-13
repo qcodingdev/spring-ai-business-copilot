@@ -86,7 +86,7 @@ public class SqlGenerationService {
         AiInvocationMetadata invocationMetadata;
         try {
             AiInvocationResult<GeneratedSqlCandidate> invocation =
-                    aiChatService.generateJsonWithMetadata(
+                    aiChatService.generatePromptJsonWithMetadata(
                             "data.sql-generation", prompt.content(), GeneratedSqlCandidate.class);
             candidate = invocation.content();
             invocationMetadata = invocation.metadata();

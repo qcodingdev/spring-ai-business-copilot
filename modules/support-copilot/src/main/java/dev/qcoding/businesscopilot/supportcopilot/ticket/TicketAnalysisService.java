@@ -4,6 +4,7 @@ import dev.qcoding.businesscopilot.commonweb.api.BusinessException;
 import dev.qcoding.businesscopilot.commonweb.api.ErrorCode;
 import dev.qcoding.businesscopilot.commonsecurity.CurrentActor;
 import dev.qcoding.businesscopilot.commonsecurity.CurrentActorProvider;
+import dev.qcoding.businesscopilot.commonsecurity.BusinessRole;
 import dev.qcoding.businesscopilot.guardrails.SensitiveTextMasker;
 import dev.qcoding.businesscopilot.supportcopilot.SupportCopilotProperties;
 import dev.qcoding.businesscopilot.supportcopilot.audit.SupportAuditLog;
@@ -74,6 +75,24 @@ public class TicketAnalysisService {
      * @return full analysis result
      */
     public TicketAnalysisResult analyze(TicketClassificationRequest request) {
+        return analyzeInternal(request, null);
+    }
+
+    /** Continues the explicit enterprise flow for a previously imported ticket. */
+    public TicketAnalysisResult analyzeStored(long ticketId) {
+        CurrentActor actor = actorProvider.currentActor();
+        if (!actor.authenticated()) {
+            throw new BusinessException(ErrorCode.NOT_FOUND);
+        }
+        SupportTicket ticket = ticketRepository.claimForAnalysis(
+                        ticketId, actor.actorId(), actor.hasRole(BusinessRole.ADMIN))
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+        return analyzeInternal(new TicketClassificationRequest(
+                ticket.customerMessage(), ticket.channel()), ticket);
+    }
+
+    private TicketAnalysisResult analyzeInternal(
+            TicketClassificationRequest request, SupportTicket claimedTicket) {
         String requestId = UUID.randomUUID().toString();
         long startMs = System.currentTimeMillis();
         String modelName = null;
@@ -92,20 +111,34 @@ public class TicketAnalysisService {
             modelName = classificationAi != null ? classificationAi.modelName() : null;
             String maskedMessage = classificationService.maskedMessage(request.customerMessage());
 
-            // Persist ticket
-            SupportTicket ticket = ticketRepository.save(new SupportTicket(
-                    null, null, maskedMessage,
-                    request.channel() != null ? request.channel() : "sample",
-                    classification.category(), classification.sentiment(),
-                    classification.urgency(), SupportTicketStatus.CLASSIFIED,
-                    actor.actorId(), null, null));
+            SupportTicket ticket;
+            if (claimedTicket == null) {
+                ticket = ticketRepository.save(new SupportTicket(
+                        null, null, maskedMessage,
+                        request.channel() != null ? request.channel() : "sample",
+                        classification.category(), classification.sentiment(),
+                        classification.urgency(), SupportTicketStatus.CLASSIFIED,
+                        actor.actorId(), null, null));
+            } else {
+                if (!ticketRepository.updateClassification(
+                        claimedTicket.id(), classification.category(),
+                        classification.sentiment(), classification.urgency())) {
+                    throw new BusinessException(ErrorCode.STATE_CONFLICT);
+                }
+                ticket = new SupportTicket(
+                        claimedTicket.id(), claimedTicket.externalId(), maskedMessage,
+                        claimedTicket.channel(), classification.category(),
+                        classification.sentiment(), classification.urgency(),
+                        SupportTicketStatus.CLASSIFIED, claimedTicket.ownerActorId(),
+                        claimedTicket.createdAt(), Instant.now());
+            }
 
             auditService.record(new SupportAuditLog(
                     null, requestId, ticket.id(), "CLASSIFIED",
                     classification.category().name(), classification.urgency().name(),
                     null, null, modelName,
                     System.currentTimeMillis() - startMs, null,
-                    ticket.ownerActorId(), null,
+                    ticket.ownerActorId(), actor.actorId(),
                     classificationAi != null ? classificationAi.providerName() : null,
                     classificationAi != null ? classificationAi.providerRequestId() : null,
                     classificationPrompt != null ? classificationPrompt.name() : null,
@@ -175,7 +208,7 @@ public class TicketAnalysisService {
                     null, requestId, ticket.id(), eventType,
                     classification.category().name(), classification.urgency().name(),
                     draftResponse.riskLevel(), evidenceChunkIds, draftModel,
-                    totalMs, null, ticket.ownerActorId(), null,
+                    totalMs, null, ticket.ownerActorId(), actor.actorId(),
                     draftAi != null ? draftAi.providerName() : null,
                     draftAi != null ? draftAi.providerRequestId() : null,
                     draftPrompt != null ? draftPrompt.name() : null,
@@ -195,8 +228,11 @@ public class TicketAnalysisService {
 
         } catch (BusinessException ex) {
             log.error("工单分析失败：requestId={}", requestId, ex);
+            if (claimedTicket != null) {
+                ticketRepository.failAnalysis(claimedTicket.id());
+            }
             auditService.record(new SupportAuditLog(
-                    null, requestId, null, "FAILED",
+                    null, requestId, claimedTicket == null ? null : claimedTicket.id(), "FAILED",
                     null, null, null, null, modelName,
                     System.currentTimeMillis() - startMs, null,
                     actor.actorId(), null,
@@ -205,8 +241,11 @@ public class TicketAnalysisService {
             throw ex;
         } catch (Exception ex) {
             log.error("工单分析发生未预期异常：requestId={}", requestId, ex);
+            if (claimedTicket != null) {
+                ticketRepository.failAnalysis(claimedTicket.id());
+            }
             auditService.record(new SupportAuditLog(
-                    null, requestId, null, "FAILED",
+                    null, requestId, claimedTicket == null ? null : claimedTicket.id(), "FAILED",
                     null, null, null, null, modelName,
                     System.currentTimeMillis() - startMs, null,
                     actor.actorId(), null,

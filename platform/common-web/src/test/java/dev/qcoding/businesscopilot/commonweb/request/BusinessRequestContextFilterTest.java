@@ -51,4 +51,37 @@ class BusinessRequestContextFilterTest {
 
         assertThat(observed.get()).hasSize(32).matches("[a-f0-9]{32}");
     }
+
+    @Test
+    void mapsStandardAuthenticatedRolesForHostIndependentAuthorization() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setUserPrincipal((Principal) () -> "reviewer");
+        request.addUserRole("REVIEWER");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        AtomicReference<BusinessRequestContext> observed = new AtomicReference<>();
+
+        new BusinessRequestContextFilter().doFilter(request, response,
+                (req, res) -> observed.set(BusinessRequestContextHolder.current()));
+
+        assertThat(observed.get().actorId()).isEqualTo("reviewer");
+        assertThat(observed.get().roles()).containsExactly("REVIEWER");
+    }
+
+    @Test
+    void acceptsOnlyExplicitEnglishAndDefaultsEveryOtherLanguageToChinese() throws Exception {
+        assertThat(BusinessRequestContextFilter.resolveLocale(null)).isEqualTo("zh-CN");
+        assertThat(BusinessRequestContextFilter.resolveLocale("en-US")).isEqualTo("en-US");
+        assertThat(BusinessRequestContextFilter.resolveLocale("en-US,en;q=0.9")).isEqualTo("en-US");
+        assertThat(BusinessRequestContextFilter.resolveLocale("en-GB")).isEqualTo("zh-CN");
+        assertThat(BusinessRequestContextFilter.resolveLocale("fr-FR")).isEqualTo("zh-CN");
+
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("Accept-Language", "en-US");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        AtomicReference<String> observed = new AtomicReference<>();
+        new BusinessRequestContextFilter().doFilter(request, response,
+                (req, res) -> observed.set(BusinessRequestContextHolder.currentLocale()));
+        assertThat(observed.get()).isEqualTo("en-US");
+        assertThat(MDC.get(BusinessRequestContextFilter.LOCALE_MDC_KEY)).isNull();
+    }
 }

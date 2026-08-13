@@ -18,6 +18,12 @@ public interface ReportDraftRepository {
 
     Optional<ReportDraft> findById(Long draftId);
 
+    boolean updateContent(Long draftId, ReportDraftStatus expected, LlmReportOutput content,
+                          String actionActorId);
+
     boolean transitionStatus(Long draftId, ReportDraftStatus expected, ReportDraftStatus target,
                              String actionActorId);
+
+    boolean replaceConfirmationToken(Long draftId, ReportDraftStatus expected, String tokenDigest,
+                                     String reviewerActorId, java.time.Instant expiresAt);
 }

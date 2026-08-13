@@ -1,6 +1,9 @@
 package dev.qcoding.businesscopilot.resumecopilot.enterprise;
 
 import dev.qcoding.businesscopilot.commonsecurity.ExternalSecretResolver;
+import dev.qcoding.businesscopilot.commonsecurity.BusinessRole;
+import dev.qcoding.businesscopilot.commonsecurity.CurrentActor;
+import dev.qcoding.businesscopilot.commonsecurity.CurrentActorProvider;
 import dev.qcoding.businesscopilot.commonweb.api.BusinessException;
 import dev.qcoding.businesscopilot.guardrails.SensitiveTextMasker;
 import dev.qcoding.businesscopilot.resumecopilot.assessment.ResumeAssessmentService;
@@ -11,6 +14,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -22,14 +26,18 @@ import static org.mockito.Mockito.verify;
 class HrEnterpriseServiceTest {
 
     private final JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+    private final CurrentActorProvider actorProvider = () ->
+            new CurrentActor("operator-1", Set.of(BusinessRole.OPERATOR));
     private HrEnterpriseService service;
 
     @BeforeEach
     void setUp() {
         service = new HrEnterpriseService(
-                jdbcTemplate, mock(ResumeAssessmentService.class), mock(),
+                jdbcTemplate, mock(ResumeAssessmentService.class), actorProvider,
                 mock(ExternalSecretResolver.class), new SensitiveTextMasker(),
-                new ObjectMapper(), org.springframework.web.client.RestClient.builder());
+                new ObjectMapper(),
+                mock(dev.qcoding.businesscopilot.commonsecurity.ExternalEndpointPolicy.class),
+                mock(dev.qcoding.businesscopilot.commonsecurity.ExternalHttpClientFactory.class));
     }
 
     @Test
@@ -59,7 +67,7 @@ class HrEnterpriseServiceTest {
     void rejectsExpiredOrReversedCandidateConsentBeforePersistence() {
         Instant grantedAt = Instant.parse("2026-07-28T10:00:00Z");
         HrEnterpriseService.ConsentCommand command = new HrEnterpriseService.ConsentCommand(
-                "consent-001", "candidate-001", "面试评估",
+                "consent-001", "candidate-001", HrEnterpriseService.ConsentPurpose.ASSESSMENT,
                 grantedAt, grantedAt.minusSeconds(1));
 
         assertThatThrownBy(() -> service.saveConsent(command))
@@ -69,9 +77,28 @@ class HrEnterpriseServiceTest {
 
     @Test
     void emptyInterviewSummaryKeepsHumanDecisionBoundaryExplicit() {
+        org.mockito.Mockito.when(jdbcTemplate.queryForObject(
+                anyString(), org.mockito.ArgumentMatchers.eq(Integer.class),
+                org.mockito.ArgumentMatchers.any(Object[].class))).thenReturn(1);
         HrEnterpriseService.InterviewSummary summary = service.interviewSummary(77L);
 
         assertThat(summary.interviewerCount()).isZero();
         assertThat(summary.decisionBoundary()).contains("不形成排名、评分或录用决定");
+    }
+
+    @Test
+    void rejectsOnboardingChecklistWithoutAnyRequiredTask() {
+        HrEnterpriseService.ChecklistCommand command = new HrEnterpriseService.ChecklistCommand(
+                "engineer-onboarding", "工程师入职清单", "ENGINEER",
+                List.of(new HrEnterpriseService.ChecklistItem(
+                        "read-handbook", "阅读员工手册", "查看最新制度", false, "EMPLOYEE")),
+                List.of("knowledge:employee-handbook"));
+
+        assertThatThrownBy(() -> service.saveChecklist(command))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("至少包含一个必办事项");
+        verify(jdbcTemplate, never()).queryForObject(
+                anyString(), org.mockito.ArgumentMatchers.<Class<Long>>any(),
+                org.mockito.ArgumentMatchers.<Object[]>any());
     }
 }

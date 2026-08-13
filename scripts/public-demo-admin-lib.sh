@@ -4,7 +4,7 @@
 set -eu
 
 require_public_demo_tools() {
-  for tool_name in curl jq sed awk mktemp; do
+  for tool_name in curl jq awk mktemp; do
     command -v "$tool_name" >/dev/null 2>&1 || {
       echo "缺少命令：$tool_name" >&2
       exit 1
@@ -19,14 +19,13 @@ public_demo_login() {
   public_demo_cookie_jar="$(mktemp "${TMPDIR:-/tmp}/business-copilot-admin.XXXXXX")"
   trap 'rm -f "$public_demo_cookie_jar"' EXIT HUP INT TERM
 
-  public_demo_login_page="$(curl --fail --silent --show-error \
+  curl --fail --silent --show-error \
     --cookie-jar "$public_demo_cookie_jar" \
-    "${ADMIN_BASE_URL%/}/login")"
-  public_demo_login_csrf="$(printf '%s' "$public_demo_login_page" \
-    | sed -n 's/.*name="_csrf"[^>]*value="\([^"]*\)".*/\1/p' \
-    | head -n 1)"
+    "${ADMIN_BASE_URL%/}/api/session" >/dev/null
+  public_demo_login_csrf="$(awk '$6 == "XSRF-TOKEN" {print $7}' \
+    "$public_demo_cookie_jar" | tail -n 1)"
   if [ -z "$public_demo_login_csrf" ]; then
-    echo "无法从登录页读取 CSRF 凭证。" >&2
+    echo "匿名会话未签发 CSRF Cookie。" >&2
     exit 1
   fi
 
@@ -41,7 +40,7 @@ public_demo_login() {
   curl --fail --silent --show-error \
     --cookie "$public_demo_cookie_jar" \
     --cookie-jar "$public_demo_cookie_jar" \
-    "${ADMIN_BASE_URL%/}/admin" >/dev/null
+    "${ADMIN_BASE_URL%/}/api/session" >/dev/null
   public_demo_csrf="$(awk '$6 == "XSRF-TOKEN" {print $7}' "$public_demo_cookie_jar" | tail -n 1)"
   if [ -z "$public_demo_csrf" ]; then
     echo "Admin 登录失败或无法读取 CSRF Cookie。" >&2

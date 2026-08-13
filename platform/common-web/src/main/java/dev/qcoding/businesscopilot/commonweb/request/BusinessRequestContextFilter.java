@@ -22,6 +22,7 @@ public class BusinessRequestContextFilter extends OncePerRequestFilter {
     public static final String REQUEST_ID_HEADER = "X-Request-Id";
     public static final String REQUEST_ID_MDC_KEY = "requestId";
     public static final String ACTOR_ID_MDC_KEY = "actorId";
+    public static final String LOCALE_MDC_KEY = "locale";
     private static final Pattern SAFE_REQUEST_ID = Pattern.compile("[A-Za-z0-9._-]{8,64}");
     private static final Logger log = LoggerFactory.getLogger(BusinessRequestContextFilter.class);
 
@@ -29,7 +30,8 @@ public class BusinessRequestContextFilter extends OncePerRequestFilter {
     private final Function<HttpServletRequest, Set<String>> rolesResolver;
 
     public BusinessRequestContextFilter() {
-        this(BusinessRequestContextFilter::principalName, request -> Set.of());
+        this(BusinessRequestContextFilter::principalName,
+                BusinessRequestContextFilter::standardBusinessRoles);
     }
 
     public BusinessRequestContextFilter(Function<HttpServletRequest, String> actorResolver) {
@@ -49,9 +51,11 @@ public class BusinessRequestContextFilter extends OncePerRequestFilter {
         String requestId = resolveRequestId(request.getHeader(REQUEST_ID_HEADER));
         String actorId = normalizeActor(actorResolver.apply(request));
         BusinessRequestContextHolder.set(new BusinessRequestContext(
-                requestId, actorId, rolesResolver.apply(request)));
+                requestId, actorId, rolesResolver.apply(request),
+                resolveLocale(request.getHeader("Accept-Language"))));
         MDC.put(REQUEST_ID_MDC_KEY, requestId);
         MDC.put(ACTOR_ID_MDC_KEY, actorId);
+        MDC.put(LOCALE_MDC_KEY, BusinessRequestContextHolder.currentLocale());
         response.setHeader(REQUEST_ID_HEADER, requestId);
         long startNanos = System.nanoTime();
         try {
@@ -67,6 +71,7 @@ public class BusinessRequestContextFilter extends OncePerRequestFilter {
             }
             MDC.remove(ACTOR_ID_MDC_KEY);
             MDC.remove(REQUEST_ID_MDC_KEY);
+            MDC.remove(LOCALE_MDC_KEY);
             BusinessRequestContextHolder.clear();
         }
     }
@@ -82,8 +87,22 @@ public class BusinessRequestContextFilter extends OncePerRequestFilter {
         return actor == null || actor.isBlank() ? "anonymous" : actor;
     }
 
+    static String resolveLocale(String acceptLanguage) {
+        if (acceptLanguage == null || acceptLanguage.isBlank()) return "zh-CN";
+        String first = acceptLanguage.split(",", 2)[0].split(";", 2)[0].trim();
+        return "en-US".equalsIgnoreCase(first) ? "en-US" : "zh-CN";
+    }
+
     private static String principalName(HttpServletRequest request) {
         Principal principal = request.getUserPrincipal();
         return principal != null ? principal.getName() : null;
+    }
+
+    private static Set<String> standardBusinessRoles(HttpServletRequest request) {
+        java.util.HashSet<String> roles = new java.util.HashSet<>();
+        for (String role : new String[]{"ADMIN", "OPERATOR", "REVIEWER"}) {
+            if (request.isUserInRole(role)) roles.add(role);
+        }
+        return Set.copyOf(roles);
     }
 }

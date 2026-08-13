@@ -111,6 +111,30 @@ public class JdbcReportDraftRepository implements ReportDraftRepository {
         return rows == 1;
     }
 
+    @Override
+    public boolean updateContent(Long draftId, ReportDraftStatus expected, LlmReportOutput content,
+                                 String actionActorId) {
+        String citedSourceIds = content.citations().stream().map(citation -> citation.sourceId())
+                .distinct().collect(Collectors.joining(","));
+        int rows = jdbcTemplate.update("UPDATE report_drafts SET structured_content = ?, cited_source_ids = ?, "
+                        + "action_actor_id = ?, updated_at = ? WHERE id = ? AND status = ? AND expires_at > ?",
+                serialize(content), citedSourceIds, actionActorId, Timestamp.from(Instant.now()),
+                draftId, expected.name(), Timestamp.from(Instant.now()));
+        return rows == 1;
+    }
+
+    @Override
+    public boolean replaceConfirmationToken(Long draftId, ReportDraftStatus expected,
+                                            String tokenDigest, String reviewerActorId,
+                                            Instant expiresAt) {
+        return jdbcTemplate.update("""
+                UPDATE report_drafts
+                SET confirmation_token_digest = ?, action_actor_id = ?, expires_at = ?, updated_at = now()
+                WHERE id = ? AND status = ?
+                """, tokenDigest, reviewerActorId, Timestamp.from(expiresAt), draftId,
+                expected.name()) == 1;
+    }
+
     private long insertRequest(ReportRequestPreparationService.ReportRequestPreview preview,
                                String ownerActorId, Instant now) {
         KeyHolder keyHolder = new GeneratedKeyHolder();

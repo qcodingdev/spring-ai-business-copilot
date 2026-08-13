@@ -98,7 +98,7 @@ public class KnowledgeAnswerService {
         LlmAnswerOutput llmOutput;
         try {
             AiInvocationResult<LlmAnswerOutput> invocation =
-                    aiChatService.generateJsonWithMetadata(
+                    aiChatService.generatePromptJsonWithMetadata(
                             "knowledge.answer-generation", prompt.content(), LlmAnswerOutput.class);
             llmOutput = invocation.content();
             aiMetadata = invocation.metadata();
@@ -106,7 +106,11 @@ public class KnowledgeAnswerService {
                 modelName = aiMetadata.modelName();
             }
         } catch (BusinessException ex) {
-            // JSON 解析失败 → 返回 REJECTED
+            // 只有模型返回的 JSON 无法解析时才降级为可检查的 REJECTED。
+            // 超时、熔断等上游故障必须保留为可重试的 503，不能误报成解析问题。
+            if (ex.errorCode() != ErrorCode.AI_OUTPUT_PARSE_ERROR) {
+                throw ex;
+            }
             log.error("问答模型结构化输出解析失败", ex);
             return result(new KnowledgeAnswerResponse(
                     KnowledgeAnswerStatus.REJECTED, null, List.of(),

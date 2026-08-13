@@ -3,6 +3,8 @@ package dev.qcoding.businesscopilot.knowledgecopilot.source;
 import dev.qcoding.businesscopilot.commonsecurity.BusinessRole;
 import dev.qcoding.businesscopilot.commonsecurity.CurrentActor;
 import dev.qcoding.businesscopilot.commonsecurity.ExternalSecretResolver;
+import dev.qcoding.businesscopilot.commonsecurity.ExternalConnectionSecurityProperties;
+import dev.qcoding.businesscopilot.commonsecurity.ExternalEndpointPolicy;
 import dev.qcoding.businesscopilot.knowledgecopilot.document.DocumentUploadService;
 import dev.qcoding.businesscopilot.knowledgecopilot.document.KnowledgeVisibilityScope;
 import org.junit.jupiter.api.Test;
@@ -11,6 +13,7 @@ import org.springframework.jdbc.core.RowMapper;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -64,10 +67,15 @@ class KnowledgeSourceSyncServiceTest {
                         List.of("unknown-external-group"), false)), null, false);
             }
         };
+        ExternalEndpointPolicy endpointPolicy = mock(ExternalEndpointPolicy.class);
+        when(endpointPolicy.properties()).thenReturn(new ExternalConnectionSecurityProperties(
+                List.of(), false, false, Duration.ofSeconds(1), Duration.ofSeconds(2),
+                Duration.ofSeconds(10), 1024, 2, 50, 16));
         KnowledgeSourceSyncService service = new KnowledgeSourceSyncService(
                 jdbcTemplate, List.of(adapter), uploadService,
                 () -> new CurrentActor("admin", Set.of(BusinessRole.ADMIN)),
-                mock(ExternalSecretResolver.class), new ObjectMapper());
+                mock(ExternalSecretResolver.class), new ObjectMapper(),
+                endpointPolicy);
 
         KnowledgeSourceSyncService.SyncResult result = service.synchronize(7L);
 

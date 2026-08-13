@@ -58,8 +58,8 @@ public class JdbcSupportAuditRepository implements SupportAuditRepository {
                 + "ticket_id, event_type, category, urgency, risk_level, cited_chunk_ids, "
                 + "model_name, latency_ms, error_message, creator_actor_id, action_actor_id, "
                 + "provider_name, provider_request_id, prompt_name, prompt_version, prompt_hash, "
-                + "policy_version, violation_codes, input_tokens, output_tokens, finish_reason, created_at) "
-                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                + "policy_version, violation_codes, input_tokens, output_tokens, finish_reason, locale, created_at) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         KeyHolder keyHolder = new GeneratedKeyHolder();
         Instant now = Instant.now();
@@ -106,7 +106,8 @@ public class JdbcSupportAuditRepository implements SupportAuditRepository {
                 ps.setNull(23, java.sql.Types.INTEGER);
             }
             ps.setString(24, log.finishReason());
-            ps.setTimestamp(25, Timestamp.from(now));
+            ps.setString(25, BusinessRequestContextHolder.currentLocale());
+            ps.setTimestamp(26, Timestamp.from(now));
             return ps;
         }, keyHolder);
 

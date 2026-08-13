@@ -6,6 +6,59 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-08-13
+
+### Added
+
+- Replaced the Thymeleaf/vanilla-JavaScript workbench with a same-origin Vue 3,
+  TypeScript, and Vite SPA covering login, Admin, and all five business workflows.
+- Added deterministic `zh-CN` default and persistent `en-US` switching, including
+  `document.lang`, `Accept-Language`, AI output-language prompts, and low-cardinality
+  audit locale.
+- Added controlled enterprise UI surfaces for Data governance, Knowledge sources,
+  Support connections, Report delivery, and HR collaboration.
+- Added a filterable Support human-review queue with token-bound draft review,
+  explicit manual-channel completion, and independently confirmed external writeback.
+- Added structured Knowledge quality review dimensions for evidence, answer quality,
+  remediation, disposition, and reviewer notes, persisted through Flyway V30.
+- Added Report entry from prepared Data handoffs, quick-start title/source filling,
+  and bounded CSV/JSON source upload while retaining fully manual generation.
+- Added Flyway V31 for immutable governance versions, claim-safe Data handoffs and
+  Report schedules, recoverable Support writeback outcomes, interview membership,
+  purpose-bound candidate consent, and actionable onboarding instances/tasks.
+- Added an actor-scoped HR assessment review queue with atomic reviewer claiming,
+  rotated one-time credentials, evidence inspection, and auditable disposition.
+
+### Changed
+
+- Pinned Node 22/npm 10 in the Maven build and packaged the production frontend in
+  the same executable JAR and non-Node runtime image.
+- Updated CI with TypeScript, lint, unit, i18n, production-build, desktop/mobile
+  Playwright, accessibility, and bundle checks.
+- Refined the grouped recruiting/employee-service navigation and refreshed the
+  README animated GIF and workflow screenshots from the running 2.3 workbench.
+- Made Data governance and HR question/checklist versions immutable with four-eyes
+  approval, made Report schedules accept only repeatable executable sources, and
+  made Support imports idempotent under concurrency.
+
+### Fixed
+
+- Prevented Data result/audit loading from failing as a unit when an operator cannot
+  access reviewer audit data, and aligned reviewer navigation with callable APIs.
+- Made one-shot Data handoffs claim/consume atomically, reconciled stale Report
+  schedule leases, and disabled schedules when referenced connections become invalid.
+- Added conditional transitions and explicit recovery evidence for uncertain external
+  Support writebacks, while retaining the no-customer-send boundary.
+- Allowed expired pending Support review credentials to be renewed with atomic
+  reviewer assignment, while invalidating the previous digest-backed token.
+
+### Security
+
+- Added fail-closed HTTPS host allowlists, DNS/IP SSRF checks, disabled redirects,
+  same-origin revalidation, connection/read/task timeouts, byte/page/item/JSON
+  limits, environment-only secret references, and UI secret redaction for REST
+  enterprise connections.
+
 ## [2.2.1] - 2026-07-29
 
 ### Changed
@@ -146,7 +199,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Kept risky actions behind single-use confirmation tokens and explicit human review.
 - Excluded local AI-agent settings, internal planning documents, and generated review evidence from the public repository.
 
-[Unreleased]: https://github.com/qcodingdev/spring-ai-business-copilot/compare/v2.2.1...main
+[Unreleased]: https://github.com/qcodingdev/spring-ai-business-copilot/compare/v2.3.0...main
+[2.3.0]: https://github.com/qcodingdev/spring-ai-business-copilot/compare/v2.2.1...v2.3.0
 [2.2.1]: https://github.com/qcodingdev/spring-ai-business-copilot/compare/v2.2.0...v2.2.1
 [2.2.0]: https://github.com/qcodingdev/spring-ai-business-copilot/compare/v2.0.0...v2.2.0
 [2.0.0]: https://github.com/qcodingdev/spring-ai-business-copilot/compare/v1.0.0...v2.0.0

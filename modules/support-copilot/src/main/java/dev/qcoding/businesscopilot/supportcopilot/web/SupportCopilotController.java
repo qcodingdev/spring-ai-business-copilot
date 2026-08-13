@@ -83,6 +83,13 @@ public class SupportCopilotController {
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 
+    /** Continues an imported ticket from RECEIVED/FAILED into the audited AI review flow. */
+    @PostMapping("/tickets/{ticketId}/analyze")
+    public ResponseEntity<ApiResponse<TicketAnalyzeResponse>> analyzeImportedTicket(
+            @PathVariable long ticketId) {
+        return ResponseEntity.ok(ApiResponse.ok(toResponse(analysisService.analyzeStored(ticketId))));
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // 草稿确认/取消
     // ═══════════════════════════════════════════════════════════════
@@ -148,10 +155,10 @@ public class SupportCopilotController {
     }
 
     /** Records a manual external reply for a high-risk queue item that intentionally has no AI draft. */
-    @PostMapping("/tickets/{externalReference}/record-manual-reply")
+    @PostMapping("/tickets/{ticketId}/record-manual-reply")
     public ResponseEntity<ApiResponse<SupportQueueService.ManualResolutionResult>> recordManualReply(
-            @PathVariable String externalReference) {
-        return ResponseEntity.ok(ApiResponse.ok(queueService.recordManualReply(externalReference)));
+            @PathVariable long ticketId) {
+        return ResponseEntity.ok(ApiResponse.ok(queueService.recordManualReply(ticketId)));
     }
 
     /** GET /api/support-copilot/audit-logs — 审计日志分页 */
@@ -174,6 +181,16 @@ public class SupportCopilotController {
                 .map(e -> new EvidenceItem(e.chunkId(), e.sourceTitle(),
                         e.sectionTitle(), e.snippet(), e.similarity(), e.versionReference()))
                 .toList();
+    }
+
+    private TicketAnalyzeResponse toResponse(TicketAnalysisService.TicketAnalysisResult result) {
+        return new TicketAnalyzeResponse(
+                result.requestId(), result.ticketId(), result.classification().category(),
+                result.classification().sentiment(), result.classification().urgency(),
+                result.classification().summary(), result.classification().reasons(),
+                result.draft(), buildEvidenceResponse(result.knowledgeResult()),
+                result.knowledgeResult() != null ? result.knowledgeResult().reason() : "知识检索未返回状态",
+                result.draft() != null && result.draft().needsHuman());
     }
 
     // ═══════════════════════════════════════════════════════════════

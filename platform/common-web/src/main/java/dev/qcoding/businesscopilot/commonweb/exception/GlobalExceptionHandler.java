@@ -6,13 +6,17 @@ import dev.qcoding.businesscopilot.commonweb.api.ErrorCode;
 import dev.qcoding.businesscopilot.commonweb.api.ValidationErrorResponse;
 import dev.qcoding.businesscopilot.commonweb.api.ValidationErrorResponse.FieldError;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 
 import java.util.List;
 
@@ -69,8 +73,23 @@ public class GlobalExceptionHandler {
                 .toList();
 
         ValidationErrorResponse validation = ValidationErrorResponse.of(fieldErrors);
-        ApiResponse<ValidationErrorResponse> body = ApiResponse.ok(validation, "请求参数校验失败");
+        ApiResponse<ValidationErrorResponse> body = ApiResponse.fail(
+                validation, ErrorCode.VALIDATION_ERROR, "请求参数校验失败");
         return ResponseEntity.badRequest().body(body);
+    }
+
+    /** Treat malformed JSON, enum/path conversion and method constraints as client errors. */
+    @ExceptionHandler({HttpMessageNotReadableException.class,
+            MethodArgumentTypeMismatchException.class,
+            MissingServletRequestParameterException.class,
+            ConstraintViolationException.class})
+    public ResponseEntity<ApiResponse<ValidationErrorResponse>> handleMalformedInput(
+            Exception ex, HttpServletRequest request) {
+        log.warn("请求参数格式无效：uri={}，type={}", request.getRequestURI(),
+                ex.getClass().getSimpleName());
+        ValidationErrorResponse validation = ValidationErrorResponse.of(List.of());
+        return ResponseEntity.badRequest().body(ApiResponse.fail(
+                validation, ErrorCode.VALIDATION_ERROR, "请求参数格式无效"));
     }
 
     /**

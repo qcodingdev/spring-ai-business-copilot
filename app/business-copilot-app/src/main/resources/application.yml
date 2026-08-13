@@ -11,9 +11,11 @@ spring:
       chat:
         base-url: ${SPRING_AI_OPENAI_CHAT_BASE_URL:${SPRING_AI_OPENAI_BASE_URL:https://api.deepseek.com}}
         api-key: ${SPRING_AI_OPENAI_CHAT_API_KEY:${SPRING_AI_OPENAI_API_KEY:}}
-        timeout: ${SPRING_AI_OPENAI_CHAT_TIMEOUT:45s}
-        options:
-          model: ${SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL:deepseek-v4-flash}
+        # 兼容端点在高峰期可能在首个响应前等待较久；45 秒会导致客户端主动取消。
+        # 仍可通过环境变量缩短或延长，避免将无限等待带入业务请求。
+        timeout: ${SPRING_AI_OPENAI_CHAT_TIMEOUT:120s}
+        # Spring AI 2.x 的正式属性；保留旧环境变量回退，确保已有 Compose 配置升级不中断。
+        model: ${SPRING_AI_OPENAI_CHAT_MODEL:${SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL:deepseek-v4-flash}}
       embedding:
         base-url: ${SPRING_AI_OPENAI_EMBEDDING_BASE_URL:https://api.openai.com}
         api-key: ${SPRING_AI_OPENAI_EMBEDDING_API_KEY:${SPRING_AI_OPENAI_API_KEY:}}
@@ -60,6 +62,9 @@ logging:
 # ── Data Copilot 配置 ──────────────────────────────────────────
 business-copilot:
   runtime-mode: ${BUSINESS_COPILOT_RUNTIME_MODE:development}
+  common-web:
+    # The host adds this filter after authentication in Spring Security.
+    register-request-context-filter: false
   public-demo:
     client-daily-operations: ${BUSINESS_COPILOT_PUBLIC_DEMO_CLIENT_DAILY_OPERATIONS:20}
     global-daily-model-calls: ${BUSINESS_COPILOT_PUBLIC_DEMO_GLOBAL_DAILY_MODEL_CALLS:500}
@@ -104,8 +109,13 @@ business-copilot:
         - public.order_items
         - public.refunds
         - public.marketing_events
+      column-descriptions:
+        public.orders.status: "订单状态，仅允许 pending、shipped、completed、cancelled；已完成订单使用 completed，不使用 paid"
+        public.refunds.status: "退款状态，仅允许 pending、completed"
+        public.orders.total_amount: "订单总金额"
+        public.order_items.subtotal: "订单明细小计金额"
       # query_audit_logs 不在白名单中，自然语言查询无法触达
-      max-schema-text-length: 2000
+      max-schema-text-length: 4000
     confirmation:
       candidate-ttl-minutes: 10
     query:
@@ -117,6 +127,8 @@ business-copilot:
     enterprise:
       max-estimated-rows: ${DATA_QUERY_MAX_ESTIMATED_ROWS:100000}
       block-high-risk-plan: ${DATA_QUERY_BLOCK_HIGH_RISK_PLAN:true}
+      result-retention: ${DATA_QUERY_RESULT_RETENTION:PT24H}
+      result-cleanup-delay: ${DATA_QUERY_RESULT_CLEANUP_DELAY:PT1H}
   guardrails:
     queryable-columns:
       - public.customers.id
@@ -160,8 +172,20 @@ business-copilot:
       - avg
       - min
       - max
+  external-security:
+    # 企业外部连接失败关闭；生产环境必须显式配置逗号分隔域名或 *.example.com。
+    allowed-hosts: ${EXTERNAL_ALLOWED_HOSTS:}
+    allow-http: ${EXTERNAL_ALLOW_HTTP:false}
+    allow-private-addresses: ${EXTERNAL_ALLOW_PRIVATE_ADDRESSES:false}
+    connect-timeout: ${EXTERNAL_CONNECT_TIMEOUT:PT3S}
+    read-timeout: ${EXTERNAL_READ_TIMEOUT:PT10S}
+    task-timeout: ${EXTERNAL_TASK_TIMEOUT:PT30S}
+    max-response-bytes: ${EXTERNAL_MAX_RESPONSE_BYTES:2000000}
+    max-pages: ${EXTERNAL_MAX_PAGES:10}
+    max-items: ${EXTERNAL_MAX_ITEMS:1000}
+    max-json-depth: ${EXTERNAL_MAX_JSON_DEPTH:32}
   ai-core:
-    model-name: ${SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL:deepseek-v4-flash}
+    model-name: ${SPRING_AI_OPENAI_CHAT_MODEL:${SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL:deepseek-v4-flash}}
     provider-name: ${BUSINESS_COPILOT_AI_PROVIDER:openai-compatible}
     resilience:
       max-concurrent-calls: ${BUSINESS_COPILOT_AI_MAX_CONCURRENT_CALLS:8}

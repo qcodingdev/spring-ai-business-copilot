@@ -127,13 +127,16 @@ public class JdbcSupportReplyDraftRepository implements SupportReplyDraftReposit
 
     @Override
     public boolean replaceConfirmationToken(Long id, SupportDraftStatus expectedStatus,
-                                            String tokenDigest, String reviewerActorId, Instant now) {
+                                            String expectedReviewerActorId, String tokenDigest,
+                                            String reviewerActorId, Instant expiresAt, Instant now) {
         return jdbcTemplate.update("""
                 UPDATE support_reply_drafts
-                SET confirmation_token_digest = ?, reviewer_actor_id = ?, updated_at = ?
-                WHERE id = ? AND status = ? AND expires_at > ?
-                """, tokenDigest, reviewerActorId, Timestamp.from(now), id,
-                expectedStatus.name(), Timestamp.from(now)) == 1;
+                SET confirmation_token_digest = ?, reviewer_actor_id = ?,
+                    expires_at = ?, updated_at = ?
+                WHERE id = ? AND status = ?
+                  AND reviewer_actor_id IS NOT DISTINCT FROM ?
+                """, tokenDigest, reviewerActorId, Timestamp.from(expiresAt),
+                Timestamp.from(now), id, expectedStatus.name(), expectedReviewerActorId) == 1;
     }
 
     @Override

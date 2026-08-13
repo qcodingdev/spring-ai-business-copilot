@@ -111,6 +111,9 @@ class KnowledgeFeedbackServiceTest {
     void qualityReviewRequiresAUsefulNote() {
         var request = new KnowledgeQualityReviewRequest(
                 KnowledgeQualityReviewDecision.RESOLVED,
+                KnowledgeEvidenceAssessment.SUFFICIENT,
+                KnowledgeAnswerAssessment.ACCURATE,
+                KnowledgeRemediationAction.NONE,
                 " ",
                 1L,
                 Instant.now());
@@ -125,11 +128,17 @@ class KnowledgeFeedbackServiceTest {
         Instant issueUpdatedAt = Instant.now();
         var saved = new KnowledgeQualityReview(
                 5L, 7L, KnowledgeQualityReviewDecision.KNOWLEDGE_UPDATE_REQUIRED,
+                KnowledgeEvidenceAssessment.OUTDATED,
+                KnowledgeAnswerAssessment.PARTIALLY_ACCURATE,
+                KnowledgeRemediationAction.UPDATE_KNOWLEDGE,
                 "补充制度", "operator-1", 1L,
                 issueUpdatedAt, Instant.now(), Instant.now());
         when(repository.review(
                 eq(7L),
                 eq(KnowledgeQualityReviewDecision.KNOWLEDGE_UPDATE_REQUIRED),
+                eq(KnowledgeEvidenceAssessment.OUTDATED),
+                eq(KnowledgeAnswerAssessment.PARTIALLY_ACCURATE),
+                eq(KnowledgeRemediationAction.UPDATE_KNOWLEDGE),
                 eq("补充制度"),
                 eq("operator-1"),
                 eq(1L),
@@ -139,6 +148,9 @@ class KnowledgeFeedbackServiceTest {
                 7L,
                 new KnowledgeQualityReviewRequest(
                         KnowledgeQualityReviewDecision.KNOWLEDGE_UPDATE_REQUIRED,
+                        KnowledgeEvidenceAssessment.OUTDATED,
+                        KnowledgeAnswerAssessment.PARTIALLY_ACCURATE,
+                        KnowledgeRemediationAction.UPDATE_KNOWLEDGE,
                         "  补充制度  ",
                         1L,
                         issueUpdatedAt));
@@ -152,6 +164,9 @@ class KnowledgeFeedbackServiceTest {
         when(repository.review(
                 eq(7L),
                 eq(KnowledgeQualityReviewDecision.DISMISSED),
+                eq(KnowledgeEvidenceAssessment.NOT_APPLICABLE),
+                eq(KnowledgeAnswerAssessment.NOT_VERIFIABLE),
+                eq(KnowledgeRemediationAction.NONE),
                 eq("无需处理"),
                 eq("operator-1"),
                 eq(1L),
@@ -161,6 +176,9 @@ class KnowledgeFeedbackServiceTest {
                 7L,
                 new KnowledgeQualityReviewRequest(
                         KnowledgeQualityReviewDecision.DISMISSED,
+                        KnowledgeEvidenceAssessment.NOT_APPLICABLE,
+                        KnowledgeAnswerAssessment.NOT_VERIFIABLE,
+                        KnowledgeRemediationAction.NONE,
                         "无需处理",
                         1L,
                         issueUpdatedAt)))

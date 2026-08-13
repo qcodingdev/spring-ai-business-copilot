@@ -38,9 +38,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import tools.jackson.databind.ObjectMapper;
-
-import java.time.Duration;
 
 /**
  * Auto-configuration for the Data Copilot module.
@@ -52,6 +51,7 @@ import java.time.Duration;
 @AutoConfiguration
 @ConditionalOnProperty(prefix = "business-copilot.data-copilot", name = "enabled",
         havingValue = "true", matchIfMissing = true)
+@EnableScheduling
 public class DataCopilotAutoConfiguration {
 
     /**
@@ -106,7 +106,7 @@ public class DataCopilotAutoConfiguration {
     @Bean
     @ConfigurationProperties(prefix = "business-copilot.data-copilot.enterprise")
     public DataEnterpriseProperties dataEnterpriseProperties() {
-        return new DataEnterpriseProperties(0, true);
+        return new DataEnterpriseProperties(0, true, null);
     }
 
     @Bean
@@ -198,9 +198,10 @@ public class DataCopilotAutoConfiguration {
     public DataQueryResultService dataQueryResultService(
             @Qualifier("jdbcTemplate") JdbcTemplate platformJdbcTemplate,
             ObjectMapper objectMapper,
-            CurrentActorProvider actorProvider) {
+            CurrentActorProvider actorProvider,
+            DataEnterpriseProperties properties) {
         return new DataQueryResultService(
-                platformJdbcTemplate, objectMapper, actorProvider, Duration.ofHours(24));
+                platformJdbcTemplate, objectMapper, actorProvider, properties.resultRetention());
     }
 
     @Bean

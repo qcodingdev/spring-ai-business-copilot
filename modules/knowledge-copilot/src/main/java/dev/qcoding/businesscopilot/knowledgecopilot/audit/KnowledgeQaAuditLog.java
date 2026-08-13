@@ -11,6 +11,7 @@ import java.time.Instant;
  * @param id                 primary key
  * @param requestId          request identifier for cross-service tracing
  * @param question           the user's natural language question
+ * @param answerPreview      bounded masked answer text for quality review
  * @param retrievedChunkIds  comma-separated chunk IDs returned by retrieval
  * @param citedChunkIds      comma-separated chunk IDs actually cited in the answer
  * @param answerStatus       ANSWERED, NO_EVIDENCE, REJECTED, or FAILED
@@ -24,6 +25,7 @@ public record KnowledgeQaAuditLog(
         Long id,
         String requestId,
         String question,
+        String answerPreview,
         String retrievedChunkIds,
         String citedChunkIds,
         String answerStatus,
@@ -50,7 +52,7 @@ public record KnowledgeQaAuditLog(
                                String retrievedChunkIds, String citedChunkIds,
                                String answerStatus, String refusalReason, String modelName,
                                String embeddingModel, Long latencyMs, Instant createdAt) {
-        this(id, requestId, question, retrievedChunkIds, citedChunkIds,
+        this(id, requestId, question, null, retrievedChunkIds, citedChunkIds,
                 answerStatus, refusalReason, modelName, embeddingModel, latencyMs,
                 null, null, null, null, null, null, null,
                 null, null, null, null, null, null, createdAt);

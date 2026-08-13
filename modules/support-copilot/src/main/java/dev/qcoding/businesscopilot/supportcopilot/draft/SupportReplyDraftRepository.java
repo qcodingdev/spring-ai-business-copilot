@@ -21,7 +21,8 @@ public interface SupportReplyDraftRepository {
                  String editReason, String editedByActorId, Instant now);
 
     boolean replaceConfirmationToken(Long id, SupportDraftStatus expectedStatus,
-                                     String tokenDigest, String reviewerActorId, Instant now);
+                                     String expectedReviewerActorId, String tokenDigest,
+                                     String reviewerActorId, Instant expiresAt, Instant now);
 
     long count();
 }

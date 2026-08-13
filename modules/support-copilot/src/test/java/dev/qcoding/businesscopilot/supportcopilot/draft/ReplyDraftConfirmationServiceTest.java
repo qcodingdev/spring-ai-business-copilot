@@ -7,6 +7,7 @@ import dev.qcoding.businesscopilot.commonsecurity.CurrentActorProvider;
 import dev.qcoding.businesscopilot.commonsecurity.DefaultObjectAccessPolicy;
 import dev.qcoding.businesscopilot.commonweb.api.BusinessException;
 import dev.qcoding.businesscopilot.guardrails.SensitiveTextMasker;
+import dev.qcoding.businesscopilot.supportcopilot.SupportCopilotProperties;
 import dev.qcoding.businesscopilot.supportcopilot.classification.SupportRiskLevel;
 import dev.qcoding.businesscopilot.supportcopilot.audit.SupportAuditLog;
 import dev.qcoding.businesscopilot.supportcopilot.audit.SupportAuditRepository;
@@ -48,7 +49,8 @@ class ReplyDraftConfirmationServiceTest {
                 actors,
                 new DefaultObjectAccessPolicy(),
                 tokenService,
-                new SensitiveTextMasker());
+                new SensitiveTextMasker(),
+                new SupportCopilotProperties(true, 2000, 10, null, true, 5));
     }
 
     @Test
@@ -88,6 +90,34 @@ class ReplyDraftConfirmationServiceTest {
         assertThatThrownBy(() -> service.confirm(10L, token.rawToken()))
                 .isInstanceOf(BusinessException.class);
         assertThat(draftRepository.draft.status()).isEqualTo(SupportDraftStatus.DRAFTED);
+    }
+
+    @Test
+    void expiredPendingDraftCanOpenFreshSessionWithoutRevivingOldToken() {
+        ConfirmationTokenService.IssuedToken oldToken = tokenService.issue();
+        draftRepository.draft = draft(oldToken, false, null, Instant.now().minusSeconds(1));
+
+        var session = service.openReviewSession(10L);
+
+        assertThat(session.expiresAt()).isAfter(Instant.now().plusSeconds(500));
+        assertThat(tokenService.matches(oldToken.rawToken(), draftRepository.draft.tokenDigest())).isFalse();
+        assertThat(service.confirm(10L, session.confirmationToken()).status())
+                .isEqualTo(SupportDraftStatus.CONFIRMED);
+        assertThat(auditRepository.saved.getFirst().eventType()).isEqualTo("REVIEW_SESSION_OPENED");
+    }
+
+    @Test
+    void assignedReviewerCannotBeOverwrittenByAnotherReviewer() {
+        ConfirmationTokenService.IssuedToken oldToken = tokenService.issue();
+        draftRepository.draft = draft(oldToken, true, null, Instant.now().minusSeconds(1));
+        actors.actor = new CurrentActor("reviewer-1", Set.of(BusinessRole.REVIEWER));
+
+        service.openReviewSession(10L);
+        actors.actor = new CurrentActor("reviewer-2", Set.of(BusinessRole.REVIEWER));
+
+        assertThatThrownBy(() -> service.openReviewSession(10L))
+                .isInstanceOf(BusinessException.class);
+        assertThat(draftRepository.draft.reviewerActorId()).isEqualTo("reviewer-1");
     }
 
     @Test
@@ -195,9 +225,11 @@ class ReplyDraftConfirmationServiceTest {
 
         @Override
         public boolean replaceConfirmationToken(Long id, SupportDraftStatus expectedStatus,
-                                                String tokenDigest, String reviewerActorId, Instant now) {
+                                                String expectedReviewerActorId, String tokenDigest,
+                                                String reviewerActorId, Instant expiresAt, Instant now) {
             if (draft == null || !draft.id().equals(id) || draft.status() != expectedStatus
-                    || draft.expiresAt() == null || !draft.expiresAt().isAfter(now)) {
+                    || !java.util.Objects.equals(
+                            draft.reviewerActorId(), expectedReviewerActorId)) {
                 return false;
             }
             draft = new SupportReplyDraft(
@@ -206,7 +238,7 @@ class ReplyDraftConfirmationServiceTest {
                     null, tokenDigest, draft.status(), draft.ownerActorId(), draft.reviewQueue(),
                     reviewerActorId, draft.actionActorId(), draft.originalDraftText(),
                     draft.editedDraftText(), draft.editReason(), draft.editedByActorId(), draft.editedAt(),
-                    draft.decisionOutcome(), draft.expiresAt(), draft.createdAt(), now);
+                    draft.decisionOutcome(), expiresAt, draft.createdAt(), now);
             return true;
         }
 

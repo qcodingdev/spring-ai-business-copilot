@@ -60,7 +60,8 @@ public class PublicDemoBoundaryFilter extends OncePerRequestFilter {
         if (path == null || !path.startsWith("/api/")) return true;
         if (request.isUserInRole("ADMIN") && path.startsWith("/api/admin/")) return true;
         if ("GET".equals(method)) {
-            return path.equals("/api/demo/scenarios")
+            return path.equals("/api/session")
+                    || path.equals("/api/demo/scenarios")
                     || path.equals("/api/demo/usage")
                     || path.equals("/api/demo/overview")
                     || DEMO_SAMPLE_RESULT.matcher(path).matches();

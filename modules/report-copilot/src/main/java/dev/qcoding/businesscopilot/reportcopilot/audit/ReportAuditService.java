@@ -28,14 +28,15 @@ public class ReportAuditService {
                         + "draft_id, event_type, source_count, cited_source_ids, model_name, status, "
                         + "error_message, latency_ms, creator_actor_id, action_actor_id, provider_name, "
                         + "provider_request_id, prompt_name, prompt_version, prompt_hash, policy_version, "
-                        + "violation_codes, input_tokens, output_tokens, finish_reason) "
-                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        + "violation_codes, input_tokens, output_tokens, finish_reason, locale) "
+                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 event.requestId(), BusinessRequestContextHolder.currentRequestId(),
                 BusinessRequestContextHolder.currentActorId(), event.draftId(), event.eventType(),
                 event.sourceCount(), event.citedSourceIds(), event.modelName(), event.status(),
                 event.errorMessage(), event.latencyMs(), event.creatorActorId(), event.actionActorId(),
                 event.providerName(), event.providerRequestId(), event.promptName(),
                 event.promptVersion(), event.promptHash(), event.policyVersion(),
-                event.violationCodes(), event.inputTokens(), event.outputTokens(), event.finishReason());
+                event.violationCodes(), event.inputTokens(), event.outputTokens(), event.finishReason(),
+                BusinessRequestContextHolder.currentLocale());
     }
 }

@@ -1,6 +1,9 @@
 package dev.qcoding.businesscopilot.supportcopilot.ticket;
 
 import dev.qcoding.businesscopilot.guardrails.SensitiveTextMasker;
+import dev.qcoding.businesscopilot.supportcopilot.classification.TicketCategory;
+import dev.qcoding.businesscopilot.supportcopilot.classification.TicketSentiment;
+import dev.qcoding.businesscopilot.supportcopilot.classification.TicketUrgency;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
@@ -76,6 +79,38 @@ public class JdbcSupportTicketRepository implements SupportTicketRepository {
         List<SupportTicket> results = jdbcTemplate.query(
                 "SELECT * FROM support_tickets WHERE id = ?", ROW_MAPPER, id);
         return results.isEmpty() ? Optional.empty() : Optional.of(results.getFirst());
+    }
+
+    @Override
+    public Optional<SupportTicket> claimForAnalysis(Long id, String actorId, boolean admin) {
+        List<SupportTicket> results = jdbcTemplate.query("""
+                UPDATE support_tickets
+                SET status = 'CLASSIFIED', updated_at = now()
+                WHERE id = ?
+                  AND status IN ('RECEIVED', 'FAILED')
+                  AND (? OR system_managed = TRUE OR owner_actor_id = ?)
+                RETURNING *
+                """, ROW_MAPPER, id, admin, actorId);
+        return results.isEmpty() ? Optional.empty() : Optional.of(results.getFirst());
+    }
+
+    @Override
+    public boolean updateClassification(Long id, TicketCategory category,
+                                        TicketSentiment sentiment, TicketUrgency urgency) {
+        return jdbcTemplate.update("""
+                UPDATE support_tickets
+                SET category = ?, sentiment = ?, urgency = ?, updated_at = now()
+                WHERE id = ? AND status = 'CLASSIFIED'
+                """, category.name(), sentiment.name(), urgency.name(), id) == 1;
+    }
+
+    @Override
+    public boolean failAnalysis(Long id) {
+        return jdbcTemplate.update("""
+                UPDATE support_tickets
+                SET status = 'FAILED', updated_at = now()
+                WHERE id = ? AND status = 'CLASSIFIED'
+                """, id) == 1;
     }
 
     @Override
