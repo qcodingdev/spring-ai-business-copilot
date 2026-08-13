@@ -331,6 +331,9 @@ test('shows and completes the support draft review flow', async ({ page }) => {
   await page.route('**/api/support-copilot/reply-drafts/7/confirm', async (route) => {
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: { draftId: 7, status: 'CONFIRMED' }, success: true, requestId: 'support-confirmed', timestamp: new Date().toISOString() }) })
   })
+  await page.route('**/api/support-copilot/enterprise/drafts/7/writeback-capability', async (route) => {
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: { eligible: false }, success: true, requestId: 'support-writeback-unavailable', timestamp: new Date().toISOString() }) })
+  })
   await page.goto('/support')
   await page.getByLabel('客户消息').fill('请协助处理退款。')
   await page.getByRole('button', { name: '分析工单并生成草稿' }).click()
@@ -338,6 +341,7 @@ test('shows and completes the support draft review flow', async ({ page }) => {
   await page.getByRole('button', { name: '确认采用草稿' }).click()
   await page.getByRole('dialog').getByRole('button', { name: '确认客服回复草稿' }).click()
   await expect(page.getByText('回复草稿已确认；系统不会自动向客户发送。')).toBeVisible()
+  await expect(page.getByText('当前工单由工作台直接创建，没有外部工单目标；流程已在内部确认处安全结束。')).toBeVisible()
 })
 
 test('operates the support human review queue instead of exposing raw JSON', async ({ page }) => {
