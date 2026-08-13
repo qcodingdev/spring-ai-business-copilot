@@ -29,6 +29,12 @@ public final class BusinessRequestContextHolder {
         return context != null ? context.actorId() : "system";
     }
 
+    /** 只返回固定低基数值；未处于 HTTP 请求时保持产品默认中文。 */
+    public static String currentLocale() {
+        BusinessRequestContext context = CONTEXT.get();
+        return context != null ? context.locale() : "zh-CN";
+    }
+
     public static void clear() {
         CONTEXT.remove();
     }

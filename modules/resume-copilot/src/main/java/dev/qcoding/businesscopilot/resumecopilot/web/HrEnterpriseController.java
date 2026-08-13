@@ -40,6 +40,11 @@ public class HrEnterpriseController {
                         request.grantedAt(), request.expiresAt()))));
     }
 
+    @GetMapping("/consents")
+    public ResponseEntity<ApiResponse<?>> consents() {
+        return ResponseEntity.ok(ApiResponse.ok(service.consents()));
+    }
+
     @PostMapping("/consents/{reference}/revoke")
     public ResponseEntity<ApiResponse<?>> revokeConsent(@PathVariable String reference) {
         return ResponseEntity.ok(ApiResponse.ok(service.revokeConsent(reference)));
@@ -73,7 +78,30 @@ public class HrEnterpriseController {
 
     @PostMapping("/interview-sessions")
     public ResponseEntity<ApiResponse<?>> openInterview(@Valid @RequestBody SessionRequest request) {
-        return ResponseEntity.ok(ApiResponse.ok(service.openSession(request.assessmentId())));
+        return ResponseEntity.ok(ApiResponse.ok(service.openSession(
+                request.assessmentId(), request.interviewerActorIds())));
+    }
+
+    @GetMapping("/interview-sessions")
+    public ResponseEntity<ApiResponse<?>> interviewSessions() {
+        return ResponseEntity.ok(ApiResponse.ok(service.sessions()));
+    }
+
+    @GetMapping("/interview-sessions/{sessionId}/members")
+    public ResponseEntity<ApiResponse<?>> interviewMembers(@PathVariable long sessionId) {
+        return ResponseEntity.ok(ApiResponse.ok(service.sessionMembers(sessionId)));
+    }
+
+    @PostMapping("/interview-sessions/{sessionId}/members")
+    public ResponseEntity<ApiResponse<?>> addInterviewMember(
+            @PathVariable long sessionId, @Valid @RequestBody MemberRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                service.addSessionMember(sessionId, request.actorId())));
+    }
+
+    @PostMapping("/interview-sessions/{sessionId}/close")
+    public ResponseEntity<ApiResponse<?>> closeInterview(@PathVariable long sessionId) {
+        return ResponseEntity.ok(ApiResponse.ok(service.closeSession(sessionId)));
     }
 
     @PostMapping("/interview-sessions/{sessionId}/opinions")
@@ -96,6 +124,16 @@ public class HrEnterpriseController {
                 new HrEnterpriseService.AtsConnectionCommand(
                         request.connectionKey(), request.displayName(), request.provider(),
                         request.baseUrl(), request.secretRef(), request.enabled()))));
+    }
+
+    @GetMapping("/ats-connections")
+    public ResponseEntity<ApiResponse<?>> atsConnections() {
+        return ResponseEntity.ok(ApiResponse.ok(service.atsConnections()));
+    }
+
+    @GetMapping("/ats-imports")
+    public ResponseEntity<ApiResponse<?>> atsImports() {
+        return ResponseEntity.ok(ApiResponse.ok(service.atsImports()));
     }
 
     @PostMapping("/ats-connections/{connectionId}/import")
@@ -126,10 +164,35 @@ public class HrEnterpriseController {
         return ResponseEntity.ok(ApiResponse.ok(service.approveChecklist(id)));
     }
 
+    @GetMapping("/onboarding-instances")
+    public ResponseEntity<ApiResponse<?>> onboardingInstances() {
+        return ResponseEntity.ok(ApiResponse.ok(service.onboardingInstances()));
+    }
+
+    @PostMapping("/onboarding-instances")
+    public ResponseEntity<ApiResponse<?>> startOnboarding(
+            @Valid @RequestBody OnboardingStartRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(service.startOnboarding(
+                request.checklistId(), request.employeeReference())));
+    }
+
+    @PostMapping("/onboarding-instances/{instanceId}/tasks/{taskId}/complete")
+    public ResponseEntity<ApiResponse<?>> completeOnboardingTask(
+            @PathVariable long instanceId, @PathVariable long taskId,
+            @Valid @RequestBody TaskCompletionRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(service.completeOnboardingTask(
+                instanceId, taskId, request.evidenceReference())));
+    }
+
+    @PostMapping("/onboarding-instances/{instanceId}/cancel")
+    public ResponseEntity<ApiResponse<?>> cancelOnboarding(@PathVariable long instanceId) {
+        return ResponseEntity.ok(ApiResponse.ok(service.cancelOnboarding(instanceId)));
+    }
+
     public record ConsentRequest(
             @NotBlank @Size(max = 200) String consentReference,
             @NotBlank @Size(max = 200) String candidateReference,
-            @NotBlank @Size(max = 300) String purpose,
+            @NotNull HrEnterpriseService.ConsentPurpose purpose,
             @NotNull Instant grantedAt,
             @NotNull Instant expiresAt) { }
     public record AuthorizedAssessmentRequest(
@@ -143,7 +206,10 @@ public class HrEnterpriseController {
             @NotBlank @Size(max = 1000) String questionText,
             @NotBlank @Size(max = 1500) String evidenceGuidance,
             List<String> prohibitedTopics) { }
-    public record SessionRequest(@NotNull Long assessmentId) { }
+    public record SessionRequest(
+            @NotNull Long assessmentId,
+            @Size(max = 20) List<@NotBlank @Size(max = 100) String> interviewerActorIds) { }
+    public record MemberRequest(@NotBlank @Size(max = 100) String actorId) { }
     public record OpinionRequest(
             @NotEmpty List<String> evidence,
             List<String> gaps,
@@ -161,4 +227,9 @@ public class HrEnterpriseController {
             @Size(max = 100) String roleScope,
             @NotEmpty List<HrEnterpriseService.ChecklistItem> items,
             List<String> knowledgeReferences) { }
+    public record OnboardingStartRequest(
+            @NotNull Long checklistId,
+            @NotBlank @Size(max = 200) String employeeReference) { }
+    public record TaskCompletionRequest(
+            @NotBlank @Size(max = 1000) String evidenceReference) { }
 }

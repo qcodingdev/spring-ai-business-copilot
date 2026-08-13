@@ -14,7 +14,8 @@ public interface SupportExternalAdapter {
     void writeConfirmedDraft(
             SupportExternalConnection connection,
             String externalTicketId,
-            String sanitizedDraft);
+            String sanitizedDraft,
+            String idempotencyKey);
 
     record ExternalTicket(
             String externalId,

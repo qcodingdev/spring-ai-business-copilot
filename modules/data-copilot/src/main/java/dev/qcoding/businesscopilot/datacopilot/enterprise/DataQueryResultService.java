@@ -12,6 +12,7 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
+import org.springframework.scheduling.annotation.Scheduled;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
@@ -124,6 +125,53 @@ public class DataQueryResultService {
         return new Handoff(id, resultId, reference, "READY");
     }
 
+    /** 返回当前操作者仍可查看的结果快照，供执行记录和交接选择使用。 */
+    public List<ResultSummary> listOwned(int page, int size) {
+        String actorId = actorProvider.currentActor().actorId();
+        return jdbcTemplate.query("""
+                SELECT id, candidate_id, row_count, truncated, expires_at, created_at
+                FROM data_query_results
+                WHERE owner_actor_id = ? AND expires_at > now()
+                ORDER BY created_at DESC
+                LIMIT ? OFFSET ?
+                """, (rs, rowNum) -> new ResultSummary(
+                rs.getLong("id"), rs.getString("candidate_id"), rs.getInt("row_count"),
+                rs.getBoolean("truncated"), rs.getTimestamp("expires_at").toInstant(),
+                rs.getTimestamp("created_at").toInstant()),
+                actorId, size, page * size);
+    }
+
+    /** 返回当前操作者创建的 Report 交接及其状态。 */
+    public List<HandoffSummary> listHandoffs(int page, int size) {
+        String actorId = actorProvider.currentActor().actorId();
+        return jdbcTemplate.query("""
+                SELECT handoff.id, handoff.query_result_id, handoff.title,
+                       handoff.status, handoff.source_reference, result.row_count,
+                       result.expires_at, handoff.consumed_at, handoff.created_at
+                FROM data_report_handoffs handoff
+                JOIN data_query_results result ON result.id = handoff.query_result_id
+                WHERE handoff.owner_actor_id = ? AND result.expires_at > now()
+                ORDER BY handoff.created_at DESC
+                LIMIT ? OFFSET ?
+                """, (rs, rowNum) -> new HandoffSummary(
+                rs.getLong("id"), rs.getLong("query_result_id"), rs.getString("title"),
+                rs.getString("status"), rs.getString("source_reference"),
+                rs.getInt("row_count"), rs.getTimestamp("expires_at").toInstant(),
+                instant(rs.getTimestamp("consumed_at")), rs.getTimestamp("created_at").toInstant()),
+                actorId, size, page * size);
+    }
+
+    /** Purges retained result payloads at expiry; handoffs cascade while immutable audits remain. */
+    @Scheduled(fixedDelayString =
+            "${business-copilot.data-copilot.enterprise.result-cleanup-delay:PT1H}")
+    public void cleanupExpiredResults() {
+        purgeExpiredResults();
+    }
+
+    int purgeExpiredResults() {
+        return jdbcTemplate.update("DELETE FROM data_query_results WHERE expires_at <= now()");
+    }
+
     public StoredResult requireOwned(long resultId) {
         String actorId = actorProvider.currentActor().actorId();
         List<StoredResult> rows = jdbcTemplate.query("""
@@ -169,5 +217,14 @@ public class DataQueryResultService {
 
     public record StoredResult(long id, List<QueryColumn> columns, List<Map<String, Object>> rows,
                                int rowCount, boolean truncated, Instant createdAt) { }
+    public record ResultSummary(long id, String candidateId, int rowCount, boolean truncated,
+                                Instant expiresAt, Instant createdAt) { }
+    public record HandoffSummary(long id, long resultId, String title, String status,
+                                 String sourceReference, int rowCount, Instant resultExpiresAt,
+                                 Instant consumedAt, Instant createdAt) { }
     public record Handoff(Long id, long resultId, String sourceReference, String status) { }
+
+    private Instant instant(Timestamp value) {
+        return value == null ? null : value.toInstant();
+    }
 }

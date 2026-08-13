@@ -5,6 +5,8 @@ import dev.qcoding.businesscopilot.commonsecurity.ConfirmationTokenService;
 import dev.qcoding.businesscopilot.commonsecurity.CurrentActorProvider;
 import dev.qcoding.businesscopilot.commonsecurity.ObjectAccessPolicy;
 import dev.qcoding.businesscopilot.commonsecurity.ExternalSecretResolver;
+import dev.qcoding.businesscopilot.commonsecurity.ExternalEndpointPolicy;
+import dev.qcoding.businesscopilot.commonsecurity.ExternalHttpClientFactory;
 import dev.qcoding.businesscopilot.knowledgecopilot.KnowledgeCopilotAutoConfiguration;
 import dev.qcoding.businesscopilot.knowledgecopilot.document.KnowledgeDocumentRepository;
 import dev.qcoding.businesscopilot.knowledgecopilot.retrieval.KnowledgeRetrievalService;
@@ -129,10 +131,11 @@ public class SupportCopilotAutoConfiguration {
             CurrentActorProvider actorProvider,
             ObjectAccessPolicy accessPolicy,
             ConfirmationTokenService tokenService,
-            SensitiveTextMasker sensitiveTextMasker) {
+            SensitiveTextMasker sensitiveTextMasker,
+            SupportCopilotProperties properties) {
         return new ReplyDraftConfirmationService(
                 draftRepository, ticketRepository, auditService,
-                actorProvider, accessPolicy, tokenService, sensitiveTextMasker);
+                actorProvider, accessPolicy, tokenService, sensitiveTextMasker, properties);
     }
 
     // ── Knowledge retriever ──────────────────────────────────────────────
@@ -178,8 +181,9 @@ public class SupportCopilotAutoConfiguration {
 
     @Bean
     public RestSupportExternalAdapter restSupportExternalAdapter(
-            ExternalSecretResolver secretResolver) {
-        return new RestSupportExternalAdapter(RestClient.builder(), secretResolver);
+            ExternalSecretResolver secretResolver,
+            ExternalHttpClientFactory clientFactory) {
+        return new RestSupportExternalAdapter(clientFactory, secretResolver);
     }
 
     @Bean
@@ -191,10 +195,14 @@ public class SupportCopilotAutoConfiguration {
             ConfirmationTokenService tokenService,
             ExternalSecretResolver secretResolver,
             SensitiveTextMasker sensitiveTextMasker,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            ExternalEndpointPolicy endpointPolicy,
+            ObjectAccessPolicy accessPolicy,
+            SupportAuditService auditService) {
         return new SupportEnterpriseService(
                 jdbcTemplate, ticketRepository, adapters, actorProvider, tokenService,
-                secretResolver, sensitiveTextMasker, objectMapper);
+                secretResolver, sensitiveTextMasker, objectMapper, endpointPolicy, accessPolicy,
+                auditService);
     }
 
     @Bean

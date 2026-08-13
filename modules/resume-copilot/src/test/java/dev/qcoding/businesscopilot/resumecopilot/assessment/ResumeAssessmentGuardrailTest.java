@@ -62,7 +62,7 @@ class ResumeAssessmentGuardrailTest {
     }
 
     @Test
-    void rejectsEnglishNarrativeUntilAnExplicitLanguageOptionExists() {
+    void acceptsEnglishNarrativeOnlyWhenEnglishWasExplicitlySelected() {
         var content = new ResumeModels.AssessmentContent("Backend engineer with Java experience", List.of(
                 new ResumeModels.CriterionAssessment("criterion-1", ResumeModels.MatchStatus.SUPPORTED,
                         "The resume mentions Java services", List.of("evidence-1"))),
@@ -75,5 +75,13 @@ class ResumeAssessmentGuardrailTest {
 
         assertThat(result.valid()).isFalse();
         assertThat(result.reasons()).anyMatch(reason -> reason.contains("简体中文"));
+        try {
+            dev.qcoding.businesscopilot.commonweb.request.BusinessRequestContextHolder.set(
+                    new dev.qcoding.businesscopilot.commonweb.request.BusinessRequestContext(
+                            "request-en", "reviewer", java.util.Set.of("REVIEWER"), "en-US"));
+            assertThat(guardrail.validate(content, criteria, evidence).valid()).isTrue();
+        } finally {
+            dev.qcoding.businesscopilot.commonweb.request.BusinessRequestContextHolder.clear();
+        }
     }
 }

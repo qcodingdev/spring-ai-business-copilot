@@ -38,8 +38,11 @@ public class DemoAdminController {
     @GetMapping("/jobs/{jobId}")
     public ResponseEntity<ApiResponse<DemoDataJob>> job(@PathVariable UUID jobId) {
         DemoDataJob job = initializationService.getJob(jobId);
-        return job == null ? ResponseEntity.notFound().build()
-                : ResponseEntity.ok(ApiResponse.ok(job));
+        if (job == null) {
+            throw new dev.qcoding.businesscopilot.commonweb.api.BusinessException(
+                    dev.qcoding.businesscopilot.commonweb.api.ErrorCode.NOT_FOUND);
+        }
+        return ResponseEntity.ok(ApiResponse.ok(job));
     }
 
     @PostMapping("/reset-intents")

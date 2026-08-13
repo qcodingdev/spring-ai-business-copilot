@@ -3,6 +3,7 @@ package dev.qcoding.businesscopilot.datacopilot.enterprise;
 import dev.qcoding.businesscopilot.commonsecurity.BusinessRole;
 import dev.qcoding.businesscopilot.commonsecurity.CurrentActor;
 import dev.qcoding.businesscopilot.datacopilot.confirmation.SqlConfirmationService;
+import dev.qcoding.businesscopilot.datacopilot.confirmation.SqlCandidate;
 import dev.qcoding.businesscopilot.datacopilot.schema.BusinessDatabaseDialect;
 import dev.qcoding.businesscopilot.datacopilot.schema.SchemaContextService;
 import dev.qcoding.businesscopilot.guardrails.GuardrailsProperties;
@@ -13,15 +14,20 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import tools.jackson.databind.ObjectMapper;
 
+import java.sql.ResultSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
 
 class DataGovernanceServiceTest {
 
@@ -71,5 +77,53 @@ class DataGovernanceServiceTest {
         assertThat(preview.estimatedRows()).isEqualTo(Long.MAX_VALUE);
         assertThat(preview.allowed()).isFalse();
         assertThat(preview.rejectionReason()).isEqualTo("QUERY_BUDGET_EXCEEDED");
+    }
+
+    @Test
+    void refusesSelfApprovalBeforeChangingAnExistingActiveMetric() throws Exception {
+        when(platformJdbc.query(anyString(), any(org.springframework.jdbc.core.RowMapper.class), eq(7L)))
+                .thenAnswer(invocation -> {
+                    ResultSet rs = mock(ResultSet.class);
+                    when(rs.getString(1)).thenReturn("revenue");
+                    when(rs.getString(2)).thenReturn("operator-1");
+                    org.springframework.jdbc.core.RowMapper<?> mapper = invocation.getArgument(1);
+                    return List.of(mapper.mapRow(rs, 0));
+                });
+
+        assertThatThrownBy(() -> service.approveMetric(7L))
+                .isInstanceOf(dev.qcoding.businesscopilot.commonweb.api.BusinessException.class)
+                .hasMessageContaining("必须由另一名管理员批准");
+
+        org.mockito.Mockito.verify(platformJdbc, org.mockito.Mockito.never())
+                .update(org.mockito.ArgumentMatchers.contains("SET active = FALSE"),
+                        org.mockito.ArgumentMatchers.any(Object[].class));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void launchesAnApprovedMetricThroughTheOneTimeConfirmationFlow() {
+        String sql = "SELECT SUM(total_amount) AS revenue FROM orders LIMIT 100";
+        when(platformJdbc.query(anyString(), any(org.springframework.jdbc.core.RowMapper.class), eq(23L)))
+                .thenReturn(List.of(sql));
+        SqlCandidate candidate = mock(SqlCandidate.class);
+        when(candidate.candidateId()).thenReturn("candidate-23");
+        when(candidate.confirmationToken()).thenReturn("one-time-token");
+        when(candidate.expiresAt()).thenReturn(java.time.Instant.parse("2026-08-13T12:00:00Z"));
+        when(confirmationService.createExecutableCandidate(
+                eq(sql), eq("approved-metric:23"),
+                org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.isNull(),
+                eq(SqlGuardrailService.POLICY_VERSION))).thenReturn(candidate);
+
+        DataGovernanceService.TemplateLaunch launch = service.launchMetric(23L);
+
+        assertThat(launch.candidateId()).isEqualTo("candidate-23");
+        assertThat(launch.confirmationToken()).isEqualTo("one-time-token");
+        verify(guardrailService).validate(sql, guardrails);
+        verify(confirmationService).createExecutableCandidate(
+                eq(sql), eq("approved-metric:23"),
+                org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.isNull(),
+                eq(SqlGuardrailService.POLICY_VERSION));
     }
 }

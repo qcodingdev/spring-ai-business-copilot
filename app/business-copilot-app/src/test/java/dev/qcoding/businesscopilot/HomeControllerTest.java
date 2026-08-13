@@ -22,7 +22,7 @@ class HomeControllerTest {
     @org.junit.jupiter.api.BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.standaloneSetup(
-                new HomeController(new dev.qcoding.businesscopilot.demo.RuntimeModeProperties("development")))
+                new HomeController())
                 .build();
     }
 
@@ -31,7 +31,7 @@ class HomeControllerTest {
     void homeReturnsIndexView() throws Exception {
         mockMvc.perform(get("/"))
                 .andExpect(status().isOk())
-                .andExpect(view().name("index"));
+                .andExpect(view().name("forward:/index.html"));
     }
 
     @Test

@@ -57,7 +57,7 @@ public class KnowledgeSourceController {
             @NotBlank @Size(max = 100) String connectionKey,
             @NotBlank @Size(max = 200) String displayName,
             @NotNull KnowledgeSourceProvider provider,
-            @NotBlank @Size(max = 500) String baseUrl,
+            @Size(max = 500) String baseUrl,
             @Size(max = 500) String rootReference,
             @Size(max = 200) String secretRef,
             Map<String, KnowledgeVisibilityScope> groupMapping,

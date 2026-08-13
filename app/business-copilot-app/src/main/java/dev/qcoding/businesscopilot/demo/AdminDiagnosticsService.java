@@ -132,8 +132,12 @@ public class AdminDiagnosticsService {
 
     private List<Map<String, Object>> recentDemoJobs() {
         return jdbcTemplate.queryForList("""
-                SELECT id, job_type, status, requested_by, error_category,
-                       created_at, started_at, finished_at
+                SELECT id, job_type AS "jobType", status,
+                       requested_by AS "requestedBy",
+                       error_category AS "errorCategory",
+                       created_at AS "createdAt",
+                       started_at AS "startedAt",
+                       finished_at AS "finishedAt"
                 FROM demo_data_jobs
                 ORDER BY created_at DESC
                 LIMIT 20

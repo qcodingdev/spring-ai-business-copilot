@@ -11,6 +11,7 @@ import dev.qcoding.businesscopilot.datacopilot.schema.SchemaContextService;
 import dev.qcoding.businesscopilot.guardrails.GuardrailsProperties;
 import dev.qcoding.businesscopilot.guardrails.SqlGuardrailService;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
@@ -66,56 +67,78 @@ public class DataGovernanceService {
         this.enterpriseProperties = enterpriseProperties;
     }
 
+    @Transactional
     public MetricDefinition saveMetric(MetricCommand command) {
         validateSql(command.expressionSql());
         String actorId = actorProvider.currentActor().actorId();
+        lockGovernanceKey("metric:" + command.metricKey().trim());
+        Long nextVersion = platformJdbcTemplate.queryForObject("""
+                SELECT COALESCE(MAX(version), 0) + 1
+                FROM data_metric_definitions WHERE metric_key = ?
+                """, Long.class, command.metricKey().trim());
         return platformJdbcTemplate.queryForObject("""
                 INSERT INTO data_metric_definitions (
-                    metric_key, display_name, description, unit, expression_sql, owner_actor_id
-                ) VALUES (?, ?, ?, ?, ?, ?)
-                ON CONFLICT (metric_key) DO UPDATE SET
-                    display_name = EXCLUDED.display_name,
-                    description = EXCLUDED.description,
-                    unit = EXCLUDED.unit,
-                    expression_sql = EXCLUDED.expression_sql,
-                    owner_actor_id = EXCLUDED.owner_actor_id,
-                    active = FALSE,
-                    approved_by = NULL,
-                    approved_at = NULL,
-                    version = data_metric_definitions.version + 1,
-                    updated_at = now()
+                    metric_key, display_name, description, unit, expression_sql,
+                    owner_actor_id, version
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
                 RETURNING id, metric_key, display_name, description, unit, expression_sql,
-                          active, version, approved_by, updated_at
+                          active, version, owner_actor_id, approved_by, updated_at
                 """, this::mapMetric,
                 command.metricKey().trim(), command.displayName().trim(),
                 command.description().trim(), trimToNull(command.unit()),
-                command.expressionSql().trim(), actorId);
+                command.expressionSql().trim(), actorId, nextVersion);
     }
 
+    @Transactional
     public MetricDefinition approveMetric(long id) {
         String actorId = actorProvider.currentActor().actorId();
+        GovernanceTarget target = requireGovernanceTarget("data_metric_definitions", id);
+        rejectSelfApproval(target.ownerActorId(), actorId);
+        lockGovernanceKey("metric:" + target.key());
+        platformJdbcTemplate.update("""
+                UPDATE data_metric_definitions SET active = FALSE, updated_at = now()
+                WHERE metric_key = ? AND active = TRUE AND id <> ?
+                """, target.key(), id);
         List<MetricDefinition> rows = platformJdbcTemplate.query("""
                 UPDATE data_metric_definitions
                 SET active = TRUE, approved_by = ?, approved_at = now(), updated_at = now()
-                WHERE id = ?
+                WHERE id = ? AND approved_by IS NULL
                 RETURNING id, metric_key, display_name, description, unit, expression_sql,
-                          active, version, approved_by, updated_at
+                          active, version, owner_actor_id, approved_by, updated_at
                 """, this::mapMetric, actorId, id);
-        return firstOrNotFound(rows);
+        MetricDefinition result = firstOrConflict(rows);
+        recordGovernanceAction("METRIC", id, "APPROVED", actorId);
+        return result;
+    }
+
+    @Transactional
+    public MetricDefinition deactivateMetric(long id) {
+        String actorId = actorProvider.currentActor().actorId();
+        List<MetricDefinition> rows = platformJdbcTemplate.query("""
+                UPDATE data_metric_definitions SET active = FALSE, updated_at = now()
+                WHERE id = ? AND active = TRUE
+                RETURNING id, metric_key, display_name, description, unit, expression_sql,
+                          active, version, owner_actor_id, approved_by, updated_at
+                """, this::mapMetric, id);
+        MetricDefinition result = firstOrConflict(rows);
+        recordGovernanceAction("METRIC", id, "DEACTIVATED", actorId);
+        return result;
     }
 
     public List<MetricDefinition> metrics() {
         return platformJdbcTemplate.query("""
                 SELECT id, metric_key, display_name, description, unit, expression_sql,
-                       active, version, approved_by, updated_at
+                       active, version, owner_actor_id, approved_by, updated_at
                 FROM data_metric_definitions
                 ORDER BY display_name, version DESC
                 """, this::mapMetric);
     }
 
+    @Transactional
     public QueryTemplate saveTemplate(TemplateCommand command) {
         validateSql(command.sql());
         String actorId = actorProvider.currentActor().actorId();
+        lockGovernanceKey("template:" + command.templateKey().trim());
         Long nextVersion = platformJdbcTemplate.queryForObject("""
                 SELECT COALESCE(MAX(version), 0) + 1
                 FROM data_query_templates WHERE template_key = ?
@@ -125,42 +148,78 @@ public class DataGovernanceService {
                     template_key, name, description, sql_text, owner_actor_id, version
                 ) VALUES (?, ?, ?, ?, ?, ?)
                 RETURNING id, template_key, name, description, sql_text, active,
-                          version, approved_by, updated_at
+                          version, owner_actor_id, approved_by, updated_at
                 """, this::mapTemplate, command.templateKey().trim(), command.name().trim(),
                 command.description().trim(), command.sql().trim(), actorId, nextVersion);
     }
 
+    @Transactional
     public QueryTemplate approveTemplate(long id) {
         String actorId = actorProvider.currentActor().actorId();
+        GovernanceTarget target = requireGovernanceTarget("data_query_templates", id);
+        rejectSelfApproval(target.ownerActorId(), actorId);
+        lockGovernanceKey("template:" + target.key());
+        platformJdbcTemplate.update("""
+                UPDATE data_query_templates SET active = FALSE, updated_at = now()
+                WHERE template_key = ? AND active = TRUE AND id <> ?
+                """, target.key(), id);
         List<QueryTemplate> rows = platformJdbcTemplate.query("""
                 UPDATE data_query_templates
                 SET active = TRUE, approved_by = ?, approved_at = now(), updated_at = now()
-                WHERE id = ?
+                WHERE id = ? AND approved_by IS NULL
                 RETURNING id, template_key, name, description, sql_text, active,
-                          version, approved_by, updated_at
+                          version, owner_actor_id, approved_by, updated_at
                 """, this::mapTemplate, actorId, id);
-        return firstOrNotFound(rows);
+        QueryTemplate result = firstOrConflict(rows);
+        recordGovernanceAction("QUERY_TEMPLATE", id, "APPROVED", actorId);
+        return result;
+    }
+
+    @Transactional
+    public QueryTemplate deactivateTemplate(long id) {
+        String actorId = actorProvider.currentActor().actorId();
+        List<QueryTemplate> rows = platformJdbcTemplate.query("""
+                UPDATE data_query_templates SET active = FALSE, updated_at = now()
+                WHERE id = ? AND active = TRUE
+                RETURNING id, template_key, name, description, sql_text, active,
+                          version, owner_actor_id, approved_by, updated_at
+                """, this::mapTemplate, id);
+        QueryTemplate result = firstOrConflict(rows);
+        recordGovernanceAction("QUERY_TEMPLATE", id, "DEACTIVATED", actorId);
+        return result;
     }
 
     public List<QueryTemplate> templates() {
         return platformJdbcTemplate.query("""
                 SELECT id, template_key, name, description, sql_text, active,
-                       version, approved_by, updated_at
+                       version, owner_actor_id, approved_by, updated_at
                 FROM data_query_templates
                 ORDER BY template_key, version DESC
                 """, this::mapTemplate);
     }
 
     public TemplateLaunch launchTemplate(long id) {
-        List<String> sql = platformJdbcTemplate.query("""
+        return launchApprovedSql("""
                 SELECT sql_text FROM data_query_templates WHERE id = ? AND active = TRUE
-                """, (rs, rowNum) -> rs.getString(1), id);
+                """, "approved-template:", id);
+    }
+
+    /** Launches an approved metric definition through the same preview and one-time confirmation flow. */
+    public TemplateLaunch launchMetric(long id) {
+        return launchApprovedSql("""
+                SELECT expression_sql FROM data_metric_definitions WHERE id = ? AND active = TRUE
+                """, "approved-metric:", id);
+    }
+
+    private TemplateLaunch launchApprovedSql(String query, String sourcePrefix, long id) {
+        List<String> sql = platformJdbcTemplate.query(
+                query, (rs, rowNum) -> rs.getString(1), id);
         if (sql.isEmpty()) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         validateSql(sql.getFirst());
         SqlCandidate candidate = confirmationService.createExecutableCandidate(
-                sql.getFirst(), "approved-template:" + id, null, null, null,
+                sql.getFirst(), sourcePrefix + id, null, null, null,
                 SqlGuardrailService.POLICY_VERSION);
         return new TemplateLaunch(candidate.candidateId(), candidate.confirmationToken(), candidate.expiresAt());
     }
@@ -258,14 +317,48 @@ public class DataGovernanceService {
         return new MetricDefinition(rs.getLong("id"), rs.getString("metric_key"),
                 rs.getString("display_name"), rs.getString("description"), rs.getString("unit"),
                 rs.getString("expression_sql"), rs.getBoolean("active"), rs.getLong("version"),
-                rs.getString("approved_by"), rs.getTimestamp("updated_at").toInstant());
+                rs.getString("owner_actor_id"), rs.getString("approved_by"),
+                rs.getTimestamp("updated_at").toInstant());
     }
 
     private QueryTemplate mapTemplate(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException {
         return new QueryTemplate(rs.getLong("id"), rs.getString("template_key"), rs.getString("name"),
                 rs.getString("description"), rs.getString("sql_text"), rs.getBoolean("active"),
-                rs.getLong("version"), rs.getString("approved_by"),
+                rs.getLong("version"), rs.getString("owner_actor_id"), rs.getString("approved_by"),
                 rs.getTimestamp("updated_at").toInstant());
+    }
+
+    private GovernanceTarget requireGovernanceTarget(String table, long id) {
+        String keyColumn = "data_metric_definitions".equals(table) ? "metric_key" : "template_key";
+        List<GovernanceTarget> rows = platformJdbcTemplate.query(
+                "SELECT " + keyColumn + ", owner_actor_id FROM " + table + " WHERE id = ?",
+                (rs, rowNum) -> new GovernanceTarget(rs.getString(1), rs.getString(2)), id);
+        if (rows.isEmpty()) throw new BusinessException(ErrorCode.NOT_FOUND);
+        return rows.getFirst();
+    }
+
+    private void rejectSelfApproval(String ownerActorId, String actorId) {
+        if (actorId.equals(ownerActorId)) {
+            throw new BusinessException(ErrorCode.STATE_CONFLICT,
+                    "治理对象必须由另一名管理员批准");
+        }
+    }
+
+    private void lockGovernanceKey(String key) {
+        platformJdbcTemplate.queryForObject(
+                "SELECT pg_advisory_xact_lock(hashtext(?))::text", String.class, key);
+    }
+
+    private void recordGovernanceAction(String type, long id, String action, String actorId) {
+        platformJdbcTemplate.update("""
+                INSERT INTO data_governance_actions(object_type, object_id, action, actor_id)
+                VALUES (?, ?, ?, ?)
+                """, type, id, action, actorId);
+    }
+
+    private <T> T firstOrConflict(List<T> values) {
+        if (values.isEmpty()) throw new BusinessException(ErrorCode.STATE_CONFLICT);
+        return values.getFirst();
     }
 
     private <T> T firstOrNotFound(List<T> values) {
@@ -295,15 +388,16 @@ public class DataGovernanceService {
     }
 
     private record PreviousSnapshot(String hash, String json) { }
+    private record GovernanceTarget(String key, String ownerActorId) { }
     public record MetricCommand(String metricKey, String displayName, String description,
                                 String unit, String expressionSql) { }
     public record MetricDefinition(long id, String metricKey, String displayName, String description,
                                    String unit, String expressionSql, boolean active, long version,
-                                   String approvedBy, Instant updatedAt) { }
+                                   String ownerActorId, String approvedBy, Instant updatedAt) { }
     public record TemplateCommand(String templateKey, String name, String description, String sql) { }
     public record QueryTemplate(long id, String templateKey, String name, String description,
-                                String sql, boolean active, long version, String approvedBy,
-                                Instant updatedAt) { }
+                                String sql, boolean active, long version, String ownerActorId,
+                                String approvedBy, Instant updatedAt) { }
     public record TemplateLaunch(String candidateId, String confirmationToken, Instant expiresAt) { }
     public record DataSourceHealth(boolean healthy, String dialect, long latencyMs, String errorCategory) { }
     public record SchemaChangeCheck(String schemaHash, boolean changed, List<String> changes,

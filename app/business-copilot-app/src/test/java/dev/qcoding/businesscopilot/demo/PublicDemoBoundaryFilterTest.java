@@ -36,6 +36,7 @@ class PublicDemoBoundaryFilterTest {
 
     @Test
     void allowsScenarioReadsExecutionAndTokenProtectedActions() throws Exception {
+        assertAllowed("GET", "/api/session");
         assertAllowed("POST", "/api/demo/scenarios/execute");
         assertAllowed("GET", "/api/demo/usage");
         assertAllowed("GET", "/api/demo/overview");

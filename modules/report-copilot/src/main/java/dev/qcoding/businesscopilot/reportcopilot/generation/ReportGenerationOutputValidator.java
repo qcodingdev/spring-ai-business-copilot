@@ -38,7 +38,8 @@ public class ReportGenerationOutputValidator {
                 violations.add("引用指向当前请求之外的来源。");
             }
         });
-        return new ValidationResult(violations.isEmpty(), List.copyOf(violations));
+        List<String> distinctViolations = violations.stream().distinct().toList();
+        return new ValidationResult(distinctViolations.isEmpty(), distinctViolations);
     }
 
     private void requireSourceIds(String label, String text, List<String> sourceIds, Set<String> validSourceIds,

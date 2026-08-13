@@ -69,6 +69,8 @@ class GlobalExceptionHandlerTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().success()).isFalse();
+        assertThat(response.getBody().errorCode()).isEqualTo(ErrorCode.VALIDATION_ERROR.code());
         ValidationErrorResponse validation = response.getBody().data();
         assertThat(validation.fieldErrors()).hasSize(1);
         ValidationErrorResponse.FieldError fieldError = validation.fieldErrors().get(0);

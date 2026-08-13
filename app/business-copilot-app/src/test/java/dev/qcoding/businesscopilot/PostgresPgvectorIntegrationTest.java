@@ -23,6 +23,9 @@ import dev.qcoding.businesscopilot.knowledgecopilot.feedback.JdbcKnowledgeFeedba
 import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeFeedbackRating;
 import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeFeedbackReason;
 import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeQualityReviewDecision;
+import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeEvidenceAssessment;
+import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeAnswerAssessment;
+import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeRemediationAction;
 import dev.qcoding.businesscopilot.datacopilot.schema.DataCopilotSchemaProperties;
 import dev.qcoding.businesscopilot.datacopilot.schema.JdbcSchemaMetadataRepository;
 import dev.qcoding.businesscopilot.demo.DemoModule;
@@ -35,6 +38,11 @@ import dev.qcoding.businesscopilot.demo.PublicDemoInputGuard;
 import dev.qcoding.businesscopilot.demo.PublicDemoProperties;
 import dev.qcoding.businesscopilot.demo.PublicDemoQuotaService;
 import dev.qcoding.businesscopilot.supportcopilot.queue.SupportQueueService;
+import dev.qcoding.businesscopilot.supportcopilot.classification.SupportRiskLevel;
+import dev.qcoding.businesscopilot.supportcopilot.draft.JdbcSupportReplyDraftRepository;
+import dev.qcoding.businesscopilot.supportcopilot.draft.SupportDraftStatus;
+import dev.qcoding.businesscopilot.supportcopilot.draft.SupportReplyDraft;
+import dev.qcoding.businesscopilot.guardrails.SensitiveTextMasker;
 import dev.qcoding.businesscopilot.commonweb.api.BusinessException;
 import dev.qcoding.businesscopilot.commonweb.api.ErrorCode;
 import org.flywaydb.core.Flyway;
@@ -61,7 +69,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-@Testcontainers(disabledWithoutDocker = true)
+@Testcontainers(disabledWithoutDocker = false)
 class PostgresPgvectorIntegrationTest {
 
     @Container
@@ -124,6 +132,19 @@ class PostgresPgvectorIntegrationTest {
                     'resume_audit_logs'
                   )
                 """, Integer.class);
+        Integer localeColumns = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND column_name = 'locale'
+                  AND table_name IN (
+                    'query_audit_logs',
+                    'knowledge_qa_audit_logs',
+                    'support_audit_logs',
+                    'report_audit_logs',
+                    'resume_audit_logs'
+                  )
+                """, Integer.class);
         String latestMigration = jdbcTemplate.queryForObject(
                 "SELECT version FROM flyway_schema_history WHERE success = TRUE ORDER BY installed_rank DESC LIMIT 1",
                 String.class);
@@ -131,7 +152,8 @@ class PostgresPgvectorIntegrationTest {
         assertThat(extension).isEqualTo("vector");
         assertThat(actorColumns).isEqualTo(5);
         assertThat(httpRequestColumns).isEqualTo(5);
-        assertThat(latestMigration).isEqualTo("28");
+        assertThat(localeColumns).isEqualTo(5);
+        assertThat(latestMigration).isEqualTo("31");
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT format_type(atttypid, atttypmod) "
                         + "FROM pg_attribute "
@@ -184,13 +206,190 @@ class PostgresPgvectorIntegrationTest {
                 """, Integer.class)).isEqualTo(10);
         assertThat(upgradeJdbcTemplate.queryForObject(
                 "SELECT version FROM flyway_schema_history WHERE success = TRUE ORDER BY installed_rank DESC LIMIT 1",
-                String.class)).isEqualTo("28");
+                String.class)).isEqualTo("31");
+        assertThat(upgradeJdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND column_name = 'locale'
+                  AND table_name IN (
+                    'query_audit_logs',
+                    'knowledge_qa_audit_logs',
+                    'support_audit_logs',
+                    'report_audit_logs',
+                    'resume_audit_logs'
+                  )
+                """, Integer.class)).isEqualTo(5);
         assertThat(upgradeJdbcTemplate.queryForObject(
                 "SELECT format_type(atttypid, atttypmod) "
                         + "FROM pg_attribute "
                         + "WHERE attrelid = 'knowledge_chunk_embeddings'::regclass "
                         + "AND attname = 'embedding'",
                 String.class)).isEqualTo("vector");
+    }
+
+    @Test
+    void upgradesV221SchemaToV230WithoutLosingExistingAuditRows() {
+        JdbcTemplate adminJdbcTemplate = new JdbcTemplate(new DriverManagerDataSource(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword()));
+        adminJdbcTemplate.execute("CREATE DATABASE business_copilot_v221_upgrade_test");
+
+        String upgradeJdbcUrl = "jdbc:postgresql://" + POSTGRES.getHost() + ":"
+                + POSTGRES.getFirstMappedPort() + "/business_copilot_v221_upgrade_test";
+        DriverManagerDataSource upgradeDataSource = new DriverManagerDataSource(
+                upgradeJdbcUrl, POSTGRES.getUsername(), POSTGRES.getPassword());
+        Flyway.configure().dataSource(upgradeDataSource).target("28").load().migrate();
+        JdbcTemplate upgradeJdbcTemplate = new JdbcTemplate(upgradeDataSource);
+        Long auditId = upgradeJdbcTemplate.queryForObject(
+                "INSERT INTO query_audit_logs DEFAULT VALUES RETURNING id", Long.class);
+        Long supportConnectionId = upgradeJdbcTemplate.queryForObject("""
+                INSERT INTO support_external_connections (
+                    connection_key, display_name, provider, base_url,
+                    secret_ref, enabled, owner_actor_id
+                ) VALUES ('legacy-jsm', '历史 JSM', 'JIRA_SERVICE_MANAGEMENT',
+                          'https://jira.example.test', 'JSM_TOKEN', TRUE, 'operator-1')
+                RETURNING id
+                """, Long.class);
+        Long keeperTicketId = upgradeJdbcTemplate.queryForObject("""
+                INSERT INTO support_tickets (
+                    external_id, customer_message, channel, category, sentiment,
+                    urgency, status, owner_actor_id, external_connection_id
+                ) VALUES ('EXT-100', '已脱敏的历史问题', 'jira', 'OTHER', 'NEUTRAL',
+                          'MEDIUM', 'RECEIVED', 'operator-1', ?)
+                RETURNING id
+                """, Long.class, supportConnectionId);
+        Long duplicateTicketId = upgradeJdbcTemplate.queryForObject("""
+                INSERT INTO support_tickets (
+                    external_id, customer_message, channel, category, sentiment,
+                    urgency, status, owner_actor_id, external_connection_id
+                ) VALUES ('EXT-100', '并发导入形成的重复行', 'jira', 'OTHER', 'NEUTRAL',
+                          'MEDIUM', 'RECEIVED', 'operator-1', ?)
+                RETURNING id
+                """, Long.class, supportConnectionId);
+        Long draftId = upgradeJdbcTemplate.queryForObject("""
+                INSERT INTO support_reply_drafts (
+                    ticket_id, draft_text, risk_level, expires_at, owner_actor_id,
+                    status, original_draft_text, decision_outcome
+                ) VALUES (?, '已脱敏的历史草稿', 'LOW', now() + interval '1 hour',
+                          'operator-1', 'CONFIRMED', '已脱敏的历史草稿', 'ACCEPTED')
+                RETURNING id
+                """, Long.class, duplicateTicketId);
+        Instant contextObservedAt = Instant.parse("2026-07-28T10:00:00Z");
+        for (Long ticketId : List.of(keeperTicketId, duplicateTicketId)) {
+            upgradeJdbcTemplate.update("""
+                    INSERT INTO support_ticket_context_snapshots (
+                        ticket_id, context_type, source_reference, sanitized_payload,
+                        observed_at, expires_at
+                    ) VALUES (?, 'CUSTOMER', 'customer:EXT-100', '{"tier":"standard"}'::jsonb,
+                              ?, now() + interval '1 day')
+                    """, ticketId, java.sql.Timestamp.from(contextObservedAt));
+        }
+        Long supportAuditId = upgradeJdbcTemplate.queryForObject("""
+                INSERT INTO support_audit_logs (
+                    ticket_id, event_type, actor_id, creator_actor_id
+                ) VALUES (?, 'TICKET_IMPORTED', 'operator-1', 'operator-1')
+                RETURNING id
+                """, Long.class, duplicateTicketId);
+        Long legacyWritebackId = upgradeJdbcTemplate.queryForObject("""
+                INSERT INTO support_draft_writebacks (
+                    draft_id, connection_id, external_ticket_id, payload_hash,
+                    status, requested_by, confirmed_by
+                ) VALUES (?, ?, 'EXT-100', ?, 'CONFIRMED', 'operator-1', 'operator-1')
+                RETURNING id
+                """, Long.class, draftId, supportConnectionId, "a".repeat(64));
+        Long legacyReportConnectionId = upgradeJdbcTemplate.queryForObject("""
+                INSERT INTO report_external_connections (
+                    connection_key, display_name, provider, enabled, owner_actor_id
+                ) VALUES ('legacy-data-query', '旧版数据查询占位来源',
+                          'DATA_QUERY', TRUE, 'operator-1')
+                RETURNING id
+                """, Long.class);
+        upgradeJdbcTemplate.update("""
+                INSERT INTO report_schedules (
+                    schedule_key, report_type, title_template, cron_expression, zone_id,
+                    template_id, template_version, source_config, enabled,
+                    owner_actor_id, next_run_at
+                ) VALUES ('legacy-placeholder-schedule', 'BUSINESS_WEEKLY', '历史周报',
+                          '0 0 9 ? * MON', 'Asia/Shanghai', 'weekly-ops', 'v1',
+                          ?::jsonb, TRUE, 'operator-1', now() + interval '1 day')
+                """, "{\"connectionIds\":[" + legacyReportConnectionId
+                        + "],\"dataHandoffReferences\":[],\"includeSupportMetrics\":false}");
+        upgradeJdbcTemplate.update("""
+                INSERT INTO report_schedules (
+                    schedule_key, report_type, title_template, cron_expression, zone_id,
+                    template_id, template_version, source_config, enabled,
+                    owner_actor_id, next_run_at
+                ) VALUES ('legacy-one-shot-schedule', 'BUSINESS_WEEKLY', '一次性来源周报',
+                          '0 0 9 ? * MON', 'Asia/Shanghai', 'weekly-ops', 'v1',
+                          '{"connectionIds":[],"dataHandoffReferences":["data-result:old"],'
+                          '"includeSupportMetrics":false}'::jsonb,
+                          TRUE, 'operator-1', now() + interval '1 day')
+                """);
+
+        Flyway.configure().dataSource(upgradeDataSource).load().migrate();
+
+        assertThat(upgradeJdbcTemplate.queryForObject(
+                "SELECT version FROM flyway_schema_history WHERE success = TRUE "
+                        + "ORDER BY installed_rank DESC LIMIT 1",
+                String.class)).isEqualTo("31");
+        assertThat(upgradeJdbcTemplate.queryForObject(
+                "SELECT locale FROM query_audit_logs WHERE id = ?",
+                String.class, auditId)).isEqualTo("zh-CN");
+        assertThat(upgradeJdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND column_name = 'locale'
+                  AND table_name IN (
+                    'query_audit_logs',
+                    'knowledge_qa_audit_logs',
+                    'support_audit_logs',
+                    'report_audit_logs',
+                    'resume_audit_logs'
+                  )
+                """, Integer.class)).isEqualTo(5);
+        assertThat(upgradeJdbcTemplate.queryForObject(
+                "SELECT status FROM support_draft_writebacks WHERE id = ?",
+                String.class, legacyWritebackId)).isEqualTo("UNKNOWN");
+        assertThat(upgradeJdbcTemplate.queryForObject(
+                "SELECT error_category FROM support_draft_writebacks WHERE id = ?",
+                String.class, legacyWritebackId)).isEqualTo("LEGACY_EXTERNAL_OUTCOME_UNKNOWN");
+        assertThat(upgradeJdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM support_tickets
+                WHERE external_connection_id = ? AND external_id = 'EXT-100'
+                """, Integer.class, supportConnectionId)).isEqualTo(1);
+        assertThat(upgradeJdbcTemplate.queryForObject(
+                "SELECT ticket_id FROM support_reply_drafts WHERE id = ?",
+                Long.class, draftId)).isEqualTo(keeperTicketId);
+        assertThat(upgradeJdbcTemplate.queryForObject(
+                "SELECT ticket_id FROM support_audit_logs WHERE id = ?",
+                Long.class, supportAuditId)).isEqualTo(keeperTicketId);
+        assertThat(upgradeJdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM support_ticket_context_snapshots
+                WHERE ticket_id = ? AND source_reference = 'customer:EXT-100'
+                """, Integer.class, keeperTicketId)).isEqualTo(1);
+        assertThat(upgradeJdbcTemplate.queryForObject(
+                "SELECT enabled FROM report_external_connections WHERE id = ?",
+                Boolean.class, legacyReportConnectionId)).isFalse();
+        assertThat(upgradeJdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM report_schedules
+                WHERE schedule_key IN ('legacy-placeholder-schedule', 'legacy-one-shot-schedule')
+                  AND enabled = TRUE
+                """, Integer.class)).isZero();
+        assertThatThrownBy(() -> upgradeJdbcTemplate.update("""
+                UPDATE report_external_connections SET enabled = TRUE WHERE id = ?
+                """, legacyReportConnectionId)).isInstanceOf(DataAccessException.class);
+        assertThatThrownBy(() -> upgradeJdbcTemplate.update("""
+                UPDATE report_schedules SET enabled = TRUE
+                WHERE schedule_key = 'legacy-one-shot-schedule'
+                """)).isInstanceOf(DataAccessException.class);
+        assertThatThrownBy(() -> upgradeJdbcTemplate.update("""
+                INSERT INTO support_tickets (
+                    external_id, customer_message, channel, category, sentiment,
+                    urgency, status, owner_actor_id, external_connection_id
+                ) VALUES ('EXT-100', '重复身份', 'jira', 'OTHER', 'NEUTRAL',
+                          'MEDIUM', 'RECEIVED', 'operator-1', ?)
+                """, supportConnectionId)).isInstanceOf(DataAccessException.class);
     }
 
     @Test
@@ -201,6 +400,7 @@ class PostgresPgvectorIntegrationTest {
                 "data_schema_snapshots",
                 "data_query_results",
                 "data_report_handoffs",
+                "data_governance_actions",
                 "knowledge_source_connections",
                 "knowledge_sync_runs",
                 "knowledge_source_items",
@@ -214,10 +414,13 @@ class PostgresPgvectorIntegrationTest {
                 "hr_candidate_consents",
                 "hr_interview_question_bank",
                 "hr_interview_sessions",
+                "hr_interview_session_members",
                 "hr_interview_opinions",
                 "hr_ats_connections",
                 "hr_ats_imports",
-                "hr_onboarding_checklists");
+                "hr_onboarding_checklists",
+                "hr_onboarding_instances",
+                "hr_onboarding_tasks");
 
         List<String> actual = jdbcTemplate.queryForList("""
                 SELECT table_name
@@ -244,6 +447,46 @@ class PostgresPgvectorIntegrationTest {
                   AND table_name = 'resume_submissions'
                   AND column_name IN ('consent_id', 'candidate_reference')
                 """, Integer.class)).isEqualTo(2);
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'hr_onboarding_tasks'
+                  AND column_name IN ('guidance', 'required', 'owner_role')
+                """, Integer.class)).isEqualTo(3);
+    }
+
+    @Test
+    void expiredSupportReviewCredentialIsRenewedWithAtomicReviewerClaim() {
+        Long ticketId = jdbcTemplate.queryForObject("""
+                INSERT INTO support_tickets (
+                    external_id, customer_message, channel, category, sentiment,
+                    urgency, status, owner_actor_id
+                ) VALUES ('RENEW-CREDENTIAL-1', '已脱敏的凭证续期测试', 'local',
+                          'OTHER', 'NEUTRAL', 'MEDIUM', 'NEEDS_HUMAN', 'operator-1')
+                RETURNING id
+                """, Long.class);
+        JdbcSupportReplyDraftRepository repository = new JdbcSupportReplyDraftRepository(
+                jdbcTemplate, new SensitiveTextMasker());
+        SupportReplyDraft draft = repository.save(new SupportReplyDraft(
+                null, ticketId, "仅供复核的脱敏草稿", "chunk-1", SupportRiskLevel.MEDIUM,
+                "人工复核", null, "old-digest", SupportDraftStatus.NEEDS_REVIEW,
+                "operator-1", true, null, null,
+                Instant.now().minusSeconds(1), null, null));
+        Instant now = Instant.now();
+        Instant renewedExpiry = now.plus(Duration.ofMinutes(10));
+
+        assertThat(repository.replaceConfirmationToken(
+                draft.id(), SupportDraftStatus.NEEDS_REVIEW, null,
+                "new-digest", "reviewer-1", renewedExpiry, now)).isTrue();
+        assertThat(repository.replaceConfirmationToken(
+                draft.id(), SupportDraftStatus.NEEDS_REVIEW, null,
+                "racing-digest", "reviewer-2", renewedExpiry, now)).isFalse();
+
+        SupportReplyDraft claimed = repository.findById(draft.id()).orElseThrow();
+        assertThat(claimed.tokenDigest()).isEqualTo("new-digest");
+        assertThat(claimed.reviewerActorId()).isEqualTo("reviewer-1");
+        assertThat(claimed.expiresAt()).isAfter(now.plus(Duration.ofMinutes(9)));
     }
 
     @Test
@@ -288,9 +531,9 @@ class PostgresPgvectorIntegrationTest {
                 """);
         jdbcTemplate.update("""
                 INSERT INTO hr_candidate_consents (
-                    consent_reference, candidate_reference, purpose,
+                    consent_reference, candidate_reference, purpose, purpose_code,
                     granted_at, expires_at, recorded_by
-                ) VALUES ('consent-001', 'candidate-001', '面试评估',
+                ) VALUES ('consent-001', 'candidate-001', '面试评估', 'ASSESSMENT',
                           now(), now() + interval '7 days', 'hr-reviewer-1')
                 """);
 
@@ -305,9 +548,9 @@ class PostgresPgvectorIntegrationTest {
                 Integer.class)).isGreaterThanOrEqualTo(1);
         assertThatThrownBy(() -> jdbcTemplate.update("""
                 INSERT INTO hr_candidate_consents (
-                    consent_reference, candidate_reference, purpose,
+                    consent_reference, candidate_reference, purpose, purpose_code,
                     granted_at, expires_at, recorded_by
-                ) VALUES ('invalid-consent', 'candidate-002', '面试评估',
+                ) VALUES ('invalid-consent', 'candidate-002', '面试评估', 'ASSESSMENT',
                           now(), now() - interval '1 minute', 'hr-reviewer-1')
                 """)).isInstanceOf(DataAccessException.class);
         assertThatThrownBy(() -> jdbcTemplate.update("""
@@ -339,6 +582,12 @@ class PostgresPgvectorIntegrationTest {
 
         repository.upsert(scenario);
         repository.upsert(scenario);
+        assertThat(repository.findEnabled(null))
+                .extracting(DemoScenario::scenarioId)
+                .contains(scenario.scenarioId());
+        assertThat(repository.findEnabled(DemoModule.KNOWLEDGE))
+                .extracting(DemoScenario::scenarioId)
+                .contains(scenario.scenarioId());
         repository.upsertSampleResult(
                 scenario.scenarioId(), 1, "{\"notice\":\"stale\"}", Instant.now(), "b".repeat(64));
 
@@ -419,14 +668,16 @@ class PostgresPgvectorIntegrationTest {
     void knowledgeFeedbackAndHumanDispositionFormAConcurrencySafeQualityLoop() {
         Long answerId = jdbcTemplate.queryForObject("""
                 INSERT INTO knowledge_qa_audit_logs (
-                    request_id, actor_id, creator_actor_id, question, answer_status
-                ) VALUES (?, ?, ?, ?, 'ANSWERED')
+                    request_id, actor_id, creator_actor_id, question, answer_preview,
+                    retrieved_chunk_ids, cited_chunk_ids, answer_status
+                ) VALUES (?, ?, ?, ?, ?, '11,12', '11', 'ANSWERED')
                 RETURNING id
                 """, Long.class,
                 "knowledge-feedback-" + System.nanoTime(),
                 "operator-feedback",
                 "operator-feedback",
-                "差旅报销上限是多少？");
+                "差旅报销上限是多少？",
+                "旧制度中的上限为 2000 元。");
         JdbcKnowledgeFeedbackRepository repository =
                 new JdbcKnowledgeFeedbackRepository(jdbcTemplate);
 
@@ -455,6 +706,9 @@ class PostgresPgvectorIntegrationTest {
                 .filter(item -> item.answerId().equals(answerId))
                 .findFirst()
                 .orElseThrow();
+        assertThat(pendingIssue.answerPreview()).isEqualTo("旧制度中的上限为 2000 元。");
+        assertThat(pendingIssue.retrievedChunkIds()).isEqualTo("11,12");
+        assertThat(pendingIssue.citedChunkIds()).isEqualTo("11");
         assertThat(repository.findQualityQueue(0, 100))
                 .extracting(item -> item.answerId())
                 .contains(answerId);
@@ -472,17 +726,26 @@ class PostgresPgvectorIntegrationTest {
         var review = repository.review(
                 answerId,
                 KnowledgeQualityReviewDecision.KNOWLEDGE_UPDATE_REQUIRED,
+                KnowledgeEvidenceAssessment.OUTDATED,
+                KnowledgeAnswerAssessment.PARTIALLY_ACCURATE,
+                KnowledgeRemediationAction.UPDATE_KNOWLEDGE,
                 "需要补充最新报销制度",
                 "reviewer-1",
                 pendingIssue.issueVersion(),
                 pendingIssue.issueUpdatedAt()).orElseThrow();
         assertThat(review.answerId()).isEqualTo(answerId);
+        assertThat(review.evidenceAssessment()).isEqualTo(KnowledgeEvidenceAssessment.OUTDATED);
+        assertThat(review.answerAssessment()).isEqualTo(KnowledgeAnswerAssessment.PARTIALLY_ACCURATE);
+        assertThat(review.remediationAction()).isEqualTo(KnowledgeRemediationAction.UPDATE_KNOWLEDGE);
         assertThat(repository.findQualityQueue(0, 100))
                 .extracting(item -> item.answerId())
                 .doesNotContain(answerId);
         assertThat(repository.review(
                 answerId,
                 KnowledgeQualityReviewDecision.DISMISSED,
+                KnowledgeEvidenceAssessment.NOT_APPLICABLE,
+                KnowledgeAnswerAssessment.NOT_VERIFIABLE,
+                KnowledgeRemediationAction.NONE,
                 "并发旧页面不应覆盖",
                 "reviewer-2",
                 pendingIssue.issueVersion(),

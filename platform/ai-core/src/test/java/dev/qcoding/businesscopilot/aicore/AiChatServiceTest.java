@@ -84,7 +84,8 @@ class AiChatServiceTest {
 
         when(builder.build()).thenReturn(chatClient);
         when(chatClient.prompt()).thenReturn(requestSpec);
-        when(requestSpec.user("return a structured response")).thenReturn(requestSpec);
+        when(requestSpec.user(org.mockito.ArgumentMatchers.contains("return a structured response")))
+                .thenReturn(requestSpec);
         when(requestSpec.call()).thenReturn(responseSpec);
         when(entityParamSpec.validateSchema()).thenReturn(entityParamSpec);
         when(responseSpec.entity(
@@ -102,6 +103,22 @@ class AiChatServiceTest {
 
         assertThat(service.generateJson("return a structured response", StructuredOutput.class)).isEqualTo(expected);
         verify(entityParamSpec).validateSchema();
+        verify(requestSpec).user(org.mockito.ArgumentMatchers.contains("输出语言要求"));
+    }
+
+    @Test
+    void extractsJsonObjectFromMarkdownFenceAndIgnoresSurroundingText() {
+        String raw = "模型结果：\n```json\n{\"sql\":\"SELECT '{x}'\",\"summary\":\"已完成\"}\n```\n请复核";
+
+        assertThat(AiChatService.extractJsonObject(raw))
+                .isEqualTo("{\"sql\":\"SELECT '{x}'\",\"summary\":\"已完成\"}");
+    }
+
+    @Test
+    void rejectsTruncatedPromptJson() {
+        assertThatThrownBy(() -> AiChatService.extractJsonObject("```json\n{\"sql\":\"SELECT 1\""))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("truncated");
     }
 
     private record StructuredOutput(String status) {

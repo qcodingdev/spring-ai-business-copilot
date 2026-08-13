@@ -87,6 +87,33 @@ class TicketAnalysisServiceTest {
         assertEquals("DRAFTED", auditRepository.saved.getLast().eventType());
     }
 
+    @Test
+    void shouldContinueImportedTicketWithoutCreatingDuplicateTicket() {
+        var ticketRepository = new InMemoryTicketRepository();
+        ticketRepository.claimed = new SupportTicket(
+                200L, "JSM-200", "批量导入上限是多少？", "JSM",
+                dev.qcoding.businesscopilot.supportcopilot.classification.TicketCategory.OTHER,
+                dev.qcoding.businesscopilot.supportcopilot.classification.TicketSentiment.NEUTRAL,
+                dev.qcoding.businesscopilot.supportcopilot.classification.TicketUrgency.MEDIUM,
+                SupportTicketStatus.RECEIVED, "admin-1", Instant.now(), Instant.now());
+        var service = new TicketAnalysisService(
+                new FixedClassificationService(),
+                query -> SupportKnowledgeResult.of(List.of(new SupportKnowledgeEvidence(
+                        "产品 FAQ", "商品管理", "单次最多导入一万个 SKU", "chunk-1", 0.88))),
+                new CountingDraftService(), ticketRepository,
+                new SupportAuditService(new InMemoryAuditRepository()),
+                new SensitiveTextMasker(),
+                new SupportCopilotProperties(true, 2000, 10,
+                        "REFUND,ACCOUNT_SECURITY,INCIDENT", true, 5), actorProvider());
+
+        var result = service.analyzeStored(200L);
+
+        assertEquals(200L, result.ticketId());
+        assertEquals(0, ticketRepository.saveCalls);
+        assertTrue(ticketRepository.classificationUpdated);
+        assertEquals(SupportTicketStatus.DRAFTED, ticketRepository.lastStatus);
+    }
+
     private static class FixedClassificationService extends TicketClassificationService {
         FixedClassificationService() {
             super(null, null, new SensitiveTextMasker(),
@@ -141,13 +168,38 @@ class TicketAnalysisServiceTest {
 
     private static class InMemoryTicketRepository implements SupportTicketRepository {
         private SupportTicketStatus lastStatus;
+        private SupportTicket claimed;
+        private int saveCalls;
+        private boolean classificationUpdated;
 
         @Override
         public SupportTicket save(SupportTicket ticket) {
+            saveCalls++;
             return new SupportTicket(100L, ticket.externalId(), ticket.customerMessage(),
                     ticket.channel(), ticket.category(), ticket.sentiment(),
                     ticket.urgency(), ticket.status(), ticket.ownerActorId(),
                     Instant.now(), Instant.now());
+        }
+
+        @Override
+        public Optional<SupportTicket> claimForAnalysis(Long id, String actorId, boolean admin) {
+            return claimed != null && claimed.id().equals(id) ? Optional.of(claimed) : Optional.empty();
+        }
+
+        @Override
+        public boolean updateClassification(
+                Long id,
+                dev.qcoding.businesscopilot.supportcopilot.classification.TicketCategory category,
+                dev.qcoding.businesscopilot.supportcopilot.classification.TicketSentiment sentiment,
+                dev.qcoding.businesscopilot.supportcopilot.classification.TicketUrgency urgency) {
+            classificationUpdated = true;
+            return true;
+        }
+
+        @Override
+        public boolean failAnalysis(Long id) {
+            lastStatus = SupportTicketStatus.FAILED;
+            return true;
         }
 
         @Override

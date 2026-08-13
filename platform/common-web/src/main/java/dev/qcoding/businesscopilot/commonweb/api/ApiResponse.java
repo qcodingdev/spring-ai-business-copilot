@@ -46,6 +46,11 @@ public record ApiResponse<T>(
         return new ApiResponse<>(null, false, errorCode.code(), message, currentRequestId(), Instant.now());
     }
 
+    /** Build a failure response that also carries bounded, client-safe details. */
+    public static <T> ApiResponse<T> fail(T data, ErrorCode errorCode, String message) {
+        return new ApiResponse<>(data, false, errorCode.code(), message, currentRequestId(), Instant.now());
+    }
+
     /** Build a failure response from a raw error code string and message. */
     public static <T> ApiResponse<T> fail(String errorCode, String message) {
         return new ApiResponse<>(null, false, errorCode, message, currentRequestId(), Instant.now());

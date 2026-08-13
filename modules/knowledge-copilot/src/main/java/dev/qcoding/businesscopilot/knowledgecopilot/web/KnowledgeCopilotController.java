@@ -117,7 +117,8 @@ public class KnowledgeCopilotController {
             @Valid @RequestBody DocumentEnabledRequest request) {
         boolean updated = documentUploadService.updateEnabled(documentId, request.enabled());
         if (!updated) {
-            return ResponseEntity.notFound().build();
+            throw new dev.qcoding.businesscopilot.commonweb.api.BusinessException(
+                    dev.qcoding.businesscopilot.commonweb.api.ErrorCode.NOT_FOUND);
         }
         return ResponseEntity.ok(ApiResponse.ok(
                 new DocumentEnabledResponse(documentId, request.enabled()),
@@ -140,7 +141,8 @@ public class KnowledgeCopilotController {
     @DeleteMapping("/documents/{documentId}")
     public ResponseEntity<ApiResponse<Void>> deleteDocument(@PathVariable Long documentId) {
         if (!documentUploadService.delete(documentId)) {
-            return ResponseEntity.notFound().build();
+            throw new dev.qcoding.businesscopilot.commonweb.api.BusinessException(
+                    dev.qcoding.businesscopilot.commonweb.api.ErrorCode.NOT_FOUND);
         }
         return ResponseEntity.ok(ApiResponse.ok(null, "文档版本已删除"));
     }
@@ -237,6 +239,7 @@ public class KnowledgeCopilotController {
                 null,
                 UUID.randomUUID().toString(),
                 question,
+                boundedAnswerPreview(response.answer()),
                 invocation.retrievedChunkIds(),
                 citedIds,
                 response.status().name(),
@@ -257,6 +260,14 @@ public class KnowledgeCopilotController {
                 aiMetadata != null ? aiMetadata.finishReason() : null,
                 null,
                 null);
+    }
+
+    private String boundedAnswerPreview(String answer) {
+        if (answer == null || answer.isBlank()) {
+            return null;
+        }
+        String normalized = answer.trim();
+        return normalized.length() <= 2000 ? normalized : normalized.substring(0, 2000);
     }
 
     // ═══════════════════════════════════════════════════════════════

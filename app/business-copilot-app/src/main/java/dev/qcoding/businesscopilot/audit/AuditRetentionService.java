@@ -36,7 +36,7 @@ public class AuditRetentionService {
                             + "WHERE anonymized_at IS NULL AND created_at <= ?",
                     Timestamp.from(now), anonymizeBefore);
             anonymized += jdbcTemplate.update(
-                    "UPDATE knowledge_qa_audit_logs SET question = NULL, refusal_reason = NULL, anonymized_at = ? "
+                    "UPDATE knowledge_qa_audit_logs SET question = NULL, answer_preview = NULL, refusal_reason = NULL, anonymized_at = ? "
                             + "WHERE anonymized_at IS NULL AND created_at <= ?",
                     Timestamp.from(now), anonymizeBefore);
             anonymized += anonymizeErrors("support_audit_logs", now, anonymizeBefore);

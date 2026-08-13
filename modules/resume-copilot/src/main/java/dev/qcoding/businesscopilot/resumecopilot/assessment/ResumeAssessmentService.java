@@ -208,13 +208,51 @@ public class ResumeAssessmentService {
         ResumeAssessmentEntity assessment = requireAssessment(assessmentId);
         CurrentActor actor = actorProvider.currentActor();
         requireAccess(assessment, actor, ObjectAction.REVIEW);
-        return new ReviewView(
-                assessment.getId(), assessment.getJobId(), assessment.getSubmissionId(),
-                assessment.getCriteriaVersion(), ResumeModels.Status.valueOf(assessment.getStatus()),
-                read(assessment.getContentJson()), read(assessment.getOriginalContentJson()),
-                assessment.getReviewReasons(), assessment.getReviewerFeedback(),
-                assessment.getDecisionOutcome(), repository.findEvidence(assessment.getSubmissionId()),
-                assessment.getExpiresAt());
+        return toReviewView(assessment);
+    }
+
+    public List<ReviewQueueItem> reviewQueue(int limit) {
+        CurrentActor actor = actorProvider.currentActor();
+        boolean admin = actor.hasRole(BusinessRole.ADMIN);
+        boolean reviewer = actor.hasRole(BusinessRole.REVIEWER);
+        return repository.findAssessmentReviewQueue(actor.actorId(), admin, reviewer, limit).stream()
+                .map(item -> new ReviewQueueItem(
+                        item.assessmentId(), item.jobId(), item.submissionId(), item.jobTitle(),
+                        item.candidateReference(), item.criteriaVersion(), item.status(),
+                        lines(item.reviewReasons()), item.ownerActorId(), item.reviewerActorId(),
+                        item.expiresAt(), item.updatedAt()))
+                .toList();
+    }
+
+    /** Claims an assessment and rotates the digest-backed credential for a fresh review session. */
+    @Transactional
+    public ReviewSession openReviewSession(long assessmentId) {
+        ResumeAssessmentEntity assessment = requireAssessment(assessmentId);
+        CurrentActor actor = actorProvider.currentActor();
+        requireAccess(assessment, actor, ObjectAction.REVIEW);
+        ResumeModels.Status status = ResumeModels.Status.valueOf(assessment.getStatus());
+        if (!assessment.isReviewQueue()
+                || (status != ResumeModels.Status.DRAFTED
+                    && status != ResumeModels.Status.NEEDS_REVIEW)) {
+            throw new BusinessException(ErrorCode.STATE_CONFLICT);
+        }
+        ConfirmationTokenService.IssuedToken token = tokenService.issue();
+        Instant now = Instant.now();
+        Instant expiresAt = now.plus(properties.reviewTokenTtl());
+        if (!repository.claimAssessmentReview(
+                assessmentId, actor.actorId(), actor.hasRole(BusinessRole.ADMIN),
+                actor.hasRole(BusinessRole.REVIEWER), token.digest(), expiresAt, now)) {
+            throw new BusinessException(ErrorCode.STATE_CONFLICT);
+        }
+        ResumeAssessmentEntity claimed = requireAssessment(assessmentId);
+        ResumeJobEntity job = repository.findJob(claimed.getJobId());
+        if (job == null) throw new BusinessException(ErrorCode.NOT_FOUND);
+        List<ResumeModels.JobCriterion> criteria = criteriaService.criteria(job);
+        List<ResumeModels.ResumeEvidence> evidence = repository.findEvidence(claimed.getSubmissionId());
+        repository.auditRequired("REVIEW_SESSION_OPENED", claimed.getJobId(),
+                claimed.getSubmissionId(), assessmentId, criteria.size(), evidence.size(), null,
+                status.name(), null, claimed.getOwnerActorId(), actor.actorId());
+        return new ReviewSession(toReviewView(claimed), criteria, token.rawToken(), expiresAt);
     }
 
     public boolean deleteSubmission(long submissionId) {
@@ -262,6 +300,21 @@ public class ResumeAssessmentService {
                 assessment.getReviewerActorId(), assessment.isReviewQueue())) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
+    }
+
+    private ReviewView toReviewView(ResumeAssessmentEntity assessment) {
+        return new ReviewView(
+                assessment.getId(), assessment.getJobId(), assessment.getSubmissionId(),
+                assessment.getCriteriaVersion(), ResumeModels.Status.valueOf(assessment.getStatus()),
+                read(assessment.getContentJson()), read(assessment.getOriginalContentJson()),
+                assessment.getReviewReasons(), assessment.getReviewerFeedback(),
+                assessment.getDecisionOutcome(), repository.findEvidence(assessment.getSubmissionId()),
+                assessment.getExpiresAt());
+    }
+
+    private List<String> lines(String value) {
+        if (value == null || value.isBlank()) return List.of();
+        return value.lines().map(String::trim).filter(line -> !line.isBlank()).toList();
     }
 
     private void validateTokenAndExpiry(ResumeAssessmentEntity assessment, String rawToken) {
@@ -329,4 +382,11 @@ public class ResumeAssessmentService {
                              ResumeModels.AssessmentContent originalContent, String reviewReasons,
                              String reviewerFeedback, String decisionOutcome,
                              List<ResumeModels.ResumeEvidence> evidence, Instant expiresAt) { }
+    public record ReviewQueueItem(Long assessmentId, Long jobId, Long submissionId,
+                                  String jobTitle, String candidateReference, int criteriaVersion,
+                                  ResumeModels.Status status, List<String> reviewReasons,
+                                  String ownerActorId, String reviewerActorId,
+                                  Instant expiresAt, Instant updatedAt) { }
+    public record ReviewSession(ReviewView assessment, List<ResumeModels.JobCriterion> criteria,
+                                String reviewToken, Instant expiresAt) { }
 }

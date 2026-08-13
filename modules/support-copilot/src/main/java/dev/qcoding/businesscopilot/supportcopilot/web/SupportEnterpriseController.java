@@ -71,11 +71,29 @@ public class SupportEnterpriseController {
         return ResponseEntity.ok(ApiResponse.ok(service.prepareWriteback(draftId)));
     }
 
+    @GetMapping("/drafts/{draftId}/writeback-capability")
+    public ResponseEntity<ApiResponse<?>> writebackCapability(@PathVariable long draftId) {
+        return ResponseEntity.ok(ApiResponse.ok(service.writebackCapability(draftId)));
+    }
+
     @PostMapping("/writebacks/{writebackId}/confirm")
     public ResponseEntity<ApiResponse<?>> confirmWriteback(
             @PathVariable long writebackId, @Valid @RequestBody TokenRequest request) {
         return ResponseEntity.ok(ApiResponse.ok(
                 service.confirmWriteback(writebackId, request.confirmationToken())));
+    }
+
+    @GetMapping("/writebacks/{writebackId}")
+    public ResponseEntity<ApiResponse<?>> writebackStatus(@PathVariable long writebackId) {
+        return ResponseEntity.ok(ApiResponse.ok(service.writebackStatus(writebackId)));
+    }
+
+    @PostMapping("/writebacks/{writebackId}/resolve")
+    public ResponseEntity<ApiResponse<?>> resolveWriteback(
+            @PathVariable long writebackId, @Valid @RequestBody ResolutionRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(service.resolveUnknown(writebackId,
+                new SupportEnterpriseService.ResolutionCommand(
+                        request.resolution(), request.evidenceReference()))));
     }
 
     public record ConnectionRequest(
@@ -86,4 +104,7 @@ public class SupportEnterpriseController {
             @NotBlank @Size(max = 200) String secretRef,
             boolean enabled) { }
     public record TokenRequest(@NotBlank String confirmationToken) { }
+    public record ResolutionRequest(
+            @NotNull SupportEnterpriseService.WritebackResolution resolution,
+            @NotBlank @Size(max = 500) String evidenceReference) { }
 }

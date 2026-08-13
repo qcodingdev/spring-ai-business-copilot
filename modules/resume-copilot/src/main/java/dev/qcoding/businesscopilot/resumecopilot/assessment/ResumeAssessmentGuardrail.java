@@ -1,6 +1,7 @@
 package dev.qcoding.businesscopilot.resumecopilot.assessment;
 
 import dev.qcoding.businesscopilot.resumecopilot.ResumeModels;
+import dev.qcoding.businesscopilot.commonweb.request.BusinessRequestContextHolder;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -53,7 +54,7 @@ public class ResumeAssessmentGuardrail {
         if (PROTECTED.stream().anyMatch(allText::contains) || PROTECTED_ENGLISH.matcher(allText).find()) {
             reasons.add("评估包含受保护属性或代理招聘条件。");
         }
-        if (!usesChineseNarrative(content)) {
+        if (!"en-US".equals(BusinessRequestContextHolder.currentLocale()) && !usesChineseNarrative(content)) {
             reasons.add("评估草稿必须使用简体中文，技术专有名词除外。");
         }
         for (var question : content.interviewQuestions()) {

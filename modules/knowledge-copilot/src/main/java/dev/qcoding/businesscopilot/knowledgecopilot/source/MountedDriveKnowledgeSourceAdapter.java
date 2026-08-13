@@ -10,6 +10,14 @@ import java.util.Locale;
 /** 同步部署时显式挂载的只读目录；拒绝符号链接和目录逃逸。 */
 public class MountedDriveKnowledgeSourceAdapter implements KnowledgeSourceAdapter {
 
+    private final long maxFileBytes;
+    private final int maxItems;
+
+    public MountedDriveKnowledgeSourceAdapter(long maxFileBytes, int maxItems) {
+        this.maxFileBytes = maxFileBytes;
+        this.maxItems = maxItems;
+    }
+
     @Override
     public boolean supports(KnowledgeSourceProvider provider) {
         return provider == KnowledgeSourceProvider.MOUNTED_DRIVE;
@@ -25,7 +33,7 @@ public class MountedDriveKnowledgeSourceAdapter implements KnowledgeSourceAdapte
             List<SourceItem> items = paths.filter(Files::isRegularFile)
                     .filter(path -> !Files.isSymbolicLink(path))
                     .filter(path -> supported(path.getFileName().toString()))
-                    .limit(10_000)
+                    .limit(maxItems)
                     .map(path -> read(root, path))
                     .toList();
             return new SourceBatch(items, null, true);
@@ -41,9 +49,19 @@ public class MountedDriveKnowledgeSourceAdapter implements KnowledgeSourceAdapte
                 throw new IllegalStateException("检测到企业网盘目录逃逸");
             }
             Instant modified = Files.getLastModifiedTime(normalized).toInstant();
+            if (Files.size(normalized) > maxFileBytes) {
+                throw new IllegalStateException("企业网盘文件超过安全大小限制");
+            }
+            byte[] content;
+            try (var input = Files.newInputStream(normalized)) {
+                content = input.readNBytes(Math.toIntExact(maxFileBytes + 1));
+            }
+            if (content.length > maxFileBytes) {
+                throw new IllegalStateException("企业网盘文件超过安全大小限制");
+            }
             return new SourceItem(root.relativize(normalized).toString(),
                     normalized.getFileName().toString(), Files.probeContentType(normalized),
-                    Files.readAllBytes(normalized), String.valueOf(modified.toEpochMilli()),
+                    content, String.valueOf(modified.toEpochMilli()),
                     null, modified, List.of(), false);
         } catch (IOException ex) {
             throw new IllegalStateException("读取企业网盘文件失败", ex);

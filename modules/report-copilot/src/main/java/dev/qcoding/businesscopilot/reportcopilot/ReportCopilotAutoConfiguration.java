@@ -28,6 +28,8 @@ import dev.qcoding.businesscopilot.commonsecurity.ConfirmationTokenService;
 import dev.qcoding.businesscopilot.commonsecurity.CurrentActorProvider;
 import dev.qcoding.businesscopilot.commonsecurity.ObjectAccessPolicy;
 import dev.qcoding.businesscopilot.commonsecurity.ExternalSecretResolver;
+import dev.qcoding.businesscopilot.commonsecurity.ExternalEndpointPolicy;
+import dev.qcoding.businesscopilot.commonsecurity.ExternalHttpClientFactory;
 import dev.qcoding.businesscopilot.reportcopilot.web.ReportCopilotController;
 import dev.qcoding.businesscopilot.reportcopilot.web.ReportEnterpriseController;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -148,9 +150,10 @@ public class ReportCopilotAutoConfiguration {
                                                                          ReportAuditService auditService,
                                                                          CurrentActorProvider actorProvider,
                                                                          ObjectAccessPolicy accessPolicy,
-                                                                         ConfirmationTokenService tokenService) {
+                                                                         ConfirmationTokenService tokenService,
+                                                                         ReportOutputSanitizer outputSanitizer) {
         return new ReportDraftConfirmationService(
-                draftRepository, auditService, actorProvider, accessPolicy, tokenService);
+                draftRepository, auditService, actorProvider, accessPolicy, tokenService, outputSanitizer);
     }
 
     @Bean
@@ -206,10 +209,12 @@ public class ReportCopilotAutoConfiguration {
             ReportGenerationService generationService,
             CurrentActorProvider actorProvider,
             ExternalSecretResolver secretResolver,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            ExternalEndpointPolicy endpointPolicy,
+            ExternalHttpClientFactory clientFactory) {
         return new ReportEnterpriseService(
                 jdbcTemplate, generationService, actorProvider, secretResolver,
-                objectMapper, RestClient.builder());
+                objectMapper, endpointPolicy, clientFactory);
     }
 
     @Bean

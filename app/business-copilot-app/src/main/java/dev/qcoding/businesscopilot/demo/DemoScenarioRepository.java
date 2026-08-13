@@ -20,14 +20,24 @@ public class DemoScenarioRepository {
     }
 
     public List<DemoScenario> findEnabled(DemoModule module) {
+        if (module == null) {
+            return jdbcTemplate.query("""
+                    SELECT scenario_id, module, title, description, input_template, allowed_operations,
+                           data_scope_json, data_scope_label, version, enabled, system_managed,
+                           fallback_result_available, content_hash
+                    FROM demo_scenarios
+                    WHERE enabled = TRUE
+                    ORDER BY module, scenario_id
+                    """, this::map);
+        }
         return jdbcTemplate.query("""
                 SELECT scenario_id, module, title, description, input_template, allowed_operations,
                        data_scope_json, data_scope_label, version, enabled, system_managed,
                        fallback_result_available, content_hash
                 FROM demo_scenarios
-                WHERE enabled = TRUE AND (? IS NULL OR module = ?)
+                WHERE enabled = TRUE AND module = ?
                 ORDER BY module, scenario_id
-                """, this::map, module == null ? null : module.name(), module == null ? null : module.name());
+                """, this::map, module.name());
     }
 
     public Optional<DemoScenario> findById(String scenarioId) {

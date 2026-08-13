@@ -257,6 +257,68 @@ public class ResumeRepository {
         return assessments.isEmpty() ? null : assessments.getFirst();
     }
 
+    /** Returns only resumable, sanitized assessment records visible to the current business role. */
+    public List<AssessmentQueueRow> findAssessmentReviewQueue(
+            String actorId, boolean admin, boolean reviewer, int limit) {
+        int boundedLimit = Math.max(1, Math.min(limit, 100));
+        return jdbcTemplate.query("""
+                SELECT assessment.id, assessment.job_id, assessment.submission_id,
+                       job.title AS job_title,
+                       COALESCE(submission.candidate_reference,
+                                submission.anonymous_candidate_id) AS candidate_reference,
+                       assessment.criteria_version, assessment.status,
+                       assessment.review_reasons, assessment.owner_actor_id,
+                       assessment.reviewer_actor_id, assessment.expires_at,
+                       assessment.updated_at
+                FROM resume_assessments assessment
+                JOIN resume_jobs job ON job.id = assessment.job_id
+                JOIN resume_submissions submission ON submission.id = assessment.submission_id
+                WHERE assessment.review_queue = TRUE
+                  AND assessment.status IN ('DRAFTED', 'NEEDS_REVIEW')
+                  AND (
+                      ?
+                      OR (? AND (assessment.reviewer_actor_id IS NULL
+                                 OR assessment.reviewer_actor_id = ?))
+                      OR assessment.owner_actor_id = ?
+                  )
+                ORDER BY
+                    CASE assessment.status WHEN 'NEEDS_REVIEW' THEN 1 ELSE 2 END,
+                    assessment.updated_at DESC
+                LIMIT ?
+                """, (rs, rowNum) -> new AssessmentQueueRow(
+                rs.getLong("id"), rs.getLong("job_id"), rs.getLong("submission_id"),
+                rs.getString("job_title"), rs.getString("candidate_reference"),
+                rs.getInt("criteria_version"), ResumeModels.Status.valueOf(rs.getString("status")),
+                rs.getString("review_reasons"), rs.getString("owner_actor_id"),
+                rs.getString("reviewer_actor_id"), instant(rs.getTimestamp("expires_at")),
+                instant(rs.getTimestamp("updated_at"))),
+                admin, reviewer, actorId, actorId, boundedLimit);
+    }
+
+    /** Atomically assigns a queue item and rotates its digest-backed review credential. */
+    public boolean claimAssessmentReview(
+            long id, String actorId, boolean admin, boolean reviewer,
+            String tokenDigest, Instant expiresAt, Instant now) {
+        return jdbcTemplate.update("""
+                UPDATE resume_assessments
+                SET review_token_digest = ?,
+                    reviewer_actor_id = CASE
+                        WHEN ? THEN COALESCE(reviewer_actor_id, ?)
+                        ELSE reviewer_actor_id
+                    END,
+                    expires_at = ?, updated_at = ?
+                WHERE id = ?
+                  AND review_queue = TRUE
+                  AND status IN ('DRAFTED', 'NEEDS_REVIEW')
+                  AND (
+                      ?
+                      OR owner_actor_id = ?
+                      OR (? AND (reviewer_actor_id IS NULL OR reviewer_actor_id = ?))
+                  )
+                """, tokenDigest, reviewer, actorId, timestamp(expiresAt), timestamp(now), id,
+                admin, actorId, reviewer, actorId) == 1;
+    }
+
     public boolean transitionAssessment(long id, ResumeModels.Status expected, ResumeModels.Status target,
                                         String actionActorId, Instant now) {
         return jdbcTemplate.update(
@@ -339,8 +401,8 @@ public class ResumeRepository {
                         + "assessment_id, event_type, criteria_count, evidence_count, model_name, status, "
                         + "error_message, creator_actor_id, action_actor_id, provider_name, provider_request_id, "
                         + "prompt_name, prompt_version, prompt_hash, policy_version, violation_codes, input_tokens, "
-                        + "output_tokens, finish_reason, latency_ms) "
-                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        + "output_tokens, finish_reason, latency_ms, locale) "
+                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 UUID.randomUUID().toString(), BusinessRequestContextHolder.currentRequestId(),
                 BusinessRequestContextHolder.currentActorId(), jobId, submissionId, assessmentId,
                 eventType, criteriaCount, evidenceCount, modelName, status, errorMessage,
@@ -354,7 +416,7 @@ public class ResumeRepository {
                 aiMetadata != null ? aiMetadata.inputTokens() : null,
                 aiMetadata != null ? aiMetadata.outputTokens() : null,
                 aiMetadata != null ? aiMetadata.finishReason() : null,
-                latencyMs);
+                latencyMs, BusinessRequestContextHolder.currentLocale());
     }
 
     private String sha256(String value) {
@@ -373,4 +435,10 @@ public class ResumeRepository {
     private static Instant instant(Timestamp timestamp) {
         return timestamp == null ? null : timestamp.toInstant();
     }
+
+    public record AssessmentQueueRow(
+            long assessmentId, long jobId, long submissionId, String jobTitle,
+            String candidateReference, int criteriaVersion, ResumeModels.Status status,
+            String reviewReasons, String ownerActorId, String reviewerActorId,
+            Instant expiresAt, Instant updatedAt) { }
 }

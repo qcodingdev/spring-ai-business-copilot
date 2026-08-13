@@ -47,14 +47,21 @@ class JobCriteriaGuardrailTest {
     }
 
     @Test
-    void rejectsEnglishOnlyDescriptionUntilAnExplicitLanguageOptionExists() {
+    void acceptsEnglishDescriptionOnlyWhenEnglishWasExplicitlySelected() {
         var criterion = new ResumeModels.JobCriterion("criterion-1", ResumeModels.CriterionCategory.SKILL,
                 ResumeModels.RequirementType.REQUIRED, "Spring Boot experience", List.of("Spring Boot"),
                 "Spring Boot experience");
 
         var result = guardrail.validate(List.of(criterion), "Spring Boot experience");
-
         assertThat(result.valid()).isFalse();
         assertThat(result.reasons()).anyMatch(reason -> reason.contains("简体中文"));
+        try {
+            dev.qcoding.businesscopilot.commonweb.request.BusinessRequestContextHolder.set(
+                    new dev.qcoding.businesscopilot.commonweb.request.BusinessRequestContext(
+                            "request-en", "operator", java.util.Set.of("OPERATOR"), "en-US"));
+            assertThat(guardrail.validate(List.of(criterion), "Spring Boot experience").valid()).isTrue();
+        } finally {
+            dev.qcoding.businesscopilot.commonweb.request.BusinessRequestContextHolder.clear();
+        }
     }
 }

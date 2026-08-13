@@ -11,10 +11,13 @@ COPY pom.xml ./
 COPY platform/ platform/
 COPY modules/ modules/
 COPY app/ app/
+COPY frontend/ frontend/
 
 # 构建 app 模块的可执行 jar（跳过测试以加速镜像构建）。
-# 保持标准 Dockerfile 语法，避免依赖特定平台的 cache mount ID 约定。
-RUN mvn -q -B clean package -DskipTests -pl app/business-copilot-app -am
+# 使用不绑定宿主路径的 BuildKit 缓存，源码变化后无需重复下载 Maven/npm 依赖。
+RUN --mount=type=cache,target=/root/.m2 \
+    --mount=type=cache,target=/root/.npm \
+    mvn -q -B clean package -DskipTests -pl app/business-copilot-app -am
 
 # ---------- 运行阶段 ----------
 FROM eclipse-temurin:21-jre-alpine

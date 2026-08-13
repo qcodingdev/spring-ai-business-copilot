@@ -8,6 +8,7 @@ import dev.qcoding.businesscopilot.commonsecurity.ObjectAction;
 import dev.qcoding.businesscopilot.commonweb.api.BusinessException;
 import dev.qcoding.businesscopilot.commonweb.api.ErrorCode;
 import dev.qcoding.businesscopilot.guardrails.SensitiveTextMasker;
+import dev.qcoding.businesscopilot.supportcopilot.SupportCopilotProperties;
 import dev.qcoding.businesscopilot.supportcopilot.audit.SupportAuditLog;
 import dev.qcoding.businesscopilot.supportcopilot.audit.SupportAuditService;
 import dev.qcoding.businesscopilot.supportcopilot.ticket.SupportTicketRepository;
@@ -27,6 +28,7 @@ public class ReplyDraftConfirmationService {
     private final ObjectAccessPolicy accessPolicy;
     private final ConfirmationTokenService tokenService;
     private final SensitiveTextMasker sensitiveTextMasker;
+    private final SupportCopilotProperties properties;
 
     public ReplyDraftConfirmationService(SupportReplyDraftRepository draftRepository,
                                          SupportTicketRepository ticketRepository,
@@ -34,7 +36,8 @@ public class ReplyDraftConfirmationService {
                                          CurrentActorProvider actorProvider,
                                          ObjectAccessPolicy accessPolicy,
                                          ConfirmationTokenService tokenService,
-                                         SensitiveTextMasker sensitiveTextMasker) {
+                                         SensitiveTextMasker sensitiveTextMasker,
+                                         SupportCopilotProperties properties) {
         this.draftRepository = draftRepository;
         this.ticketRepository = ticketRepository;
         this.auditService = auditService;
@@ -42,6 +45,7 @@ public class ReplyDraftConfirmationService {
         this.accessPolicy = accessPolicy;
         this.tokenService = tokenService;
         this.sensitiveTextMasker = sensitiveTextMasker;
+        this.properties = properties;
     }
 
     @Transactional
@@ -106,17 +110,26 @@ public class ReplyDraftConfirmationService {
         CurrentActor actor = actorProvider.currentActor();
         ObjectAction action = draft.reviewQueue() ? ObjectAction.REVIEW : ObjectAction.CONFIRM;
         requireAccess(draft, actor, action);
-        if (draft.status() != SupportDraftStatus.DRAFTED && draft.status() != SupportDraftStatus.NEEDS_REVIEW
-                || draft.expiresAt() == null || !draft.expiresAt().isAfter(Instant.now())) {
+        if (draft.status() != SupportDraftStatus.DRAFTED
+                && draft.status() != SupportDraftStatus.NEEDS_REVIEW) {
             throw new BusinessException(ErrorCode.STATE_CONFLICT);
         }
         ConfirmationTokenService.IssuedToken token = tokenService.issue();
+        Instant now = Instant.now();
+        Instant expiresAt = now.plusSeconds(properties.draftTtlMinutes() * 60L);
         if (!draftRepository.replaceConfirmationToken(
-                draftId, draft.status(), token.digest(), actor.actorId(), Instant.now())) {
+                draftId, draft.status(), draft.reviewerActorId(), token.digest(),
+                actor.actorId(), expiresAt, now)) {
             throw new BusinessException(ErrorCode.STATE_CONFLICT);
         }
+        auditService.recordRequired(new SupportAuditLog(
+                null, UUID.randomUUID().toString(), draft.ticketId(), "REVIEW_SESSION_OPENED",
+                null, null, draft.riskLevel().name(), draft.citedChunkIds(), null,
+                null, null, draft.ownerActorId(), actor.actorId(),
+                null, null, null, null, null, null,
+                null, null, null, null, null, null));
         String reply = draft.editedDraftText() == null ? draft.originalDraftText() : draft.editedDraftText();
-        return new ReviewSession(draftId, reply, token.rawToken(), draft.status(), draft.expiresAt());
+        return new ReviewSession(draftId, reply, token.rawToken(), draft.status(), expiresAt);
     }
 
     /** 记录人工已经通过外部渠道回复客户；不发送任何消息或调用外部系统。 */
