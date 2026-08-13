@@ -39,5 +39,8 @@
     "vitest": "4.1.10",
     "vue-eslint-parser": "10.4.1",
     "vue-tsc": "3.3.8"
+  },
+  "overrides": {
+    "nanoid": "3.3.17"
   }
 }
