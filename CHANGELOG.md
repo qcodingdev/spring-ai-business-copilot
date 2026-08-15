@@ -38,6 +38,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - Added executable response-byte and redirect tests around the shared fail-closed
   external HTTP client, including streamed responses without a declared length.
+- Updated the enforced `nanoid` transitive dependency to `3.3.18`, resolving
+  `CVE-2026-67213` detected by the release Trivy gate.
 
 ## [2.3.0] - 2026-08-13
 
