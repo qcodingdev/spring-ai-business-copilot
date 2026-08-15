@@ -3,7 +3,7 @@
 # 也可直接通过 examples/docker-compose.yml 一键启动（会自动构建）。
 
 # ---------- 构建阶段 ----------
-FROM maven:3.9-eclipse-temurin-21 AS builder
+FROM maven:3-eclipse-temurin-26 AS builder
 WORKDIR /build
 
 # 先拷贝 pom 利用 Docker 层缓存加速依赖解析
@@ -20,7 +20,7 @@ RUN --mount=type=cache,target=/root/.m2 \
     mvn -q -B clean package -DskipTests -pl app/business-copilot-app -am
 
 # ---------- 运行阶段 ----------
-FROM eclipse-temurin:21-jre-alpine
+FROM eclipse-temurin:25-jre-alpine
 WORKDIR /app
 
 # 先安装 Alpine 已发布的安全更新；curl 仅用于容器健康检查。
