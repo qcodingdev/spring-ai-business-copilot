@@ -57,7 +57,7 @@
         <maven.resources.plugin.version>3.4.0</maven.resources.plugin.version>
         <maven.surefire.plugin.version>3.5.6</maven.surefire.plugin.version>
         <cyclonedx.maven.plugin.version>2.9.2</cyclonedx.maven.plugin.version>
-        <frontend.maven.plugin.version>1.15.4</frontend.maven.plugin.version>
+        <frontend.maven.plugin.version>2.0.2</frontend.maven.plugin.version>
         <node.version>v22.22.3</node.version>
         <npm.version>10.9.8</npm.version>
         <maven.compiler.release>${java.version}</maven.compiler.release>
