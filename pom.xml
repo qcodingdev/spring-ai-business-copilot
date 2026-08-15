@@ -42,7 +42,7 @@
         <pdfbox.version>3.0.8</pdfbox.version>
         <poi.version>5.5.1</poi.version>
         <jsoup.version>1.21.2</jsoup.version>
-        <minio.version>8.6.0</minio.version>
+        <minio.version>9.0.3</minio.version>
         <minio.okhttp-jvm.version>5.1.0</minio.okhttp-jvm.version>
         <bouncycastle.version>1.84</bouncycastle.version>
         <postgresql.version>42.7.12</postgresql.version>
