@@ -18,6 +18,11 @@ evidence, token-bound review-session reopening, edits, confirm/cancel, and expli
 customer-reply completion. Connection setup accepts only a `secretRef`, and confirmed
 external internal-note writes remain separate from ordinary saves.
 
+Since 2.3.1, deterministic HTTP contract tests cover all five providers' read paths,
+normalized ticket mapping, authorization, internal-note method/path, and idempotency
+header. These tests protect the packaged adapter contract but do not replace a real
+provider sandbox acceptance test.
+
 API: `GET /api/support-copilot/tickets`, `POST /api/support-copilot/tickets/analyze`, `POST /api/support-copilot/reply-drafts/{id}/review-session|edit|confirm|cancel|mark-customer-replied`, and `POST /api/support-copilot/tickets/{externalReference}/record-manual-reply`.
 
 Test: `./mvnw -pl modules/support-copilot -am test`
@@ -29,3 +34,7 @@ Test: `./mvnw -pl modules/support-copilot -am test`
 2.3 双语工作台提供可筛选的人工复核队列，展示风险和证据，可重新签发绑定复核凭证、修订、
 确认/驳回草稿，并明确记录客户回复或人工渠道已处理。连接页面只接受 `secretRef`，外部内部备注
 写入继续与普通保存分离并要求重新确认。
+
+从 2.3.1 开始，五类供应商均有确定性 HTTP 契约测试，覆盖只读路径、工单字段归一化、
+认证、内部备注方法/路径和幂等键。该测试固定项目内适配器契约，但不能替代真实供应商
+沙箱验收。

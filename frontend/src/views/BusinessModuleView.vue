@@ -183,9 +183,8 @@ async function selectTab(tab: string): Promise<void> {
   activeTab.value = tab
   resetTransient()
   await router.replace({ query: { ...route.query, tab } })
-  if (props.module === 'hr' && tab === 'assessment') await loadConfirmedJobs()
+  if (props.module === 'hr' && shouldLoadConfirmedJobs(tab)) await loadConfirmedJobs()
   if (props.module === 'hr' && tab === 'interview') await loadInterviewSessions()
-  if (props.module === 'hr' && tab === 'authorization') await loadConfirmedJobs()
   if (props.module === 'hr' && tab === 'onboarding') await loadOnboarding()
   if (props.module === 'report' && tab === 'generate') await loadReportHandoffs()
 }
@@ -487,7 +486,12 @@ async function confirmCriteria(): Promise<void> {
   })
 }
 
+function shouldLoadConfirmedJobs(tab: string): boolean {
+  return canOperate.value && ['assessment', 'authorization'].includes(tab)
+}
+
 async function loadConfirmedJobs(): Promise<void> {
+  if (!shouldLoadConfirmedJobs(activeTab.value)) return
   loading.value = true
   try {
     const response = await api<Record<string, any>[]>('/api/resume-copilot/jobs/confirmed')
@@ -736,7 +740,7 @@ watch(() => [props.module, route.query.section, route.query.tab], async () => {
   activeTab.value = allowed.includes(requested) ? requested : (allowed[0] ?? primaryTab.value)
   input.value = ''; secondary.value = ''; jobDraft.value = null; criteriaDraft.value = null; resetTransient()
   if (props.module === 'report' && activeTab.value === 'generate') await loadReportHandoffs()
-  if (props.module === 'hr' && ['assessment', 'authorization'].includes(activeTab.value)) await loadConfirmedJobs()
+  if (props.module === 'hr' && shouldLoadConfirmedJobs(activeTab.value)) await loadConfirmedJobs()
   if (props.module === 'hr' && activeTab.value === 'interview') await loadInterviewSessions()
   if (props.module === 'hr' && activeTab.value === 'onboarding') await loadOnboarding()
 }, { immediate: true })

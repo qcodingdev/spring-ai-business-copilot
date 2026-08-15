@@ -6,6 +6,41 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [2.3.1] - 2026-08-15
+
+### Added
+
+- Added direct HTTP contract tests for SharePoint, Confluence, Notion, Jira Service
+  Management, Zendesk, ServiceNow, Feishu, and WeCom, including authorization,
+  provider paths, response mapping, internal-note methods, and idempotency headers.
+- Added a weekly scheduled Trivy repository/container scan and Dependabot maintenance
+  for Maven, npm, GitHub Actions, and Docker dependencies.
+
+### Changed
+
+- Updated the Notion REST contract from `2022-06-28` to the current
+  `2026-03-11` API version.
+- Reused the configured external-connection page, item, JSON-depth, response-size,
+  and total-task budgets for nested Notion content retrieval.
+
+### Fixed
+
+- Retrieved every paginated Notion block page and recursively retrieved child blocks
+  instead of silently truncating pages after the first 100 top-level blocks.
+- Preserved headings, lists, tasks, quotes, code, equations, dividers, child-page titles,
+  and table rows when normalizing Notion blocks to bounded Markdown.
+- Rejected missing or repeated Notion cursors and over-budget page trees explicitly,
+  preventing partial content from being indexed as a complete document.
+- Prevented the HR reviewer workflow from loading unrelated confirmed-job data during
+  initialization, which could otherwise trigger a session-expiry redirect.
+
+### Security
+
+- Added executable response-byte and redirect tests around the shared fail-closed
+  external HTTP client, including streamed responses without a declared length.
+- Updated the enforced `nanoid` transitive dependency to `3.3.18`, resolving
+  `CVE-2026-67213` detected by the release Trivy gate.
+
 ## [2.3.0] - 2026-08-13
 
 ### Added
@@ -199,7 +234,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Kept risky actions behind single-use confirmation tokens and explicit human review.
 - Excluded local AI-agent settings, internal planning documents, and generated review evidence from the public repository.
 
-[Unreleased]: https://github.com/qcodingdev/spring-ai-business-copilot/compare/v2.3.0...main
+[Unreleased]: https://github.com/qcodingdev/spring-ai-business-copilot/compare/v2.3.1...main
+[2.3.1]: https://github.com/qcodingdev/spring-ai-business-copilot/compare/v2.3.0...v2.3.1
 [2.3.0]: https://github.com/qcodingdev/spring-ai-business-copilot/compare/v2.2.1...v2.3.0
 [2.2.1]: https://github.com/qcodingdev/spring-ai-business-copilot/compare/v2.2.0...v2.2.1
 [2.2.0]: https://github.com/qcodingdev/spring-ai-business-copilot/compare/v2.0.0...v2.2.0

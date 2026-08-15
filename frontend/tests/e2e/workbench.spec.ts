@@ -111,6 +111,11 @@ test('reviewer navigation exposes only callable review workflows', async ({ page
 
 test('reviewer claims and completes an HR assessment review', async ({ page }) => {
   await mockReviewerSession(page)
+  let confirmedJobsRequested = false
+  await page.route('**/api/resume-copilot/jobs/confirmed', async (route) => {
+    confirmedJobsRequested = true
+    await route.fulfill({ status: 403, contentType: 'application/json', body: JSON.stringify({ success: false, errorCode: 'ACCESS_DENIED' }) })
+  })
   await page.route('**/api/resume-copilot/assessments/review-queue?limit=50', async (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({
     data: [{ assessmentId: 81, jobId: 7, submissionId: 9, jobTitle: '虚构 Java 工程师', candidateReference: 'candidate-81', criteriaVersion: 2, status: 'NEEDS_REVIEW', reviewReasons: ['证据需要人工核验'], reviewerActorId: null, updatedAt: new Date().toISOString() }],
     success: true, requestId: 'assessment-review-queue', timestamp: new Date().toISOString(),
@@ -133,6 +138,7 @@ test('reviewer claims and completes an HR assessment review', async ({ page }) =
   await page.getByLabel('复核意见（可选）').fill('证据已逐项核验。')
   await page.getByRole('button', { name: '确认人工复核完成' }).click()
   expect(reviewed).toBe(true)
+  expect(confirmedJobsRequested).toBe(false)
 })
 
 test('completes all five primary workflows in the default Chinese locale', async ({ page }) => {

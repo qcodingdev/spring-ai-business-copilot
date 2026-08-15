@@ -42,6 +42,11 @@ public class ExternalHttpClientFactory {
                 .requestInterceptor(new SecurityInterceptor(base, endpointPolicy, settings.maxResponseBytes()));
     }
 
+    /** 供外部适配器复用同一组分页、条目、深度和整体超时安全预算。 */
+    public ExternalConnectionSecurityProperties properties() {
+        return endpointPolicy.properties();
+    }
+
     public void ensureWithinTaskTimeout(long startedNano) {
         long elapsed = System.nanoTime() - startedNano;
         if (elapsed > endpointPolicy.properties().taskTimeout().toNanos()) {

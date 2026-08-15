@@ -18,6 +18,12 @@ chunk IDs, then persist evidence, answer, remediation, disposition, and note fie
 REST sources share fail-closed HTTPS/DNS/IP, timeout, response, pagination, item,
 JSON-depth, and environment-secret boundaries.
 
+Since 2.3.1, Notion uses the `2026-03-11` API contract and retrieves every block
+page plus nested child blocks within the configured page, item, depth, byte, and
+task-time budgets. Missing/repeated cursors or over-budget trees fail closed instead
+of indexing partial content as a complete document. Local HTTP contract tests cover
+SharePoint delta/content/ACL, Confluence page/ACL, and Notion pagination/recursion.
+
 API: `POST/GET /api/knowledge-copilot/documents`, `POST /api/knowledge-copilot/documents/{id}/reindex`, `PATCH /api/knowledge-copilot/documents/{id}/enabled`, `POST /api/knowledge-copilot/questions`, `POST /api/knowledge-copilot/answers/{answerId}/feedback`, `GET /api/knowledge-copilot/quality-queue`, `POST /api/knowledge-copilot/quality-queue/{answerId}/review`, and `GET /api/knowledge-copilot/quality-metrics`.
 
 Test: `./mvnw -pl modules/knowledge-copilot -am test`
@@ -29,3 +35,8 @@ Test: `./mvnw -pl modules/knowledge-copilot -am test`
 2.3 双语工作台覆盖带引用问答、文档、受控来源和质量复核；复核员可查看受限脱敏回答预览、
 检索/引用证据编号，并分别保存证据评估、答案评估、后续动作、处置结论和复核说明。
 REST 来源统一执行 HTTPS/DNS/IP、超时、响应、分页、条目、JSON 深度和环境变量密钥边界。
+
+从 2.3.1 开始，Notion 使用 `2026-03-11` API 契约，在统一的页数、条目、层级、字节和
+任务超时预算内读取全部分页块与嵌套子块。游标缺失、重复或页面树超过预算时失败关闭，
+不会把部分内容索引成完整文档。本地 HTTP 契约测试覆盖 SharePoint 增量/正文/ACL、
+Confluence 页面/ACL 和 Notion 分页/递归。

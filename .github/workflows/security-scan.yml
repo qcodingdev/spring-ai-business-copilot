@@ -1,0 +1,52 @@
+name: Scheduled Security Scan
+
+on:
+  schedule:
+    - cron: '17 19 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scheduled-security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repository-and-container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Scan repository dependencies, secrets, and configuration
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          format: table
+          exit-code: '1'
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+
+      - name: Build release container
+        run: docker build --tag spring-ai-business-copilot:security-scan .
+
+      - name: Verify container runs as a non-root user
+        run: >-
+          test "$(docker image inspect --format '{{.Config.User}}'
+          spring-ai-business-copilot:security-scan)" = "10001:10001"
+
+      - name: Scan release container
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        with:
+          scan-type: image
+          image-ref: spring-ai-business-copilot:security-scan
+          vuln-type: os,library
+          format: table
+          exit-code: '1'
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true

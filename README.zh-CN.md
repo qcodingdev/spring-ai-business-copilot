@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.3.0"><img alt="正式版 v2.3.0" src="https://img.shields.io/badge/Release-v2.3.0-2563EB"></a>
+  <a href="https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.3.1"><img alt="正式版 v2.3.1" src="https://img.shields.io/badge/Release-v2.3.1-2563EB"></a>
   <a href="https://openjdk.org/projects/jdk/21/"><img alt="Java 21" src="https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&amp;logoColor=white"></a>
   <a href="https://spring.io/projects/spring-boot"><img alt="Spring Boot 4.1" src="https://img.shields.io/badge/Spring%20Boot-4.1-6DB33F?logo=springboot&amp;logoColor=white"></a>
   <a href="https://spring.io/projects/spring-ai"><img alt="Spring AI 2.0" src="https://img.shields.io/badge/Spring%20AI-2.0-6DB33F"></a>
@@ -18,24 +18,25 @@
   <a href="#快速开始">快速开始</a> ·
   <a href="#当前业务能力">业务能力</a> ·
   <a href="#总体架构">总体架构</a> ·
-  <a href="https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.3.0">稳定版 v2.3.0</a> ·
+  <a href="https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.3.1">稳定版 v2.3.1</a> ·
   <a href="https://gitee.com/qcodingdev/spring-ai-business-copilot">Gitee</a>
 </p>
 
 ![Spring AI Business Copilot 2.3 业务工作台](assets/workbench-demo.gif)
 
-> **稳定版本：** `v2.3.0` 是五模块企业闭环正式版，补齐受控状态、人工复核、审计证据、异常恢复和可复现交付门禁。生产部署仍需由部署方完成统一身份、密钥、网络策略、数据保留和供应商沙箱验收。
+> **稳定版本：** `v2.3.1` 保留五模块受控企业闭环，并加固外部集成：完整读取 Notion 分页和嵌套页面，增加确定性的供应商请求契约验证，并周期性检查依赖和容器安全。生产部署仍需由部署方完成统一身份、密钥、网络策略、数据保留和供应商沙箱验收。
 
 ## 一个工作台，连接五类企业业务
 
 Spring AI Business Copilot 已经从最初的 Data Copilot，发展为覆盖数据分析、企业知识、客户服务、经营报告、招聘与员工服务的统一业务工作台。五个模块既可以独立使用，也通过数据交接、知识证据、人工复核和状态记录形成协同流程。
 
-`2.3.0` 的重点是把已有能力进一步产品化，而不是继续增加模块：
+`2.3` 版本线继续把已有能力产品化，而不是增加模块；`2.3.1` 重点加固外部集成和维护基线：
 
 - **统一企业工作台：** Vue 3 + TypeScript 双语界面统一承载工作总览、五个业务域和系统管理，并根据 `ADMIN`、`OPERATOR`、`REVIEWER` 展示可执行动作。
 - **跨模块业务协同：** Data 查询结果可以直接交给 Report；Knowledge 为客服和员工制度问答提供证据；外部工单、知识源、报告来源和 ATS 数据进入各自受控流程。
 - **完整人工复核：** SQL 执行、知识质量处置、客服草稿、报告确认、招聘评估等关键动作都保留证据、风险、状态、人工编辑和确认记录。
 - **可诊断、可交付：** 系统管理提供运行状态、AI 调用链、Token/延迟、知识文档和体验数据管理；Docker Compose、自动化测试、SBOM 和安全门禁覆盖交付链路。
+- **可维护的外部集成：** Notion 使用当前 `2026-03-11` API 契约并在安全预算内完整遍历页面；SharePoint、Confluence、Notion、Jira Service Management、Zendesk、ServiceNow、飞书和企微均有直接请求契约验证。
 
 ## 当前业务能力
 
@@ -52,7 +53,7 @@ Spring AI Business Copilot 已经从最初的 Data Copilot，发展为覆盖数�
 需要本机已安装 Docker，并支持 Compose。
 
 ```bash
-git clone --branch v2.3.0 --single-branch \
+git clone --branch v2.3.1 --single-branch \
   https://github.com/qcodingdev/spring-ai-business-copilot.git
 cd spring-ai-business-copilot/examples
 cp .env.example .env
@@ -149,7 +150,7 @@ flowchart LR
 | AI | Spring AI 2.0、Jackson 3 | 集中 Prompt、结构化输出、超时、重试、并发隔离和熔断 |
 | 持久层 | Spring JDBC、Flyway | 显式 Repository、条件状态更新、迁移和 pgvector |
 | Web | Vue 3、TypeScript、Vite、Spring MVC | 打包进可执行 JAR 的同源双语 SPA |
-| 交付 | Docker Compose、GitHub Actions、CycloneDX | 可复现启动、评测门禁、集成测试和 SBOM |
+| 交付 | Docker Compose、GitHub Actions、CycloneDX | 可复现启动、评测门禁、集成测试、SBOM、周期性 Trivy 扫描和依赖维护 |
 
 ## 部署与集成状态
 
@@ -179,8 +180,9 @@ flowchart LR
 
 | 资源 | 链接 |
 |---|---|
-| 稳定版本 | [v2.3.0](https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.3.0) |
+| 稳定版本 | [v2.3.1](https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.3.1) |
 | 版本记录 | [CHANGELOG.md](CHANGELOG.md) · [GitHub Releases](https://github.com/qcodingdev/spring-ai-business-copilot/releases) |
+| 升级与验证 | [2.3.0 → 2.3.1](docs/upgrade-2.3.0-to-2.3.1.md) · [2.3.1 正式验证](docs/release-validation-2.3.1.md) |
 | 问题与建议 | [GitHub Issues](https://github.com/qcodingdev/spring-ai-business-copilot/issues) |
 | 参与贡献 | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | 安全报告 | [SECURITY.md](SECURITY.md) |
