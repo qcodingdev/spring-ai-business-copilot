@@ -41,22 +41,22 @@
         <spring-ai.version>2.0.0</spring-ai.version>
         <pdfbox.version>3.0.8</pdfbox.version>
         <poi.version>5.5.1</poi.version>
-        <jsoup.version>1.21.2</jsoup.version>
+        <jsoup.version>1.23.1</jsoup.version>
         <minio.version>8.6.0</minio.version>
-        <minio.okhttp-jvm.version>5.1.0</minio.okhttp-jvm.version>
-        <bouncycastle.version>1.84</bouncycastle.version>
-        <postgresql.version>42.7.12</postgresql.version>
-        <netty.version>4.2.16.Final</netty.version>
-        <resilience4j.version>2.2.0</resilience4j.version>
+        <minio.okhttp-jvm.version>5.4.0</minio.okhttp-jvm.version>
+        <bouncycastle.version>1.85.2</bouncycastle.version>
+        <postgresql.version>42.7.13</postgresql.version>
+        <netty.version>4.2.17.Final</netty.version>
+        <resilience4j.version>2.4.0</resilience4j.version>
         <!-- Keep aligned with the Spring Boot dependency BOM when Boot is upgraded. -->
         <mockito.version>5.23.0</mockito.version>
         <maven.clean.plugin.version>3.5.0</maven.clean.plugin.version>
         <maven.compiler.plugin.version>3.15.0</maven.compiler.plugin.version>
         <maven.install.plugin.version>3.1.4</maven.install.plugin.version>
-        <maven.jar.plugin.version>3.5.0</maven.jar.plugin.version>
-        <maven.resources.plugin.version>3.4.0</maven.resources.plugin.version>
+        <maven.jar.plugin.version>3.5.1</maven.jar.plugin.version>
+        <maven.resources.plugin.version>3.5.0</maven.resources.plugin.version>
         <maven.surefire.plugin.version>3.5.6</maven.surefire.plugin.version>
-        <cyclonedx.maven.plugin.version>2.9.2</cyclonedx.maven.plugin.version>
+        <cyclonedx.maven.plugin.version>2.9.3</cyclonedx.maven.plugin.version>
         <frontend.maven.plugin.version>1.15.4</frontend.maven.plugin.version>
         <node.version>v22.22.3</node.version>
         <npm.version>10.9.8</npm.version>
