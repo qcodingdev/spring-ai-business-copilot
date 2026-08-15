@@ -26,7 +26,7 @@
     "@eslint/js": "10.0.1",
     "@axe-core/playwright": "4.12.1",
     "@playwright/test": "1.62.0",
-    "@types/node": "22.20.1",
+    "@types/node": "26.2.0",
     "@vitejs/plugin-vue": "6.0.8",
     "@vue/test-utils": "2.4.11",
     "@vue/tsconfig": "0.9.1",
