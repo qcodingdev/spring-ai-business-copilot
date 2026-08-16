@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Changed
+
+- Removed scheduled Dependabot version-update PR generation after release so the
+  remote branch set stays limited to the main line and formal version branches.
+  Dependency changes are now selected explicitly and still pass the existing CI,
+  dependency-review, SBOM, and scheduled Trivy gates.
+
 ## [2.3.1] - 2026-08-15
 
 ### Added

@@ -22,8 +22,8 @@ REST 请求统一经过 `common-security` 的失败关闭客户端。
 
 SharePoint、Confluence、Notion 以及 Jira Service Management、Zendesk、ServiceNow、
 飞书、企微使用本地确定性 HTTP 契约测试验证请求方法、路径、认证、分页/内容映射和内部备注
-幂等键。GitHub 每周重新执行 Trivy 仓库与容器扫描；Dependabot 为 Maven、npm、Docker 和
-GitHub Actions 创建维护 PR，并继续经过主 CI、依赖评审和容器门禁。
+幂等键。GitHub 每周重新执行 Trivy 仓库与容器扫描；依赖升级按明确范围集中评审，不自动
+创建维护分支，并继续经过主 CI、依赖评审和容器门禁。
 
 默认配置位于 `application.yml`，示例环境变量位于 `examples/.env.example`。
 生产仍应使用出口防火墙或代理作为第二道网络边界，并在供应商沙箱中验证权限。

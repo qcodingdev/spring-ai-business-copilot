@@ -5,8 +5,8 @@
 3. 将 Notion API 契约升级到 `2026-03-11`，并继续把分页游标当作不透明值传回。
 4. 对页数、条目、层级、响应字节和整体任务时间执行统一安全预算，异常时失败关闭。
 5. 为三个云知识来源和五个客服供应商增加确定性 HTTP 契约测试。
-6. 增加周期性 Trivy 仓库/容器扫描，以及 Maven、npm、Docker、GitHub Actions 的
-   Dependabot 维护。
+6. 增加周期性 Trivy 仓库/容器扫描；Maven、npm、Docker、GitHub Actions 依赖按明确
+   范围集中维护，不自动创建远端分支。
 7. 执行前端、Reactor/SBOM、固定评测、PostgreSQL/MySQL、Docker 和打包 E2E 门禁。
 8. 移除 `-SNAPSHOT`，合入主干，并在同一提交创建 `v2.3.1` 长期分支、标签和 Release。
 
