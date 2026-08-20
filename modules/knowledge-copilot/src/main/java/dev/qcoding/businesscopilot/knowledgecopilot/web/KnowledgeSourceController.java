@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
@@ -44,8 +45,10 @@ public class KnowledgeSourceController {
     }
 
     @PostMapping("/{connectionId}/sync")
-    public ResponseEntity<ApiResponse<?>> synchronize(@PathVariable long connectionId) {
-        return ResponseEntity.ok(ApiResponse.ok(service.synchronize(connectionId)));
+    public ResponseEntity<ApiResponse<?>> synchronize(
+            @PathVariable long connectionId,
+            @RequestParam(name = "full", defaultValue = "false") boolean full) {
+        return ResponseEntity.ok(ApiResponse.ok(service.synchronize(connectionId, full)));
     }
 
     @GetMapping("/issues")

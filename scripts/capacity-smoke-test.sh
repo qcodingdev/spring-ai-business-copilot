@@ -9,11 +9,10 @@ request_count="${BUSINESS_COPILOT_CAPACITY_REQUESTS:-50}"
 concurrency="${BUSINESS_COPILOT_CAPACITY_CONCURRENCY:-5}"
 p95_limit_seconds="${BUSINESS_COPILOT_CAPACITY_P95_SECONDS:-1.5}"
 cookie_file="$(mktemp)"
-login_page="$(mktemp)"
 results_file="$(mktemp)"
 
 cleanup() {
-  rm -f "$cookie_file" "$login_page" "$results_file"
+  rm -f "$cookie_file" "$results_file"
 }
 trap cleanup EXIT
 
@@ -38,10 +37,12 @@ if ! awk -v limit="$p95_limit_seconds" 'BEGIN { exit !(limit ~ /^[0-9]+([.][0-9]
   exit 1
 fi
 
-curl --fail --silent --show-error --cookie-jar "$cookie_file" "$base_url/login" >"$login_page"
-csrf_token="$(sed -n 's/.*name="_csrf"[^>]*value="\([^"]*\)".*/\1/p' "$login_page" | head -n 1)"
+curl --fail --silent --show-error --cookie-jar "$cookie_file" "$base_url/login" >/dev/null
+curl --fail --silent --show-error --cookie "$cookie_file" --cookie-jar "$cookie_file" \
+  "$base_url/api/session" >/dev/null
+csrf_token="$(awk '$6 == "XSRF-TOKEN" { token = $7 } END { print token }' "$cookie_file")"
 if [[ -z "$csrf_token" ]]; then
-  echo "容量冒烟失败：登录页未生成 CSRF token。" >&2
+  echo "容量冒烟失败：匿名会话未生成 CSRF cookie。" >&2
   exit 1
 fi
 
@@ -73,4 +74,4 @@ if ! awk -v actual="$p95" -v limit="$p95_limit_seconds" 'BEGIN { exit !(actual <
   exit 1
 fi
 
-echo "容量冒烟通过：请求数=$request_count，并发=$concurrency，失败=0，P95=${p95}s。"
+echo "容量冒烟通过：请求数=${request_count}，并发=${concurrency}，失败=0，P95=${p95}s。"

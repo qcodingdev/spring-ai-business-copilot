@@ -6,8 +6,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- Added the 2.4 enterprise-readiness loop with stable five-module checks,
+  immutable evidence snapshots, remediation routes, and bounded retention.
+- Added source-lifecycle remediation visibility, recoverable failure checks, and
+  Admin access to the existing HR assessment-review queue.
+
 ### Changed
 
+- Made Knowledge text, keyword, and vector retrieval consistently reject expired
+  or conflicted documents, while healthy unchanged source syncs renew lifecycle.
+- Fenced recovered Knowledge indexing leases so late workers cannot replace vectors
+  or lifecycle state, with vector replacement and completion committed atomically.
 - Removed scheduled Dependabot version-update PR generation after release so the
   remote branch set stays limited to the main line and formal version branches.
   Dependency changes are now selected explicitly and still pass the existing CI,

@@ -120,10 +120,9 @@ public class DocumentUploadService {
         if (current != null && current.contentHash().equals(contentHash)) {
             int chunks = chunkRepository.findByDocumentId(current.id()).size();
             KnowledgeIndexJob retryJob = null;
-            if (!"INDEXED".equals(current.indexStatus())
-                    && !"PROCESSING".equals(current.indexStatus())
-                    && indexJobRepository.findActiveByDocumentId(current.id()).isEmpty()) {
-                retryJob = indexingService.enqueue(current.id());
+            if (!"INDEXED".equals(current.indexStatus())) {
+                retryJob = indexingService.ensureQueued(
+                        current.id(), properties.indexStaleAfter());
             }
             return new DocumentUploadResponse(
                     current.id(), current.logicalDocumentId(), current.versionNo(), current.title(),

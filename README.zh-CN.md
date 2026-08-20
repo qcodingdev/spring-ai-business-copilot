@@ -26,17 +26,20 @@
 
 > **稳定版本：** `v2.3.1` 保留五模块受控企业闭环，并加固外部集成：完整读取 Notion 分页和嵌套页面，增加确定性的供应商请求契约验证，并周期性检查依赖和容器安全。生产部署仍需由部署方完成统一身份、密钥、网络策略、数据保留和供应商沙箱验收。
 
+> **开发版本：** 当前源码版本为 `2.4.0-SNAPSHOT`。新增仅管理员可用的五模块企业就绪闭环：稳定检查区分阻断项和关注项，跳回既有业务页面整改，由服务端重新检查并保存不可修改、无业务正文的证据快照。在 2.4 发布门禁全部完成前，`v2.3.1` 仍是最新正式版。
+
 ## 一个工作台，连接五类企业业务
 
 Spring AI Business Copilot 已经从最初的 Data Copilot，发展为覆盖数据分析、企业知识、客户服务、经营报告、招聘与员工服务的统一业务工作台。五个模块既可以独立使用，也通过数据交接、知识证据、人工复核和状态记录形成协同流程。
 
-`2.3` 版本线继续把已有能力产品化，而不是增加模块；`2.3.1` 重点加固外部集成和维护基线：
+`2.3` 版本线把已有能力产品化，而不是增加模块；`2.3.1` 加固外部集成和维护基线，`2.4.0-SNAPSHOT` 继续补齐企业运行就绪证据，不增加第六个业务域：
 
 - **统一企业工作台：** Vue 3 + TypeScript 双语界面统一承载工作总览、五个业务域和系统管理，并根据 `ADMIN`、`OPERATOR`、`REVIEWER` 展示可执行动作。
 - **跨模块业务协同：** Data 查询结果可以直接交给 Report；Knowledge 为客服和员工制度问答提供证据；外部工单、知识源、报告来源和 ATS 数据进入各自受控流程。
 - **完整人工复核：** SQL 执行、知识质量处置、客服草稿、报告确认、招聘评估等关键动作都保留证据、风险、状态、人工编辑和确认记录。
 - **可诊断、可交付：** 系统管理提供运行状态、AI 调用链、Token/延迟、知识文档和体验数据管理；Docker Compose、自动化测试、SBOM 和安全门禁覆盖交付链路。
 - **可维护的外部集成：** Notion 使用当前 `2026-03-11` API 契约并在安全预算内完整遍历页面；SharePoint、Confluence、Notion、Jira Service Management、Zendesk、ServiceNow、飞书和企微均有直接请求契约验证。
+- **企业就绪证据：** 13 项检查覆盖五模块的领取超时、结果未知、知识失效、未恢复失败、SLA 违约和人工复核积压；管理员可进入整改、重新检查并按有效期和保留期保存追加式证据。
 
 ## 当前业务能力
 
@@ -105,6 +108,8 @@ Chat 与 Embedding 端点相互独立，因为很多 OpenAI 兼容 Chat 服务�
 4. **Report：** 选择 Data 交接或手工输入/上传来源，生成草稿，检查证据并确认报告。
 5. **HR：** 生成并确认岗位标准，复核虚构简历，查看分组后的招聘协同和员工服务流程。
 
+开发版本中的管理员可继续进入“系统管理 → 企业就绪”，从风险项跳回上述五模块整改，重新检查并保存绑定用途的证据快照。
+
 ## 产品页面
 
 | Data 结果交接 | Knowledge 质量复核 |
@@ -127,6 +132,7 @@ Chat 与 Embedding 端点相互独立，因为很多 OpenAI 兼容 Chat 服务�
 - Data Copilot 同时使用应用 Guardrails 和独立收缩权限的数据库只读账号。
 - request ID、模型和策略元数据、延迟、生命周期状态和受限审计保留让失败可诊断。
 - 外部连接通过 HTTPS 白名单、DNS/IP 检查、重定向阻断、响应上限和环境变量密钥引用实现失败关闭。
+- 文本、关键词和向量检索统一排除过期或冲突知识；就绪探针集合不完整时失败关闭，不会误报 `READY`。
 
 ## 总体架构
 
@@ -182,7 +188,7 @@ flowchart LR
 |---|---|
 | 稳定版本 | [v2.3.1](https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.3.1) |
 | 版本记录 | [CHANGELOG.md](CHANGELOG.md) · [GitHub Releases](https://github.com/qcodingdev/spring-ai-business-copilot/releases) |
-| 升级与验证 | [2.3.0 → 2.3.1](docs/upgrade-2.3.0-to-2.3.1.md) · [2.3.1 正式验证](docs/release-validation-2.3.1.md) |
+| 升级与验证 | [2.3.0 → 2.3.1](docs/upgrade-2.3.0-to-2.3.1.md) · [2.3.1 → 2.4.0](docs/upgrade-2.3.1-to-2.4.0.md) · [2.4 设计](docs/2.4-enterprise-readiness-design.md) · [2.4 本地验证](docs/local-validation-2.4.0.md) |
 | 问题与建议 | [GitHub Issues](https://github.com/qcodingdev/spring-ai-business-copilot/issues) |
 | 参与贡献 | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | 安全报告 | [SECURITY.md](SECURITY.md) |

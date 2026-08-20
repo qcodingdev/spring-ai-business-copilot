@@ -8,6 +8,7 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
@@ -26,7 +27,8 @@ class JdbcKnowledgeEmbeddingRepositoryTest {
 
         repository.findSimilarChunks(new float[]{0.1f, 0.2f}, "embedding-model", 5, 0.70d);
 
-        verify(jdbcTemplate).query(anyString(), any(RowMapper.class),
+        verify(jdbcTemplate).query(argThat(sql -> sql.contains("d.expires_at > now()")
+                        && sql.contains("d.conflict_status = 'NONE'")), any(RowMapper.class),
                 eq("[0.1,0.2]"), eq("embedding-model"),
                 eq(false), eq(false), isNull(), isNull(), eq(0.70d), eq(5));
     }

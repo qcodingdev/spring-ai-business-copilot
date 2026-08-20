@@ -5,11 +5,11 @@ import dev.qcoding.businesscopilot.commonweb.api.BusinessException;
 import dev.qcoding.businesscopilot.commonweb.api.ErrorCode;
 import dev.qcoding.businesscopilot.knowledgecopilot.document.KnowledgeChunkRepository;
 import dev.qcoding.businesscopilot.knowledgecopilot.document.KnowledgeDocumentRepository;
-import dev.qcoding.businesscopilot.knowledgecopilot.embedding.EmbeddingIndexResult;
 import dev.qcoding.businesscopilot.knowledgecopilot.embedding.KnowledgeEmbeddingService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -25,20 +25,50 @@ public class KnowledgeIndexingService {
     private final KnowledgeDocumentRepository documentRepository;
     private final KnowledgeChunkRepository chunkRepository;
     private final KnowledgeEmbeddingService embeddingService;
+    private final KnowledgeIndexLifecycleService lifecycleService;
 
     public KnowledgeIndexingService(KnowledgeIndexJobRepository jobRepository,
                                     KnowledgeDocumentRepository documentRepository,
                                     KnowledgeChunkRepository chunkRepository,
-                                    KnowledgeEmbeddingService embeddingService) {
+                                    KnowledgeEmbeddingService embeddingService,
+                                    KnowledgeIndexLifecycleService lifecycleService) {
         this.jobRepository = jobRepository;
         this.documentRepository = documentRepository;
         this.chunkRepository = chunkRepository;
         this.embeddingService = embeddingService;
+        this.lifecycleService = lifecycleService;
     }
 
     public KnowledgeIndexJob enqueue(Long documentId) {
         documentRepository.updateIndexStatus(documentId, "PENDING", null, false);
         return jobRepository.enqueue(documentId);
+    }
+
+    /**
+     * Return the active job or atomically replace an orphaned PROCESSING lease.
+     * The conditional cancellation prevents two administrators from creating
+     * competing replacement jobs for the same stale attempt.
+     */
+    @Transactional
+    public KnowledgeIndexJob ensureQueued(Long documentId, Duration staleAfter) {
+        Optional<KnowledgeIndexJob> active = jobRepository.findActiveByDocumentId(documentId);
+        if (active.isEmpty()) {
+            return enqueue(documentId);
+        }
+        KnowledgeIndexJob job = active.get();
+        Instant now = Instant.now();
+        if (job.status() == KnowledgeIndexJobStatus.PROCESSING
+                && job.updatedAt() != null
+                && !job.updatedAt().isAfter(now.minus(staleAfter))) {
+            if (jobRepository.cancelStaleProcessing(job.id(), now.minus(staleAfter), now)) {
+                return enqueue(documentId);
+            }
+            // worker 可能刚完成，也可能另一恢复请求已经创建替代任务；返回数据库最新状态。
+            return jobRepository.findActiveByDocumentId(documentId)
+                    .or(() -> jobRepository.findById(job.id()))
+                    .orElse(job);
+        }
+        return job;
     }
 
     @Scheduled(fixedDelayString = "${business-copilot.knowledge.index-worker-delay:5000}")
@@ -48,29 +78,28 @@ public class KnowledgeIndexingService {
 
     public Optional<KnowledgeIndexJob> processOne() {
         Instant now = Instant.now();
-        Optional<KnowledgeIndexJob> claimed = jobRepository.claimNext(now);
+        Optional<KnowledgeIndexJob> claimed = lifecycleService.claimNext(now);
         if (claimed.isEmpty()) {
             return Optional.empty();
         }
         KnowledgeIndexJob job = claimed.get();
-        documentRepository.updateIndexStatus(job.documentId(), "PROCESSING", null, false);
         var chunks = chunkRepository.findByDocumentId(job.documentId());
         try {
-            EmbeddingIndexResult result = embeddingService.reindex(
-                    job.documentId(), chunks);
+            var prepared = embeddingService.prepareIndex(job.documentId(), chunks);
             Instant finished = Instant.now();
-            jobRepository.complete(job.id(), result.modelName(), result.dimension(), result.chunkCount(), finished);
-            documentRepository.updateIndexStatus(job.documentId(), "INDEXED", null, result.chunkCount() > 0);
+            lifecycleService.completeWithEmbeddings(job, prepared, finished);
             return jobRepository.findById(job.id());
         } catch (AiModelNotEnabledException ex) {
             // 文本分片本身已经持久化。未配置向量模型时完成文本索引并启用文档，
             // 让 PostgreSQL 全文/关键词检索仍可服务知识问答和客服联动。
             Instant finished = Instant.now();
-            jobRepository.complete(job.id(), "text-search-only", 0, chunks.size(), finished);
-            documentRepository.updateIndexStatus(
-                    job.documentId(), "INDEXED", "TEXT_SEARCH_ONLY", !chunks.isEmpty());
-            log.info("Embedding 模型未启用，知识文档已降级为文本检索：jobId={}，documentId={}，chunks={}",
-                    job.id(), job.documentId(), chunks.size());
+            if (lifecycleService.completeTextSearchOnly(job, chunks.size(), finished)) {
+                log.info("Embedding 模型未启用，知识文档已降级为文本检索：jobId={}，documentId={}，chunks={}",
+                        job.id(), job.documentId(), chunks.size());
+            } else {
+                log.info("索引任务租约已失效，忽略旧 worker 的文本检索降级结果：jobId={}，documentId={}",
+                        job.id(), job.documentId());
+            }
         } catch (BusinessException ex) {
             if (ex.errorCode() == ErrorCode.EMBEDDING_DIMENSION_MISMATCH) {
                 failImmediately(job, "EMBEDDING_DIMENSION_MISMATCH");
@@ -89,21 +118,22 @@ public class KnowledgeIndexingService {
 
     private void failImmediately(KnowledgeIndexJob job, String errorCategory) {
         Instant now = Instant.now();
-        jobRepository.fail(job.id(), errorCategory, now);
-        documentRepository.updateIndexStatus(job.documentId(), "FAILED", errorCategory, false);
-        log.warn("知识索引任务不可重试，已标记失败：jobId={}，documentId={}，原因={}",
-                job.id(), job.documentId(), errorCategory);
+        if (lifecycleService.fail(job, errorCategory, now)) {
+            log.warn("知识索引任务不可重试，已标记失败：jobId={}，documentId={}，原因={}",
+                    job.id(), job.documentId(), errorCategory);
+        } else {
+            log.info("索引任务租约已失效，忽略旧 worker 的失败结果：jobId={}，documentId={}",
+                    job.id(), job.documentId());
+        }
     }
 
     private void retryOrFail(KnowledgeIndexJob job, String errorCategory) {
         Instant now = Instant.now();
         if (job.attempts() >= MAX_ATTEMPTS) {
-            jobRepository.fail(job.id(), errorCategory, now);
-            documentRepository.updateIndexStatus(job.documentId(), "FAILED", errorCategory, false);
+            lifecycleService.fail(job, errorCategory, now);
             return;
         }
         Duration delay = Duration.ofMinutes(1L << Math.max(0, job.attempts() - 1));
-        jobRepository.retry(job.id(), errorCategory, now.plus(delay), now);
-        documentRepository.updateIndexStatus(job.documentId(), "RETRYABLE", errorCategory, false);
+        lifecycleService.retry(job, errorCategory, now.plus(delay), now);
     }
 }

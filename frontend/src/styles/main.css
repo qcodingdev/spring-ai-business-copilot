@@ -333,6 +333,33 @@ input:disabled, textarea:disabled, select:disabled { color: var(--disabled); bac
 .document-search { max-width: 30rem; }
 .experience-explainer ol { color: var(--text-muted); font-size: .8rem; }
 .job-progress code { overflow-wrap: anywhere; }
+.readiness-intro { border-color: #d8dcf8; background: linear-gradient(145deg, #f7f8ff, #fff); }
+.readiness-metrics .status-badge { width: max-content; }
+.readiness-hash { max-width: 22rem; overflow-wrap: anywhere; color: var(--text-soft); font-size: .65rem; }
+.readiness-groups { display: grid; gap: 1rem; }
+.readiness-group { display: grid; gap: .65rem; }
+.readiness-group h3 { margin: 0; font-size: .85rem; }
+.readiness-checks { display: grid; gap: .6rem; }
+.readiness-check { display: flex; gap: 1rem; align-items: center; justify-content: space-between; padding: .85rem; border: 1px solid var(--border); border-left: .28rem solid var(--success); border-radius: .7rem; background: #fff; }
+.readiness-check--warning { border-left-color: var(--warning); background: #fffdf7; }
+.readiness-check--blocker { border-left-color: var(--danger); background: #fff9f9; }
+.readiness-check__body { display: grid; flex: 1 1 auto; gap: .3rem; min-width: 0; }
+.readiness-check__heading { display: flex; gap: .7rem; align-items: center; justify-content: space-between; }
+.readiness-check p { margin: 0; color: var(--text-muted); font-size: .75rem; }
+.readiness-check small { color: var(--text-soft); }
+.readiness-snapshot-form { display: grid; grid-template-columns: minmax(16rem, 1fr) auto; gap: .8rem; align-items: end; }
+.readiness-snapshot-form label { margin: 0; }
+.readiness-history { display: grid; gap: .65rem; }
+.readiness-snapshot { border: 1px solid var(--border); border-radius: .7rem; background: #fff; }
+.readiness-snapshot summary { display: flex; gap: 1rem; align-items: center; justify-content: space-between; padding: .85rem; cursor: pointer; }
+.readiness-snapshot summary > span:first-child { display: grid; gap: .25rem; }
+.readiness-snapshot summary small { color: var(--text-soft); }
+.readiness-snapshot__status { display: flex; gap: .4rem; flex-wrap: wrap; justify-content: flex-end; }
+.readiness-snapshot__details { display: grid; gap: .55rem; padding: 0 .85rem .85rem; border-top: 1px solid var(--border); }
+.readiness-snapshot__details p { margin: .7rem 0 0; overflow-wrap: anywhere; }
+.readiness-snapshot__checks { display: flex; gap: .4rem; flex-wrap: wrap; }
+.readiness-snapshot__checks > span { display: flex; gap: .25rem; align-items: center; }
+.readiness-pagination { display: flex; gap: .75rem; align-items: center; justify-content: center; margin-top: .8rem; color: var(--text-muted); font-size: .72rem; }
 
 /* Public product and login page */
 .public-page { min-height: 100vh; color: #edf1fb; background: #090f20; }
@@ -443,7 +470,7 @@ input:disabled, textarea:disabled, select:disabled { color: var(--disabled); bac
   .public-login-card { width: min(100%, 34rem); }
   .public-trust, .technology-section { grid-template-columns: 1fr; }
   .admin-layout { grid-template-columns: 1fr; }
-  .admin-subnav { position: static; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow-x: auto; }
+  .admin-subnav { position: static; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); overflow-x: auto; }
 }
 @media (max-width: 44rem) {
   .public-header { padding-inline: .9rem; }
@@ -466,7 +493,11 @@ input:disabled, textarea:disabled, select:disabled { color: var(--disabled); bac
   .confirm-grid { grid-template-columns: 1fr; }
   .confirm-grid dd { margin-bottom: .5rem; }
   .dialog-actions > * { flex: 1 1 100%; }
-  .metric-grid, .document-upload { grid-template-columns: 1fr; }
+  .metric-grid, .document-upload, .readiness-snapshot-form { grid-template-columns: 1fr; }
+  .readiness-check, .readiness-snapshot summary { align-items: stretch; flex-direction: column; }
+  .readiness-check .button { width: 100%; }
+  .readiness-snapshot__status { justify-content: flex-start; }
+  .readiness-pagination { align-items: stretch; flex-direction: column; text-align: center; }
   .admin-subnav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .toast-message { top: 4.4rem; }
 }

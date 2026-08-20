@@ -1,6 +1,9 @@
 package dev.qcoding.businesscopilot.knowledgecopilot;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.bind.ConstructorBinding;
+
+import java.time.Duration;
 
 /**
  * Knowledge Copilot 模块配置。
@@ -18,6 +21,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param minSimilarity      分片进入上下文所需的最低余弦相似度
  * @param embeddingModelName 用于追踪的向量模型名称
  * @param embeddingDimension 向量维度，必须与模型实际输出一致
+ * @param indexStaleAfter    索引任务进入可人工恢复状态前的最长无更新时间
  */
 @ConfigurationProperties(prefix = "business-copilot.knowledge")
 public record KnowledgeCopilotProperties(
@@ -26,9 +30,18 @@ public record KnowledgeCopilotProperties(
         int topK,
         double minSimilarity,
         String embeddingModelName,
-        int embeddingDimension) {
+        int embeddingDimension,
+        Duration indexStaleAfter) {
+
+    public KnowledgeCopilotProperties(boolean enabled, long maxDocumentSize, int topK,
+                                      double minSimilarity, String embeddingModelName,
+                                      int embeddingDimension) {
+        this(enabled, maxDocumentSize, topK, minSimilarity, embeddingModelName,
+                embeddingDimension, Duration.ofMinutes(15));
+    }
 
     /** 与 2.0 边界一致的保守默认值。 */
+    @ConstructorBinding
     public KnowledgeCopilotProperties {
         if (maxDocumentSize <= 0) {
             // 默认 2MB，超过该大小的单个文档将被拒绝
@@ -49,6 +62,9 @@ public record KnowledgeCopilotProperties(
         if (embeddingDimension <= 0) {
             // 默认维度 1536，对应 text-embedding-3-small；必须与模型实际输出维度一致。
             embeddingDimension = 1536;
+        }
+        if (indexStaleAfter == null || indexStaleAfter.isZero() || indexStaleAfter.isNegative()) {
+            indexStaleAfter = Duration.ofMinutes(15);
         }
     }
 }

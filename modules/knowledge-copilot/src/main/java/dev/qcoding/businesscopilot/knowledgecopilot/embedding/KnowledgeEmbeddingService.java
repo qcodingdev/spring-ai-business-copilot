@@ -15,14 +15,10 @@ import java.util.List;
 /**
  * 编排知识分片的向量生成与 pgvector 持久化。
  *
- * <p>知识分片 embedding 服务。为文档分片生成 embedding 向量并持久化到 pgvector。
- * 支持首次索引和重建索引（先删除旧 embedding 再写入新 embedding）。
- * 每个 chunk 生成一条 {@link KnowledgeChunkEmbedding} 记录，
- * embedding_model 字段记录实际使用的模型名称，便于审计和排查模型切换问题。</p>
- *
- * <p>调用方（如 {@code DocumentUploadService}）持有本服务引用，在分片入库后调用
- * {@link #indexChunks(Long, List)} 同步生成 embedding。若 embedding 模型不可用，
- * 调用方应捕获 {@code AiModelNotEnabledException} 并决定是否阻止业务流程。</p>
+ * <p>向量生成和数据库替换分成两个阶段。外部模型调用先在事务外构造
+ * {@link PreparedKnowledgeIndex}；只有索引任务租约仍有效时，生命周期服务才会在
+ * 同一数据库事务内调用 {@link #persistPreparedIndex(PreparedKnowledgeIndex)}。
+ * 这样既避免长事务，也能防止被取消的旧 worker 删除替代任务生成的新向量。</p>
  */
 public class KnowledgeEmbeddingService {
 
@@ -41,38 +37,28 @@ public class KnowledgeEmbeddingService {
     }
 
     /**
-     * 为文档的全部分片生成并持久化向量。
-     *
-     * <p>在调用本方法前，应确保 chunks 已入库且都有数据库生成的 id。
-     * 若同一文档已有旧 embedding（如重建索引场景），先删除再写入。</p>
+     * 在事务外为文档的全部分片生成并校验向量，不修改数据库。
      *
      * @param documentId 所属文档编号
      * @param chunks     待索引的已持久化分片，每个分片必须有编号
-     * @return 索引操作摘要
-     * @throws dev.qcoding.businesscopilot.aicore.AiModelNotEnabledException 未配置向量模型时抛出
-     * @throws BusinessException                                              维度不匹配或模型调用失败时抛出
+     * @return 可在租约校验后提交的完整向量集合
+     * @throws AiModelNotEnabledException 未配置向量模型时抛出
+     * @throws BusinessException          维度不匹配或模型调用失败时抛出
      */
-    // 外部模型调用不能占用数据库事务；失败时索引任务会保留可重试状态并禁用文档。
-    public EmbeddingIndexResult indexChunks(Long documentId, List<KnowledgeChunk> chunks) {
-        // 在删除已有向量之前先确认模型可用；文本检索降级不能破坏可恢复的历史向量。
+    public PreparedKnowledgeIndex prepareIndex(Long documentId, List<KnowledgeChunk> chunks) {
         if (!aiEmbeddingService.isModelEnabled()) {
             throw new AiModelNotEnabledException(
                     "未配置可用的 Embedding 模型，将由索引任务降级为文本检索。");
         }
 
-        // 1. 删除旧 embedding（重建索引场景）
-        int deleted = embeddingRepository.deleteByDocumentId(documentId);
-        if (deleted > 0) {
-            log.info("已删除文档原有向量：documentId={}，数量={}", documentId, deleted);
-        }
-
         if (chunks.isEmpty()) {
             log.info("文档没有可索引分片：documentId={}", documentId);
-            return new EmbeddingIndexResult(documentId, 0,
-                    properties.embeddingModelName(), properties.embeddingDimension());
+            return new PreparedKnowledgeIndex(
+                    new EmbeddingIndexResult(documentId, 0,
+                            properties.embeddingModelName(), properties.embeddingDimension()),
+                    List.of());
         }
 
-        // 2. 为每个 chunk 生成 embedding 并验证维度
         String modelName = properties.embeddingModelName();
         int configuredDimension = properties.embeddingDimension();
 
@@ -80,7 +66,6 @@ public class KnowledgeEmbeddingService {
         for (KnowledgeChunk chunk : chunks) {
             float[] vector = aiEmbeddingService.embed("knowledge.document-index", chunk.content());
 
-            // 3. 维度不匹配时给出清晰错误，指导修正方向
             if (vector.length != configuredDimension) {
                 throw new BusinessException(ErrorCode.EMBEDDING_DIMENSION_MISMATCH,
                         String.format(
@@ -94,21 +79,26 @@ public class KnowledgeEmbeddingService {
                     null, chunk.id(), modelName, vector, null));
         }
 
-        // 4. 批量持久化
-        embeddingRepository.saveAll(embeddings);
-        log.info("文档向量写入完成：数量={}，documentId={}，model={}，dim={}",
-                embeddings.size(), documentId, modelName, configuredDimension);
-
-        return new EmbeddingIndexResult(documentId, embeddings.size(), modelName, configuredDimension);
+        return new PreparedKnowledgeIndex(
+                new EmbeddingIndexResult(documentId, embeddings.size(), modelName, configuredDimension),
+                embeddings);
     }
 
     /**
-     * 重建文档索引：删除旧向量并按现有分片重新生成。
-     *
-     * @param documentId 待重建索引的文档编号
-     * @return 重建索引操作摘要
+     * 替换一个已经完成模型计算的向量集合。
+     * 调用方必须先持有有效任务租约，并在数据库事务内调用本方法。
      */
-    public EmbeddingIndexResult reindex(Long documentId, List<KnowledgeChunk> chunks) {
-        return indexChunks(documentId, chunks);
+    public EmbeddingIndexResult persistPreparedIndex(PreparedKnowledgeIndex prepared) {
+        EmbeddingIndexResult result = prepared.result();
+        int deleted = embeddingRepository.deleteByDocumentId(result.documentId());
+        if (deleted > 0) {
+            log.info("已删除文档原有向量：documentId={}，数量={}", result.documentId(), deleted);
+        }
+        if (!prepared.embeddings().isEmpty()) {
+            embeddingRepository.saveAll(prepared.embeddings());
+        }
+        log.info("文档向量写入完成：数量={}，documentId={}，model={}，dim={}",
+                result.chunkCount(), result.documentId(), result.modelName(), result.dimension());
+        return result;
     }
 }
