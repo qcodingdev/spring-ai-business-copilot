@@ -4,21 +4,35 @@ import dev.qcoding.businesscopilot.audit.AuditEvent;
 import dev.qcoding.businesscopilot.audit.AuditEventType;
 import dev.qcoding.businesscopilot.audit.AuditStatus;
 import dev.qcoding.businesscopilot.audit.JdbcQueryAuditRepository;
+import dev.qcoding.businesscopilot.aicore.AiEmbeddingService;
 import dev.qcoding.businesscopilot.commonweb.request.BusinessRequestContext;
 import dev.qcoding.businesscopilot.commonweb.request.BusinessRequestContextHolder;
 import dev.qcoding.businesscopilot.commonsecurity.BusinessRole;
 import dev.qcoding.businesscopilot.commonsecurity.CurrentActor;
 import dev.qcoding.businesscopilot.commonsecurity.CurrentActorProvider;
+import dev.qcoding.businesscopilot.commonsecurity.ExternalConnectionSecurityProperties;
+import dev.qcoding.businesscopilot.commonsecurity.ExternalEndpointPolicy;
+import dev.qcoding.businesscopilot.commonsecurity.ExternalSecretResolver;
+import dev.qcoding.businesscopilot.knowledgecopilot.KnowledgeCopilotProperties;
 import dev.qcoding.businesscopilot.knowledgecopilot.document.JdbcKnowledgeChunkRepository;
 import dev.qcoding.businesscopilot.knowledgecopilot.document.KnowledgeChunkRepository;
+import dev.qcoding.businesscopilot.knowledgecopilot.document.KnowledgeDocumentRepository;
 import dev.qcoding.businesscopilot.knowledgecopilot.document.DocumentUploadResponse;
 import dev.qcoding.businesscopilot.knowledgecopilot.document.DocumentUploadService;
+import dev.qcoding.businesscopilot.knowledgecopilot.embedding.EmbeddingIndexResult;
 import dev.qcoding.businesscopilot.knowledgecopilot.embedding.JdbcKnowledgeEmbeddingRepository;
 import dev.qcoding.businesscopilot.knowledgecopilot.embedding.KnowledgeChunkEmbedding;
 import dev.qcoding.businesscopilot.knowledgecopilot.embedding.KnowledgeEmbeddingRepository;
+import dev.qcoding.businesscopilot.knowledgecopilot.embedding.KnowledgeEmbeddingService;
+import dev.qcoding.businesscopilot.knowledgecopilot.embedding.PreparedKnowledgeIndex;
 import dev.qcoding.businesscopilot.knowledgecopilot.indexing.JdbcKnowledgeIndexJobRepository;
+import dev.qcoding.businesscopilot.knowledgecopilot.indexing.KnowledgeIndexLifecycleService;
 import dev.qcoding.businesscopilot.knowledgecopilot.indexing.KnowledgeIndexJobStatus;
 import dev.qcoding.businesscopilot.knowledgecopilot.retrieval.KnowledgeQueryTerms;
+import dev.qcoding.businesscopilot.knowledgecopilot.source.KnowledgeSourceAdapter;
+import dev.qcoding.businesscopilot.knowledgecopilot.source.KnowledgeSourceConnection;
+import dev.qcoding.businesscopilot.knowledgecopilot.source.KnowledgeSourceProvider;
+import dev.qcoding.businesscopilot.knowledgecopilot.source.KnowledgeSourceSyncService;
 import dev.qcoding.businesscopilot.knowledgecopilot.feedback.JdbcKnowledgeFeedbackRepository;
 import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeFeedbackRating;
 import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeFeedbackReason;
@@ -26,6 +40,8 @@ import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeQualityRev
 import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeEvidenceAssessment;
 import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeAnswerAssessment;
 import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeRemediationAction;
+import dev.qcoding.businesscopilot.readiness.EnterpriseReadinessProperties;
+import dev.qcoding.businesscopilot.readiness.JdbcEnterpriseReadinessProbeRepository;
 import dev.qcoding.businesscopilot.datacopilot.schema.DataCopilotSchemaProperties;
 import dev.qcoding.businesscopilot.datacopilot.schema.JdbcSchemaMetadataRepository;
 import dev.qcoding.businesscopilot.demo.DemoModule;
@@ -51,6 +67,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.dao.DataAccessException;
+import org.springframework.jdbc.support.JdbcTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -83,10 +101,11 @@ class PostgresPgvectorIntegrationTest {
             .withPassword("test");
 
     private static JdbcTemplate jdbcTemplate;
+    private static DriverManagerDataSource dataSource;
 
     @BeforeAll
     static void migrateDatabase() {
-        DriverManagerDataSource dataSource = new DriverManagerDataSource(
+        dataSource = new DriverManagerDataSource(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
         JdbcTemplate adminJdbcTemplate = new JdbcTemplate(dataSource);
         adminJdbcTemplate.execute("""
@@ -153,13 +172,221 @@ class PostgresPgvectorIntegrationTest {
         assertThat(actorColumns).isEqualTo(5);
         assertThat(httpRequestColumns).isEqualTo(5);
         assertThat(localeColumns).isEqualTo(5);
-        assertThat(latestMigration).isEqualTo("31");
+        assertThat(latestMigration).isEqualTo("33");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.tables "
+                        + "WHERE table_schema = 'public' "
+                        + "AND table_name = 'enterprise_readiness_snapshots'",
+                Integer.class)).isEqualTo(1);
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT format_type(atttypid, atttypmod) "
                         + "FROM pg_attribute "
                         + "WHERE attrelid = 'knowledge_chunk_embeddings'::regclass "
                         + "AND attname = 'embedding'",
                 String.class)).isEqualTo("vector");
+    }
+
+    @Test
+    void readinessSnapshotsAreAppendOnlyAndContentSafe() {
+        String checks = """
+                [{"checkId":"DATA_STALE_HANDOFF_CLAIMS","module":"DATA","status":"PASS",\
+                "affectedCount":0,"threshold":"PT15M","actionPath":"/data?tab=handoff"}]
+                """;
+        Long snapshotId = jdbcTemplate.queryForObject("""
+                INSERT INTO enterprise_readiness_snapshots (
+                    snapshot_reference, schema_version, purpose, application_version,
+                    runtime_mode, status, passed_count, warning_count, blocker_count,
+                    checks_json, content_hash, generated_by, generated_at, valid_until
+                ) VALUES (gen_random_uuid(), 1, 'integration delivery gate', '2.4.0',
+                          'self-hosted', 'READY', 1, 0, 0, ?::jsonb, ?, 'admin-test',
+                          now(), now() + interval '24 hours')
+                RETURNING id
+                """, Long.class, checks, "a".repeat(64));
+
+        assertThat(snapshotId).isNotNull();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT checks_json::text FROM enterprise_readiness_snapshots WHERE id = ?",
+                String.class, snapshotId))
+                .contains("DATA_STALE_HANDOFF_CLAIMS")
+                .doesNotContain("\"sql\"", "\"prompt\"", "\"secret\"", "\"content\"");
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "UPDATE enterprise_readiness_snapshots SET purpose = 'changed' WHERE id = ?",
+                snapshotId))
+                .isInstanceOf(DataAccessException.class)
+                .hasMessageContaining("immutable");
+    }
+
+    @Test
+    void readinessProbeExecutesAllStableChecksAgainstTheMigratedSchema() {
+        EnterpriseReadinessProperties properties = new EnterpriseReadinessProperties(
+                "2.4.0", Duration.ofHours(24), Duration.ofDays(90),
+                Duration.ofMinutes(15), Duration.ofHours(1),
+                Duration.ofDays(7));
+
+        var counts = new JdbcEnterpriseReadinessProbeRepository(jdbcTemplate)
+                .probe(Instant.now(), properties);
+
+        assertThat(counts).hasSize(13);
+        assertThat(counts.values()).allMatch(count -> count != null && count >= 0);
+        assertThat(counts).containsKeys(
+                "DATA_STALE_HANDOFF_CLAIMS", "KNOWLEDGE_BLOCKED_DOCUMENTS",
+                "SUPPORT_UNKNOWN_WRITEBACKS", "REPORT_FAILED_RUNS",
+                "HR_OVERDUE_ONBOARDING_TASKS");
+    }
+
+    @Test
+    void readinessBlocksOnFailedIndexEvenThoughTheDocumentIsDisabled() {
+        Instant now = Instant.now();
+        EnterpriseReadinessProperties properties = new EnterpriseReadinessProperties(
+                "2.4.0", Duration.ofHours(24), Duration.ofDays(90),
+                Duration.ofMinutes(15), Duration.ofHours(1),
+                Duration.ofDays(7));
+        JdbcEnterpriseReadinessProbeRepository probes =
+                new JdbcEnterpriseReadinessProbeRepository(jdbcTemplate);
+        long before = probes.probe(now, properties).get("KNOWLEDGE_BLOCKED_DOCUMENTS");
+        insertIndexLifecycleDocument(
+                "索引失败文档", "failed-index.txt", "2".repeat(64), "FAILED", false);
+
+        long after = probes.probe(now, properties).get("KNOWLEDGE_BLOCKED_DOCUMENTS");
+
+        assertThat(after).isEqualTo(before + 1);
+    }
+
+    @Test
+    void laterSuccessfulRunsClearRecoverableReadinessFailures() {
+        Instant now = Instant.now();
+        EnterpriseReadinessProperties properties = new EnterpriseReadinessProperties(
+                "2.4.0", Duration.ofHours(24), Duration.ofDays(90),
+                Duration.ofMinutes(15), Duration.ofHours(1),
+                Duration.ofDays(7));
+        JdbcEnterpriseReadinessProbeRepository probes =
+                new JdbcEnterpriseReadinessProbeRepository(jdbcTemplate);
+        var before = probes.probe(now, properties);
+        Long connectionId = jdbcTemplate.queryForObject("""
+                INSERT INTO knowledge_source_connections (
+                    connection_key, display_name, provider, base_url, secret_ref,
+                    enabled, owner_actor_id
+                ) VALUES ('readiness-recovery-source', 'Readiness recovery source', 'NOTION',
+                          'https://notion.example.test', 'READINESS_NOTION_TOKEN', TRUE, 'admin-test')
+                RETURNING id
+                """, Long.class);
+        Long scheduleId = jdbcTemplate.queryForObject("""
+                INSERT INTO report_schedules (
+                    schedule_key, report_type, title_template, cron_expression, zone_id,
+                    template_id, template_version, source_config, enabled,
+                    owner_actor_id, next_run_at
+                ) VALUES ('readiness-recovery-schedule', 'BUSINESS_WEEKLY', 'Readiness report',
+                          '0 0 9 * * MON', 'UTC', 'weekly-ops', 'v1',
+                          '{"includeSupportMetrics":true}'::jsonb, FALSE,
+                          'admin-test', now() + interval '1 day')
+                RETURNING id
+                """, Long.class);
+        jdbcTemplate.update("""
+                INSERT INTO knowledge_sync_runs (
+                    connection_id, status, requested_by, started_at, finished_at, error_category
+                ) VALUES (?, 'FAILED', 'admin-test', ?, ?, 'UPSTREAM_TIMEOUT')
+                """, connectionId, java.sql.Timestamp.from(now.minusSeconds(60)),
+                java.sql.Timestamp.from(now.minusSeconds(30)));
+        jdbcTemplate.update("""
+                INSERT INTO report_schedule_runs (
+                    schedule_id, status, reason, started_at, finished_at
+                ) VALUES (?, 'FAILED', 'SOURCE_UNAVAILABLE', ?, ?)
+                """, scheduleId, java.sql.Timestamp.from(now.minusSeconds(60)),
+                java.sql.Timestamp.from(now.minusSeconds(30)));
+
+        var failed = probes.probe(now, properties);
+        assertThat(failed.get("KNOWLEDGE_FAILED_SYNC_RUNS"))
+                .isEqualTo(before.get("KNOWLEDGE_FAILED_SYNC_RUNS") + 1);
+        assertThat(failed.get("REPORT_FAILED_RUNS"))
+                .isEqualTo(before.get("REPORT_FAILED_RUNS") + 1);
+
+        jdbcTemplate.update("""
+                INSERT INTO knowledge_sync_runs (
+                    connection_id, status, requested_by, started_at, finished_at
+                ) VALUES (?, 'COMPLETED', 'admin-test', ?, ?)
+                """, connectionId, java.sql.Timestamp.from(now.minusSeconds(20)),
+                java.sql.Timestamp.from(now.minusSeconds(10)));
+        jdbcTemplate.update("""
+                INSERT INTO report_schedule_runs (
+                    schedule_id, status, started_at, finished_at
+                ) VALUES (?, 'DRAFTED', ?, ?)
+                """, scheduleId, java.sql.Timestamp.from(now.minusSeconds(20)),
+                java.sql.Timestamp.from(now.minusSeconds(10)));
+
+        var recovered = probes.probe(now, properties);
+        assertThat(recovered.get("KNOWLEDGE_FAILED_SYNC_RUNS"))
+                .isEqualTo(before.get("KNOWLEDGE_FAILED_SYNC_RUNS"));
+        assertThat(recovered.get("REPORT_FAILED_RUNS"))
+                .isEqualTo(before.get("REPORT_FAILED_RUNS"));
+    }
+
+    @Test
+    void upgradesV31ToV33WithoutRewritingExistingBusinessData() {
+        JdbcTemplate adminJdbcTemplate = new JdbcTemplate(new DriverManagerDataSource(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword()));
+        adminJdbcTemplate.execute("CREATE DATABASE business_copilot_v31_upgrade_test");
+        String upgradeJdbcUrl = "jdbc:postgresql://" + POSTGRES.getHost() + ":"
+                + POSTGRES.getFirstMappedPort() + "/business_copilot_v31_upgrade_test";
+        DriverManagerDataSource upgradeDataSource = new DriverManagerDataSource(
+                upgradeJdbcUrl, POSTGRES.getUsername(), POSTGRES.getPassword());
+        Flyway.configure().dataSource(upgradeDataSource).target("31").load().migrate();
+        JdbcTemplate upgradeJdbcTemplate = new JdbcTemplate(upgradeDataSource);
+        Long auditId = upgradeJdbcTemplate.queryForObject(
+                "INSERT INTO query_audit_logs DEFAULT VALUES RETURNING id", Long.class);
+
+        Flyway.configure().dataSource(upgradeDataSource).load().migrate();
+
+        assertThat(upgradeJdbcTemplate.queryForObject(
+                "SELECT version FROM flyway_schema_history WHERE success = TRUE "
+                        + "ORDER BY installed_rank DESC LIMIT 1", String.class)).isEqualTo("33");
+        assertThat(upgradeJdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM query_audit_logs WHERE id = ?", Integer.class, auditId))
+                .isEqualTo(1);
+        assertThat(upgradeJdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' "
+                        + "AND table_name = 'enterprise_readiness_snapshots'", Integer.class))
+                .isEqualTo(1);
+    }
+
+    @Test
+    void upgradesV32ToV33AndReconcilesDuplicateActiveKnowledgeSyncs() {
+        JdbcTemplate adminJdbcTemplate = new JdbcTemplate(new DriverManagerDataSource(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword()));
+        adminJdbcTemplate.execute("CREATE DATABASE business_copilot_v32_upgrade_test");
+        String upgradeJdbcUrl = "jdbc:postgresql://" + POSTGRES.getHost() + ":"
+                + POSTGRES.getFirstMappedPort() + "/business_copilot_v32_upgrade_test";
+        DriverManagerDataSource upgradeDataSource = new DriverManagerDataSource(
+                upgradeJdbcUrl, POSTGRES.getUsername(), POSTGRES.getPassword());
+        Flyway.configure().dataSource(upgradeDataSource).target("32").load().migrate();
+        JdbcTemplate upgradeJdbcTemplate = new JdbcTemplate(upgradeDataSource);
+        Long connectionId = upgradeJdbcTemplate.queryForObject("""
+                INSERT INTO knowledge_source_connections (
+                    connection_key, display_name, provider, base_url, secret_ref,
+                    enabled, owner_actor_id
+                ) VALUES ('v32-duplicate-sync', 'V32 duplicate sync', 'NOTION',
+                          'https://notion.example.test', 'V32_NOTION_TOKEN', TRUE, 'admin-test')
+                RETURNING id
+                """, Long.class);
+        upgradeJdbcTemplate.update("""
+                INSERT INTO knowledge_sync_runs(connection_id, status, requested_by, started_at)
+                VALUES (?, 'RUNNING', 'admin-old', now() - interval '2 minutes'),
+                       (?, 'RUNNING', 'admin-new', now() - interval '1 minute')
+                """, connectionId, connectionId);
+
+        Flyway.configure().dataSource(upgradeDataSource).load().migrate();
+
+        assertThat(upgradeJdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM knowledge_sync_runs "
+                        + "WHERE connection_id = ? AND status = 'RUNNING'",
+                Integer.class, connectionId)).isEqualTo(1);
+        assertThat(upgradeJdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM knowledge_sync_runs "
+                        + "WHERE connection_id = ? AND status = 'CANCELED' "
+                        + "AND error_category = 'CONCURRENT_RUN_RECONCILED'",
+                Integer.class, connectionId)).isEqualTo(1);
+        assertThat(upgradeJdbcTemplate.queryForObject(
+                "SELECT version FROM flyway_schema_history WHERE success = TRUE "
+                        + "ORDER BY installed_rank DESC LIMIT 1", String.class)).isEqualTo("33");
     }
 
     @Test
@@ -206,7 +433,7 @@ class PostgresPgvectorIntegrationTest {
                 """, Integer.class)).isEqualTo(10);
         assertThat(upgradeJdbcTemplate.queryForObject(
                 "SELECT version FROM flyway_schema_history WHERE success = TRUE ORDER BY installed_rank DESC LIMIT 1",
-                String.class)).isEqualTo("31");
+                String.class)).isEqualTo("33");
         assertThat(upgradeJdbcTemplate.queryForObject("""
                 SELECT COUNT(*)
                 FROM information_schema.columns
@@ -331,7 +558,7 @@ class PostgresPgvectorIntegrationTest {
         assertThat(upgradeJdbcTemplate.queryForObject(
                 "SELECT version FROM flyway_schema_history WHERE success = TRUE "
                         + "ORDER BY installed_rank DESC LIMIT 1",
-                String.class)).isEqualTo("31");
+                String.class)).isEqualTo("33");
         assertThat(upgradeJdbcTemplate.queryForObject(
                 "SELECT locale FROM query_audit_logs WHERE id = ?",
                 String.class, auditId)).isEqualTo("zh-CN");
@@ -452,8 +679,83 @@ class PostgresPgvectorIntegrationTest {
                 FROM information_schema.columns
                 WHERE table_schema = 'public'
                   AND table_name = 'hr_onboarding_tasks'
-                  AND column_name IN ('guidance', 'required', 'owner_role')
-                """, Integer.class)).isEqualTo(3);
+                  AND column_name IN ('guidance', 'required', 'owner_role', 'due_at')
+                """, Integer.class)).isEqualTo(4);
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND ((table_name = 'report_drafts' AND column_name = 'review_due_at')
+                    OR (table_name = 'resume_assessments' AND column_name = 'review_due_at'))
+                """, Integer.class)).isEqualTo(2);
+    }
+
+    @Test
+    void knowledgeSourceAllowsOnlyOneActiveSyncRunPerConnection() {
+        Long connectionId = jdbcTemplate.queryForObject("""
+                INSERT INTO knowledge_source_connections (
+                    connection_key, display_name, provider, base_url, secret_ref,
+                    enabled, owner_actor_id
+                ) VALUES ('single-active-sync', 'Single active sync', 'NOTION',
+                          'https://notion.example.test', 'NOTION_TEST_TOKEN', TRUE, 'admin-test')
+                RETURNING id
+                """, Long.class);
+        jdbcTemplate.update("""
+                INSERT INTO knowledge_sync_runs(connection_id, status, requested_by)
+                VALUES (?, 'RUNNING', 'admin-test')
+                """, connectionId);
+
+        assertThatThrownBy(() -> jdbcTemplate.update("""
+                INSERT INTO knowledge_sync_runs(connection_id, status, requested_by)
+                VALUES (?, 'RUNNING', 'admin-test-2')
+                """, connectionId)).isInstanceOf(DataAccessException.class);
+    }
+
+    @Test
+    void confirmedFullResyncRecoversAStaleActiveSyncRun() {
+        Long connectionId = jdbcTemplate.queryForObject("""
+                INSERT INTO knowledge_source_connections (
+                    connection_key, display_name, provider, base_url, secret_ref,
+                    enabled, owner_actor_id
+                ) VALUES ('stale-sync-recovery', 'Stale sync recovery', 'NOTION',
+                          'https://notion.example.test', 'NOTION_TEST_TOKEN', TRUE, 'admin-test')
+                RETURNING id
+                """, Long.class);
+        Long staleRunId = jdbcTemplate.queryForObject("""
+                INSERT INTO knowledge_sync_runs(
+                    connection_id, status, requested_by, started_at
+                ) VALUES (?, 'RUNNING', 'admin-test', now() - interval '16 minutes')
+                RETURNING id
+                """, Long.class, connectionId);
+        KnowledgeSourceAdapter adapter = new KnowledgeSourceAdapter() {
+            @Override
+            public boolean supports(KnowledgeSourceProvider provider) {
+                return provider == KnowledgeSourceProvider.NOTION;
+            }
+
+            @Override
+            public SourceBatch fetch(KnowledgeSourceConnection connection, String cursor) {
+                return new SourceBatch(List.of(), null, false);
+            }
+        };
+        ExternalEndpointPolicy endpointPolicy = mock(ExternalEndpointPolicy.class);
+        when(endpointPolicy.properties()).thenReturn(new ExternalConnectionSecurityProperties(
+                List.of(), false, false, Duration.ofSeconds(1), Duration.ofSeconds(2),
+                Duration.ofSeconds(10), 1024, 2, 50, 16));
+        KnowledgeSourceSyncService service = new KnowledgeSourceSyncService(
+                jdbcTemplate, List.of(adapter), mock(DocumentUploadService.class),
+                () -> new CurrentActor("admin-test", Set.of(BusinessRole.ADMIN)),
+                mock(ExternalSecretResolver.class), new ObjectMapper(), endpointPolicy,
+                Duration.ofMinutes(15));
+
+        KnowledgeSourceSyncService.SyncResult result = service.synchronize(connectionId, true);
+
+        assertThat(result.status()).isEqualTo("COMPLETED");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT status FROM knowledge_sync_runs WHERE id = ?",
+                String.class, staleRunId)).isEqualTo("CANCELED");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT error_category FROM knowledge_sync_runs WHERE id = ?",
+                String.class, staleRunId)).isEqualTo("STALE_SYNC_RECOVERED");
     }
 
     @Test
@@ -931,6 +1233,83 @@ class PostgresPgvectorIntegrationTest {
     }
 
     @Test
+    void duplicateIndexEnqueueReturnsTheSingleActiveJob() {
+        Long documentId = insertIndexLifecycleDocument(
+                "并发入队文档", "concurrent-enqueue.txt", "f".repeat(64), "PENDING", false);
+        JdbcKnowledgeIndexJobRepository repository = new JdbcKnowledgeIndexJobRepository(jdbcTemplate);
+
+        var first = repository.enqueue(documentId);
+        var second = repository.enqueue(documentId);
+
+        assertThat(second.id()).isEqualTo(first.id());
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM knowledge_index_jobs
+                WHERE document_id = ? AND status IN ('PENDING', 'PROCESSING', 'RETRYABLE')
+                """, Integer.class, documentId)).isEqualTo(1);
+    }
+
+    @Test
+    void canceledIndexWorkerCannotReplaceExistingVectors() {
+        Long documentId = insertIndexLifecycleDocument(
+                "取消租约文档", "canceled-lease.txt", "0".repeat(64), "INDEXED", true);
+        Long chunkId = insertChunk(documentId, 0, "旧版本向量内容");
+        JdbcKnowledgeEmbeddingRepository embeddings = new JdbcKnowledgeEmbeddingRepository(jdbcTemplate);
+        embeddings.saveAll(List.of(new KnowledgeChunkEmbedding(
+                null, chunkId, "old-model", vector(0, 1.0f), null)));
+        Long jobId = jdbcTemplate.queryForObject("""
+                INSERT INTO knowledge_index_jobs (
+                    document_id, status, attempts, next_attempt_at, started_at, finished_at
+                ) VALUES (?, 'CANCELED', 1, now(), now(), now())
+                RETURNING id
+                """, Long.class, documentId);
+        JdbcKnowledgeIndexJobRepository jobs = new JdbcKnowledgeIndexJobRepository(jdbcTemplate);
+        KnowledgeIndexLifecycleService lifecycle = indexLifecycleService(
+                jobs, mock(KnowledgeDocumentRepository.class), embeddings);
+        PreparedKnowledgeIndex prepared = preparedIndex(documentId, chunkId, "new-model");
+
+        Boolean committed = new TransactionTemplate(new JdbcTransactionManager(dataSource))
+                .execute(status -> lifecycle.completeWithEmbeddings(
+                        jobs.findById(jobId).orElseThrow(), prepared, Instant.now()));
+
+        assertThat(committed).isFalse();
+        assertThat(embeddings.findByChunkId(chunkId).orElseThrow().embeddingModel())
+                .isEqualTo("old-model");
+    }
+
+    @Test
+    void failedLifecycleCommitRollsBackVectorsAndTaskState() {
+        Long documentId = insertIndexLifecycleDocument(
+                "事务回滚文档", "lifecycle-rollback.txt", "1".repeat(64), "PROCESSING", false);
+        Long chunkId = insertChunk(documentId, 0, "必须保留的旧向量");
+        JdbcKnowledgeEmbeddingRepository embeddings = new JdbcKnowledgeEmbeddingRepository(jdbcTemplate);
+        embeddings.saveAll(List.of(new KnowledgeChunkEmbedding(
+                null, chunkId, "old-model", vector(0, 1.0f), null)));
+        Long jobId = jdbcTemplate.queryForObject("""
+                INSERT INTO knowledge_index_jobs (
+                    document_id, status, attempts, next_attempt_at, started_at
+                ) VALUES (?, 'PROCESSING', 1, now(), now())
+                RETURNING id
+                """, Long.class, documentId);
+        JdbcKnowledgeIndexJobRepository jobs = new JdbcKnowledgeIndexJobRepository(jdbcTemplate);
+        KnowledgeDocumentRepository documents = mock(KnowledgeDocumentRepository.class);
+        when(documents.updateIndexStatus(documentId, "INDEXED", null, true)).thenReturn(false);
+        KnowledgeIndexLifecycleService lifecycle = indexLifecycleService(jobs, documents, embeddings);
+        PreparedKnowledgeIndex prepared = preparedIndex(documentId, chunkId, "new-model");
+        TransactionTemplate transaction = new TransactionTemplate(new JdbcTransactionManager(dataSource));
+
+        assertThatThrownBy(() -> transaction.executeWithoutResult(status ->
+                lifecycle.completeWithEmbeddings(
+                        jobs.findById(jobId).orElseThrow(), prepared, Instant.now())))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("documentId=" + documentId);
+
+        assertThat(jobs.findById(jobId).orElseThrow().status())
+                .isEqualTo(KnowledgeIndexJobStatus.PROCESSING);
+        assertThat(embeddings.findByChunkId(chunkId).orElseThrow().embeddingModel())
+                .isEqualTo("old-model");
+    }
+
+    @Test
     void queryAuditPersistsTheHttpRequestAndAuthenticatedActor() {
         BusinessRequestContextHolder.set(new BusinessRequestContext("http-request-001", "operator-1"));
         try {
@@ -961,6 +1340,41 @@ class PostgresPgvectorIntegrationTest {
 
     private static Long insertChunk(Long documentId, int index, String content) {
         return insertChunk(jdbcTemplate, documentId, index, content);
+    }
+
+    private static Long insertIndexLifecycleDocument(String title,
+                                                     String sourceName,
+                                                     String contentHash,
+                                                     String indexStatus,
+                                                     boolean enabled) {
+        return jdbcTemplate.queryForObject("""
+                INSERT INTO knowledge_documents (
+                    title, source_type, source_name, category, content_hash, enabled,
+                    logical_document_id, version_no, current_version, index_status,
+                    content_type, owner_actor_id, visibility_scope
+                ) VALUES (?, 'upload', ?, 'integration-test', ?, ?,
+                          gen_random_uuid(), 1, TRUE, ?,
+                          'text/plain', 'integration-test', 'ALL')
+                RETURNING id
+                """, Long.class, title, sourceName, contentHash, enabled, indexStatus);
+    }
+
+    private static KnowledgeIndexLifecycleService indexLifecycleService(
+            JdbcKnowledgeIndexJobRepository jobs,
+            KnowledgeDocumentRepository documents,
+            JdbcKnowledgeEmbeddingRepository embeddings) {
+        KnowledgeEmbeddingService embeddingService = new KnowledgeEmbeddingService(
+                mock(AiEmbeddingService.class), embeddings,
+                new KnowledgeCopilotProperties(true, 0, 5, 0.70d, "new-model", 1536));
+        return new KnowledgeIndexLifecycleService(jobs, documents, embeddingService);
+    }
+
+    private static PreparedKnowledgeIndex preparedIndex(
+            Long documentId, Long chunkId, String model) {
+        return new PreparedKnowledgeIndex(
+                new EmbeddingIndexResult(documentId, 1, model, 1536),
+                List.of(new KnowledgeChunkEmbedding(
+                        null, chunkId, model, vector(1, 1.0f), null)));
     }
 
     @Test

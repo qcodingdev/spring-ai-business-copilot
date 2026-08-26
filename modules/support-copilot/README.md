@@ -23,6 +23,11 @@ normalized ticket mapping, authorization, internal-note method/path, and idempot
 header. These tests protect the packaged adapter contract but do not replace a real
 provider sandbox acceptance test.
 
+The 2.4 development line surfaces `UNKNOWN` writeback outcomes and stale
+`PROCESSING` attempts as readiness blockers, while open breached-SLA tickets are
+warnings. Remediation stays in the human-review or quality tabs and never bypasses
+the existing evidence and confirmation flow.
+
 API: `GET /api/support-copilot/tickets`, `POST /api/support-copilot/tickets/analyze`, `POST /api/support-copilot/reply-drafts/{id}/review-session|edit|confirm|cancel|mark-customer-replied`, and `POST /api/support-copilot/tickets/{externalReference}/record-manual-reply`.
 
 Test: `./mvnw -pl modules/support-copilot -am test`
@@ -38,3 +43,6 @@ Test: `./mvnw -pl modules/support-copilot -am test`
 从 2.3.1 开始，五类供应商均有确定性 HTTP 契约测试，覆盖只读路径、工单字段归一化、
 认证、内部备注方法/路径和幂等键。该测试固定项目内适配器契约，但不能替代真实供应商
 沙箱验收。
+
+2.4 开发线把 `UNKNOWN` 回写结果和超时的 `PROCESSING` 尝试列为企业就绪阻断项，把仍未
+关闭的 SLA 违约工单列为关注项。整改继续进入人工复核或质量页面，不绕过现有证据与确认流程。

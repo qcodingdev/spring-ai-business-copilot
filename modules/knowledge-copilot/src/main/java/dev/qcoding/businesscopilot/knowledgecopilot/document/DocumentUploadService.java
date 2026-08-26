@@ -118,12 +118,17 @@ public class DocumentUploadService {
         String contentHash = sha256Hex(extracted.text());
         KnowledgeDocument current = documentRepository.findCurrent(logicalDocumentId).orElse(null);
         if (current != null && current.contentHash().equals(contentHash)) {
+            KnowledgeVisibilityScope effectiveVisibility = visibilityScope == null
+                    ? KnowledgeVisibilityScope.ADMIN : visibilityScope;
+            if (!documentRepository.updateManagedVisibility(current.id(), effectiveVisibility)) {
+                throw new BusinessException(ErrorCode.STATE_CONFLICT,
+                        "托管资料可见范围更新失败，请重新同步来源");
+            }
             int chunks = chunkRepository.findByDocumentId(current.id()).size();
             KnowledgeIndexJob retryJob = null;
-            if (!"INDEXED".equals(current.indexStatus())
-                    && !"PROCESSING".equals(current.indexStatus())
-                    && indexJobRepository.findActiveByDocumentId(current.id()).isEmpty()) {
-                retryJob = indexingService.enqueue(current.id());
+            if (!"INDEXED".equals(current.indexStatus())) {
+                retryJob = indexingService.ensureQueued(
+                        current.id(), properties.indexStaleAfter());
             }
             return new DocumentUploadResponse(
                     current.id(), current.logicalDocumentId(), current.versionNo(), current.title(),

@@ -13,6 +13,7 @@ export default {
   answerBoundary: '回答只使用当前账号可见且已索引的知识；证据不足时会明确拒答。',
   riskBoundary: '回答必须绑定引用原文；证据不足、过期或冲突时不得编造结论。',
   next: '核对引用；有问题时提交反馈进入质量复核。',
+  sourceIssues: '来源生命周期问题', sourceIssuesDescription: '展示冲突、失败、源端删除、过期或索引失败/超时的来源项；经人工确认后执行全量恢复同步。', noSourceIssues: '当前没有需要处理的来源问题。', retrySourceSync: '确认全量恢复此来源', lastSyncedAt: '最后同步', expiresAt: '资料有效期',
   feedbackTitle: '这条回答是否有帮助？', helpful: '有帮助', notHelpful: '没有帮助', feedbackReason: '问题原因', feedbackComment: '补充说明（可选）', submitFeedback: '提交反馈', feedbackSaved: '反馈已记录，已进入质量闭环。', qualityDescription: '逐项核对回答、证据、用户反馈和后续动作，并持久化可审计的人工结论。', reviewIssue: '开始人工复核', reviewDecision: '处置结论', reviewNote: '复核说明', reviewSaved: '质量问题已完成处置。', qualityNoComment: '该问答没有足够依据，需要人工核查。',
   retrievedEvidence: '检索证据', citedEvidence: '实际引用', issueVersion: '问题版本', reviewContext: '质量问题',
   answerUnderReview: '待复核回答', noAnswerPreview: '该历史记录没有可展示的回答预览，请依据拒答原因和证据轨迹复核。',

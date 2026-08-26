@@ -42,13 +42,21 @@ public class JdbcKnowledgeIndexJobRepository implements KnowledgeIndexJobReposit
     @Override
     public KnowledgeIndexJob enqueue(Long documentId) {
         Instant now = Instant.now();
-        Long id = jdbcTemplate.queryForObject("""
+        List<Long> insertedIds = jdbcTemplate.queryForList("""
                 INSERT INTO knowledge_index_jobs (
                     document_id, status, attempts, next_attempt_at, created_at, updated_at
                 ) VALUES (?, 'PENDING', 0, ?, ?, ?)
+                ON CONFLICT (document_id)
+                    WHERE status IN ('PENDING', 'PROCESSING', 'RETRYABLE')
+                    DO NOTHING
                 RETURNING id
                 """, Long.class, documentId, timestamp(now), timestamp(now), timestamp(now));
-        return findById(id).orElseThrow();
+        if (!insertedIds.isEmpty()) {
+            return findById(insertedIds.getFirst()).orElseThrow();
+        }
+        return findActiveByDocumentId(documentId)
+                .orElseThrow(() -> new IllegalStateException(
+                        "并发创建知识索引任务后未找到活动任务：documentId=" + documentId));
     }
 
     @Override
@@ -112,32 +120,49 @@ public class JdbcKnowledgeIndexJobRepository implements KnowledgeIndexJobReposit
     }
 
     @Override
-    public void complete(Long id, String model, int dimension, int chunkCount, Instant now) {
-        jdbcTemplate.update("""
+    public boolean lockProcessing(Long id) {
+        return !jdbcTemplate.queryForList(
+                "SELECT id FROM knowledge_index_jobs WHERE id = ? AND status = 'PROCESSING' FOR UPDATE",
+                Long.class, id).isEmpty();
+    }
+
+    @Override
+    public boolean complete(Long id, String model, int dimension, int chunkCount, Instant now) {
+        return jdbcTemplate.update("""
                 UPDATE knowledge_index_jobs
                 SET status = 'COMPLETED', embedding_model = ?, embedding_dim = ?,
                     chunk_count = ?, error_category = NULL, finished_at = ?, updated_at = ?
                 WHERE id = ? AND status = 'PROCESSING'
-                """, model, dimension, chunkCount, timestamp(now), timestamp(now), id);
+                """, model, dimension, chunkCount, timestamp(now), timestamp(now), id) == 1;
     }
 
     @Override
-    public void retry(Long id, String errorCategory, Instant nextAttemptAt, Instant now) {
-        jdbcTemplate.update("""
+    public boolean retry(Long id, String errorCategory, Instant nextAttemptAt, Instant now) {
+        return jdbcTemplate.update("""
                 UPDATE knowledge_index_jobs
                 SET status = 'RETRYABLE', error_category = ?, next_attempt_at = ?,
                     finished_at = ?, updated_at = ?
                 WHERE id = ? AND status = 'PROCESSING'
-                """, errorCategory, timestamp(nextAttemptAt), timestamp(now), timestamp(now), id);
+                """, errorCategory, timestamp(nextAttemptAt), timestamp(now), timestamp(now), id) == 1;
     }
 
     @Override
-    public void fail(Long id, String errorCategory, Instant now) {
-        jdbcTemplate.update("""
+    public boolean fail(Long id, String errorCategory, Instant now) {
+        return jdbcTemplate.update("""
                 UPDATE knowledge_index_jobs
                 SET status = 'FAILED', error_category = ?, finished_at = ?, updated_at = ?
                 WHERE id = ? AND status = 'PROCESSING'
-                """, errorCategory, timestamp(now), timestamp(now), id);
+                """, errorCategory, timestamp(now), timestamp(now), id) == 1;
+    }
+
+    @Override
+    public boolean cancelStaleProcessing(Long id, Instant staleBefore, Instant now) {
+        return jdbcTemplate.update("""
+                UPDATE knowledge_index_jobs
+                SET status = 'CANCELED', error_category = 'STALE_PROCESSING_RECOVERED',
+                    finished_at = ?, updated_at = ?
+                WHERE id = ? AND status = 'PROCESSING' AND updated_at <= ?
+                """, timestamp(now), timestamp(now), id, timestamp(staleBefore)) == 1;
     }
 
     private static Timestamp timestamp(Instant instant) {

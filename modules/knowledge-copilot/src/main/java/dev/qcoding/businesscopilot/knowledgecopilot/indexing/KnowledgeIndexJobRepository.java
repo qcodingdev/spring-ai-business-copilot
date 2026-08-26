@@ -14,9 +14,14 @@ public interface KnowledgeIndexJobRepository {
 
     Optional<KnowledgeIndexJob> claimNext(Instant now);
 
-    void complete(Long id, String model, int dimension, int chunkCount, Instant now);
+    /** 锁定且仅锁定仍由当前 worker 持有的 PROCESSING 任务。 */
+    boolean lockProcessing(Long id);
 
-    void retry(Long id, String errorCategory, Instant nextAttemptAt, Instant now);
+    boolean complete(Long id, String model, int dimension, int chunkCount, Instant now);
 
-    void fail(Long id, String errorCategory, Instant now);
+    boolean retry(Long id, String errorCategory, Instant nextAttemptAt, Instant now);
+
+    boolean fail(Long id, String errorCategory, Instant now);
+
+    boolean cancelStaleProcessing(Long id, Instant staleBefore, Instant now);
 }

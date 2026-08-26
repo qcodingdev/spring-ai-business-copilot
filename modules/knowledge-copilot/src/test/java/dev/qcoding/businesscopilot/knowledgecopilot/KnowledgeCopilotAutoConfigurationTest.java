@@ -11,6 +11,7 @@ import dev.qcoding.businesscopilot.documentprocessing.DocumentTextExtractor;
 import dev.qcoding.businesscopilot.knowledgecopilot.answer.KnowledgeQuestionService;
 import dev.qcoding.businesscopilot.knowledgecopilot.chunking.ChunkingProperties;
 import dev.qcoding.businesscopilot.knowledgecopilot.document.KnowledgeDocumentRepository;
+import dev.qcoding.businesscopilot.knowledgecopilot.indexing.KnowledgeIndexLifecycleService;
 import dev.qcoding.businesscopilot.knowledgecopilot.web.KnowledgeCopilotController;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -59,6 +60,7 @@ class KnowledgeCopilotAutoConfigurationTest {
         assertThat(props.minSimilarity()).isCloseTo(0.70d, org.assertj.core.data.Offset.offset(0.001));
         assertThat(props.embeddingModelName()).isEqualTo("text-embedding-3-small");
         assertThat(props.embeddingDimension()).isEqualTo(1536);
+        assertThat(props.indexStaleAfter()).isEqualTo(java.time.Duration.ofMinutes(15));
     }
 
     @Test
@@ -96,6 +98,7 @@ class KnowledgeCopilotAutoConfigurationTest {
                 .run(context -> {
                     assertThat(context).hasSingleBean(KnowledgeQuestionService.class);
                     assertThat(context).hasSingleBean(KnowledgeDocumentRepository.class);
+                    assertThat(context).hasSingleBean(KnowledgeIndexLifecycleService.class);
                     assertThat(context).hasSingleBean(KnowledgeCopilotController.class);
                 });
     }

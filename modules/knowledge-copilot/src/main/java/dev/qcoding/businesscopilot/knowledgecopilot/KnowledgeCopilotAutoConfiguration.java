@@ -27,6 +27,7 @@ import dev.qcoding.businesscopilot.knowledgecopilot.embedding.KnowledgeEmbedding
 import dev.qcoding.businesscopilot.knowledgecopilot.retrieval.KnowledgeRetrievalService;
 import dev.qcoding.businesscopilot.knowledgecopilot.indexing.JdbcKnowledgeIndexJobRepository;
 import dev.qcoding.businesscopilot.knowledgecopilot.indexing.KnowledgeIndexJobRepository;
+import dev.qcoding.businesscopilot.knowledgecopilot.indexing.KnowledgeIndexLifecycleService;
 import dev.qcoding.businesscopilot.knowledgecopilot.indexing.KnowledgeIndexingService;
 import dev.qcoding.businesscopilot.knowledgecopilot.feedback.JdbcKnowledgeFeedbackRepository;
 import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeFeedbackRepository;
@@ -113,13 +114,23 @@ public class KnowledgeCopilotAutoConfiguration {
     }
 
     @Bean
+    public KnowledgeIndexLifecycleService knowledgeIndexLifecycleService(
+            KnowledgeIndexJobRepository jobRepository,
+            KnowledgeDocumentRepository documentRepository,
+            KnowledgeEmbeddingService embeddingService) {
+        return new KnowledgeIndexLifecycleService(
+                jobRepository, documentRepository, embeddingService);
+    }
+
+    @Bean
     public KnowledgeIndexingService knowledgeIndexingService(
             KnowledgeIndexJobRepository jobRepository,
             KnowledgeDocumentRepository documentRepository,
             KnowledgeChunkRepository chunkRepository,
-            KnowledgeEmbeddingService embeddingService) {
+            KnowledgeEmbeddingService embeddingService,
+            KnowledgeIndexLifecycleService lifecycleService) {
         return new KnowledgeIndexingService(
-                jobRepository, documentRepository, chunkRepository, embeddingService);
+                jobRepository, documentRepository, chunkRepository, embeddingService, lifecycleService);
     }
 
     @Bean
@@ -230,10 +241,11 @@ public class KnowledgeCopilotAutoConfiguration {
             CurrentActorProvider actorProvider,
             ExternalSecretResolver secretResolver,
             ObjectMapper objectMapper,
-            ExternalEndpointPolicy endpointPolicy) {
+            ExternalEndpointPolicy endpointPolicy,
+            KnowledgeCopilotProperties properties) {
         return new KnowledgeSourceSyncService(
                 jdbcTemplate, adapters, uploadService, actorProvider, secretResolver,
-                objectMapper, endpointPolicy);
+                objectMapper, endpointPolicy, properties.indexStaleAfter());
     }
 
     @Bean

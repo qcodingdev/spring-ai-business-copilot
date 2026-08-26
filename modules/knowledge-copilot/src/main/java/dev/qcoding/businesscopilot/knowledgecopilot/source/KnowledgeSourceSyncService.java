@@ -7,6 +7,7 @@ import dev.qcoding.businesscopilot.commonweb.api.BusinessException;
 import dev.qcoding.businesscopilot.commonweb.api.ErrorCode;
 import dev.qcoding.businesscopilot.knowledgecopilot.document.DocumentUploadService;
 import dev.qcoding.businesscopilot.knowledgecopilot.document.KnowledgeVisibilityScope;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
@@ -16,6 +17,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -29,6 +31,8 @@ import java.util.UUID;
 /** 企业知识来源的幂等同步编排，源端删除只停用本地资料，不静默保留检索。 */
 public class KnowledgeSourceSyncService {
 
+    private static final Duration SOURCE_DOCUMENT_TTL = Duration.ofDays(30);
+
     private final JdbcTemplate jdbcTemplate;
     private final List<KnowledgeSourceAdapter> adapters;
     private final DocumentUploadService uploadService;
@@ -36,6 +40,7 @@ public class KnowledgeSourceSyncService {
     private final ExternalSecretResolver secretResolver;
     private final ObjectMapper objectMapper;
     private final ExternalEndpointPolicy endpointPolicy;
+    private final Duration indexStaleAfter;
 
     public KnowledgeSourceSyncService(
             JdbcTemplate jdbcTemplate,
@@ -45,6 +50,19 @@ public class KnowledgeSourceSyncService {
             ExternalSecretResolver secretResolver,
             ObjectMapper objectMapper,
             ExternalEndpointPolicy endpointPolicy) {
+        this(jdbcTemplate, adapters, uploadService, actorProvider, secretResolver,
+                objectMapper, endpointPolicy, Duration.ofMinutes(15));
+    }
+
+    public KnowledgeSourceSyncService(
+            JdbcTemplate jdbcTemplate,
+            List<KnowledgeSourceAdapter> adapters,
+            DocumentUploadService uploadService,
+            CurrentActorProvider actorProvider,
+            ExternalSecretResolver secretResolver,
+            ObjectMapper objectMapper,
+            ExternalEndpointPolicy endpointPolicy,
+            Duration indexStaleAfter) {
         this.jdbcTemplate = jdbcTemplate;
         this.adapters = List.copyOf(adapters);
         this.uploadService = uploadService;
@@ -52,6 +70,8 @@ public class KnowledgeSourceSyncService {
         this.secretResolver = secretResolver;
         this.objectMapper = objectMapper;
         this.endpointPolicy = endpointPolicy;
+        this.indexStaleAfter = indexStaleAfter == null || indexStaleAfter.isZero()
+                || indexStaleAfter.isNegative() ? Duration.ofMinutes(15) : indexStaleAfter;
     }
 
     public KnowledgeSourceConnection save(ConnectionCommand command) {
@@ -101,6 +121,11 @@ public class KnowledgeSourceSyncService {
     }
 
     public SyncResult synchronize(long connectionId) {
+        return synchronize(connectionId, false);
+    }
+
+    /** A confirmed full resync starts without the stored cursor and can repair unchanged stale items. */
+    public SyncResult synchronize(long connectionId, boolean fullResync) {
         KnowledgeSourceConnection connection = requireConnection(connectionId);
         if (!connection.enabled()) {
             throw new BusinessException(ErrorCode.STATE_CONFLICT, "知识来源尚未启用");
@@ -111,13 +136,25 @@ public class KnowledgeSourceSyncService {
                 .orElseThrow(() -> new BusinessException(
                         ErrorCode.STATE_CONFLICT, "当前来源适配器尚未装配"));
         String actorId = actorProvider.currentActor().actorId();
-        String cursor = latestCursor(connectionId);
-        Long runId = jdbcTemplate.queryForObject("""
-                INSERT INTO knowledge_sync_runs (
-                    connection_id, status, cursor_before, requested_by
-                ) VALUES (?, 'RUNNING', ?, ?)
-                RETURNING id
-                """, Long.class, connectionId, cursor, actorId);
+        if (fullResync) {
+            cancelStaleActiveRun(connectionId);
+        }
+        String cursor = fullResync ? null : latestCursor(connectionId);
+        Long runId;
+        try {
+            runId = jdbcTemplate.queryForObject("""
+                    INSERT INTO knowledge_sync_runs (
+                        connection_id, status, cursor_before, requested_by
+                    ) VALUES (?, 'RUNNING', ?, ?)
+                    RETURNING id
+                    """, Long.class, connectionId, cursor, actorId);
+        } catch (DuplicateKeyException ex) {
+            throw new BusinessException(ErrorCode.STATE_CONFLICT,
+                    "该知识来源已有同步任务正在运行");
+        }
+        if (runId == null) {
+            throw new IllegalStateException("知识来源同步任务创建失败");
+        }
         int fetched = 0;
         int created = 0;
         int updated = 0;
@@ -181,11 +218,27 @@ public class KnowledgeSourceSyncService {
         }
     }
 
+    private void cancelStaleActiveRun(long connectionId) {
+        jdbcTemplate.update("""
+                UPDATE knowledge_sync_runs
+                SET status = 'CANCELED', finished_at = now(),
+                    error_category = 'STALE_SYNC_RECOVERED'
+                WHERE connection_id = ?
+                  AND status IN ('PENDING', 'RUNNING')
+                  AND started_at <= ?
+                """, connectionId,
+                Timestamp.from(Instant.now().minus(indexStaleAfter)));
+    }
+
     public List<SourceIssue> issues() {
+        Timestamp staleBefore = Timestamp.from(Instant.now().minus(indexStaleAfter));
         return jdbcTemplate.query("""
-                SELECT item.id, connection.display_name, item.source_item_id,
+                SELECT item.id, connection.id AS connection_id, connection.display_name,
+                       item.source_item_id,
                        item.sync_status, item.source_updated_at, item.last_synced_at,
-                       document.expires_at, document.conflict_status
+                       document.id AS document_id, document.index_status,
+                       document.expires_at, document.conflict_status,
+                       document.updated_at AS document_updated_at
                 FROM knowledge_source_items item
                 JOIN knowledge_source_connections connection ON connection.id = item.connection_id
                 LEFT JOIN knowledge_documents document
@@ -194,15 +247,20 @@ public class KnowledgeSourceSyncService {
                 WHERE item.sync_status IN ('CONFLICT', 'FAILED', 'DELETED')
                    OR document.conflict_status <> 'NONE'
                    OR document.expires_at <= now()
+                   OR document.index_status = 'FAILED'
+                   OR (document.index_status IN ('PENDING', 'PROCESSING', 'RETRYABLE')
+                       AND document.updated_at <= ?)
                 ORDER BY item.updated_at DESC
                 LIMIT 200
                 """, (rs, rowNum) -> new SourceIssue(
-                rs.getLong("id"), rs.getString("display_name"),
+                rs.getLong("id"), rs.getLong("connection_id"), rs.getString("display_name"),
                 rs.getString("source_item_id"), rs.getString("sync_status"),
+                rs.getObject("document_id", Long.class), rs.getString("index_status"),
                 rs.getString("conflict_status"),
                 toInstant(rs.getTimestamp("source_updated_at")),
                 toInstant(rs.getTimestamp("last_synced_at")),
-                toInstant(rs.getTimestamp("expires_at"))));
+                toInstant(rs.getTimestamp("expires_at")),
+                toInstant(rs.getTimestamp("document_updated_at"))), staleBefore);
     }
 
     private Change apply(KnowledgeSourceConnection connection, KnowledgeSourceAdapter.SourceItem item) {
@@ -215,12 +273,9 @@ public class KnowledgeSourceSyncService {
             return new Change(false, false, true, false);
         }
         String contentHash = sha256(item.content());
-        if (existing.isPresent() && contentHash.equals(existing.get().contentHash())
+        boolean unchanged = existing.isPresent() && contentHash.equals(existing.get().contentHash())
                 && equal(item.etag(), existing.get().etag())
-                && equal(item.version(), existing.get().version())) {
-            touch(existing.get().id());
-            return Change.NONE;
-        }
+                && equal(item.version(), existing.get().version());
         UUID logicalDocumentId = existing.map(ExistingItem::logicalDocumentId)
                 .orElseGet(() -> UUID.nameUUIDFromBytes(
                         (connection.connectionKey() + ":" + item.sourceItemId())
@@ -232,16 +287,23 @@ public class KnowledgeSourceSyncService {
                 connection.provider().name().toLowerCase(java.util.Locale.ROOT),
                 "source:" + connection.connectionKey());
         upsertSourceItem(connection, item, logicalDocumentId, contentHash,
-                existing.isPresent() ? "UPDATED" : "CURRENT");
+                unchanged || existing.isEmpty() ? "CURRENT" : "UPDATED");
         jdbcTemplate.update("""
                 UPDATE knowledge_documents
                 SET source_item_ref = ?, source_updated_at = ?, expires_at = ?,
-                    conflict_status = 'NONE', updated_at = now()
+                    visibility_scope = ?,
+                    conflict_status = 'NONE',
+                    enabled = CASE WHEN index_status = 'INDEXED' THEN TRUE ELSE enabled END,
+                    updated_at = now()
                 WHERE logical_document_id = ? AND current_version = TRUE
                 """, connection.connectionKey() + ":" + item.sourceItemId(),
                 timestamp(item.sourceUpdatedAt()),
-                Timestamp.from(Instant.now().plus(java.time.Duration.ofDays(30))),
+                Timestamp.from(Instant.now().plus(SOURCE_DOCUMENT_TTL)),
+                visibility.name(),
                 logicalDocumentId);
+        if (unchanged) {
+            return Change.NONE;
+        }
         return new Change(existing.isEmpty(), existing.isPresent(), false, false);
     }
 
@@ -306,14 +368,6 @@ public class KnowledgeSourceSyncService {
                     WHERE logical_document_id = ? AND current_version = TRUE
                     """, logicalDocumentId);
         }
-    }
-
-    private void touch(long id) {
-        jdbcTemplate.update("""
-                UPDATE knowledge_source_items
-                SET sync_status = 'CURRENT', last_synced_at = now(), updated_at = now()
-                WHERE id = ?
-                """, id);
     }
 
     private Optional<ExistingItem> existing(long connectionId, String sourceItemId) {
@@ -440,7 +494,9 @@ public class KnowledgeSourceSyncService {
             boolean enabled) { }
     public record SyncResult(Long runId, String status, int fetched, int created,
                              int updated, int deleted, int conflicts) { }
-    public record SourceIssue(long itemId, String connectionName, String sourceItemId,
-                              String syncStatus, String conflictStatus, Instant sourceUpdatedAt,
-                              Instant lastSyncedAt, Instant expiresAt) { }
+    public record SourceIssue(long itemId, long connectionId, String connectionName, String sourceItemId,
+                              String syncStatus, Long documentId, String indexStatus,
+                              String conflictStatus, Instant sourceUpdatedAt,
+                              Instant lastSyncedAt, Instant expiresAt,
+                              Instant documentUpdatedAt) { }
 }

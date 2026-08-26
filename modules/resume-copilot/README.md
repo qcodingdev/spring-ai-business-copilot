@@ -19,6 +19,11 @@ The 2.3 bilingual HR workbench separates recruiting collaboration from employee
 services and exposes criteria, evidence assessment, interviews, authorization/ATS,
 employee Q&A, and onboarding without adding any automated hiring decision.
 
+The 2.4 development line warns when evidence assessments or required onboarding
+tasks remain open beyond the configurable human-review window. Remediation routes
+to recruiting assessment or employee onboarding, preserving the existing consent,
+reviewer, and no-automated-decision boundaries.
+
 Persistence: explicit Spring JDBC repositories for job, assessment, evidence batches, and audit metadata.
 
 API: `POST /api/resume-copilot/jobs/draft`, `POST /jobs/criteria|jobs/criteria/file`, `PUT /jobs/{id}/criteria`, `POST /jobs/{id}/criteria/confirm`, `POST /assessments|assessments/file`, `GET /assessments/review-queue`, `POST /assessments/{id}/review-session`, `GET/POST /assessments/{id}/review`, `POST /assessments/{id}/cancel`, `DELETE /submissions/{id}`.
@@ -31,3 +36,6 @@ HR Copilot 中的招聘辅助能力：先从岗位需求生成岗位画像和 JD
 
 2.3 双语 HR 工作台区分招聘协同与员工服务，覆盖岗位标准、证据化评估、面试、
 授权/ATS、员工问答和入职清单，仍不增加任何自动招聘决策。
+
+2.4 开发线对超过可配置人工复核窗口的证据评估和入职必办任务给出企业就绪关注项，整改分别
+回到招聘评估或员工入职页面，继续保持授权、复核员和禁止自动招聘决策边界。

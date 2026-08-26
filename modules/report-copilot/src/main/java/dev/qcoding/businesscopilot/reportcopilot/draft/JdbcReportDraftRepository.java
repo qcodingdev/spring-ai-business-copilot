@@ -33,15 +33,29 @@ public class JdbcReportDraftRepository implements ReportDraftRepository {
     private final CurrentActorProvider actorProvider;
     private final ConfirmationTokenService tokenService;
     private final ObjectMapper objectMapper;
+    private final Duration reviewSla;
 
     public JdbcReportDraftRepository(JdbcTemplate jdbcTemplate,
                                      CurrentActorProvider actorProvider,
                                      ConfirmationTokenService tokenService,
                                      ObjectMapper objectMapper) {
+        this(jdbcTemplate, actorProvider, tokenService, objectMapper, Duration.ofHours(24));
+    }
+
+    public JdbcReportDraftRepository(JdbcTemplate jdbcTemplate,
+                                     CurrentActorProvider actorProvider,
+                                     ConfirmationTokenService tokenService,
+                                     ObjectMapper objectMapper,
+                                     Duration reviewSla) {
         this.jdbcTemplate = jdbcTemplate;
         this.actorProvider = actorProvider;
         this.tokenService = tokenService;
         this.objectMapper = objectMapper;
+        this.reviewSla = positiveOrDefault(reviewSla, Duration.ofHours(24));
+    }
+
+    private static Duration positiveOrDefault(Duration value, Duration fallback) {
+        return value == null || value.isZero() || value.isNegative() ? fallback : value;
     }
 
     @Override
@@ -76,8 +90,8 @@ public class JdbcReportDraftRepository implements ReportDraftRepository {
         KeyHolder keyHolder = new GeneratedKeyHolder();
         jdbcTemplate.update(connection -> {
             PreparedStatement statement = connection.prepareStatement(
-                    "INSERT INTO report_drafts (request_id, structured_content, cited_source_ids, status, review_reasons, confirmation_token_digest, owner_actor_id, expires_at, created_at, updated_at) "
-                            + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", new String[]{"id"});
+                    "INSERT INTO report_drafts (request_id, structured_content, cited_source_ids, status, review_reasons, confirmation_token_digest, owner_actor_id, expires_at, review_due_at, created_at, updated_at) "
+                            + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", new String[]{"id"});
             statement.setLong(1, requestId);
             statement.setString(2, contentJson);
             statement.setString(3, citedSourceIds);
@@ -86,8 +100,9 @@ public class JdbcReportDraftRepository implements ReportDraftRepository {
             statement.setString(6, token.digest());
             statement.setString(7, ownerActorId);
             statement.setTimestamp(8, Timestamp.from(expiresAt));
-            statement.setTimestamp(9, Timestamp.from(now));
+            statement.setTimestamp(9, Timestamp.from(now.plus(reviewSla)));
             statement.setTimestamp(10, Timestamp.from(now));
+            statement.setTimestamp(11, Timestamp.from(now));
             return statement;
         }, keyHolder);
         return new ReportDraft(keyHolder.getKey().longValue(), requestId, content, status,

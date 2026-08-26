@@ -20,6 +20,7 @@ import org.mockito.ArgumentCaptor;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
@@ -29,6 +30,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -111,19 +113,22 @@ class DocumentUploadServiceTest {
         when(extractor.extract(any(), any(), any()))
                 .thenReturn(new ExtractedDocument(DocumentFormat.MARKDOWN, content, content.length()));
         when(documentRepository.findCurrent(logicalId)).thenReturn(Optional.of(current));
+        when(documentRepository.updateManagedVisibility(1L, KnowledgeVisibilityScope.ADMIN))
+                .thenReturn(true);
         when(chunkRepository.findByDocumentId(1L)).thenReturn(List.of(
                 new KnowledgeChunk(11L, 1L, "Guide", 0, "Body", "Body", 1, null)));
-        when(indexJobRepository.findActiveByDocumentId(1L))
-                .thenReturn(Optional.of(job(10L, 1L)));
+        when(indexingService.ensureQueued(eq(1L), any(Duration.class)))
+                .thenReturn(job(10L, 1L));
 
         DocumentUploadResponse response = service.ingestSystemDocument(
                 "guide.md", "text/markdown", content.getBytes(StandardCharsets.UTF_8),
-                "HR_POLICY", logicalId, KnowledgeVisibilityScope.ALL);
+                "HR_POLICY", logicalId, KnowledgeVisibilityScope.ADMIN);
 
-        assertThat(response.indexJobId()).isNull();
+        assertThat(response.indexJobId()).isEqualTo(10L);
         assertThat(response.indexStatus()).isEqualTo("PENDING");
         verify(indexingService, never()).enqueue(1L);
         verify(documentRepository, never()).save(any());
+        verify(documentRepository).updateManagedVisibility(1L, KnowledgeVisibilityScope.ADMIN);
     }
 
     @Test

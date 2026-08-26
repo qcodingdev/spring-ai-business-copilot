@@ -43,8 +43,9 @@ public class ResumeCopilotAutoConfiguration {
     }
 
     @Bean @ConditionalOnMissingBean
-    public ResumeRepository resumeRepository(JdbcTemplate jdbcTemplate) {
-        return new ResumeRepository(jdbcTemplate);
+    public ResumeRepository resumeRepository(
+            JdbcTemplate jdbcTemplate, ResumeCopilotProperties properties) {
+        return new ResumeRepository(jdbcTemplate, properties.reviewSla());
     }
 
     @Bean @ConditionalOnMissingBean

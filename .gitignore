@@ -19,9 +19,8 @@ AGENTS.md
 .codex/
 .change-evidence.yml
 
-# 正式规划、模块说明、审计和运维文档属于交付物。
-/docs/*
-!/docs/**
+# 本地规划、审核和验证文档不进入公开仓库。
+/docs/
 
 # Unpublished screenshot sources; README uses the generated GIF only
 img.png

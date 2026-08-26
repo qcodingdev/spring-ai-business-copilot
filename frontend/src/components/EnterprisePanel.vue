@@ -5,15 +5,31 @@ import { api, ApiError, jsonBody } from '@/api/client'
 import { useSession } from '@/composables/useSession'
 import RequestId from './RequestId.vue'
 import ConfirmDialog from './ConfirmDialog.vue'
+import StatusBadge from './StatusBadge.vue'
 import { safeJson } from '@/utils/safeDisplay'
 import ToastMessage from './ToastMessage.vue'
 
 type ModuleKey = 'data' | 'knowledge' | 'support' | 'report' | 'hr'
+interface KnowledgeSourceIssue {
+  itemId: number
+  connectionId: number
+  connectionName: string
+  sourceItemId: string
+  syncStatus: string
+  documentId: number | null
+  indexStatus: string | null
+  conflictStatus: string | null
+  sourceUpdatedAt: string | null
+  lastSyncedAt: string | null
+  expiresAt: string | null
+  documentUpdatedAt: string | null
+}
 const props = defineProps<{ module: ModuleKey; tab: string }>()
-const { t, te } = useI18n()
+const { t, te, locale } = useI18n()
 const { isAdmin } = useSession()
 const loading = ref(false)
 const data = ref<unknown>(null)
+const knowledgeSourceIssues = ref<KnowledgeSourceIssue[]>([])
 const errorCode = ref('')
 const requestId = ref<string | null>(null)
 const connectionKey = ref('')
@@ -27,6 +43,7 @@ const enabled = ref(true)
 const resourceId = ref('')
 const actionValue = ref('')
 const actionConfirmOpen = ref(false)
+const fullSourceSync = ref(false)
 const toast = ref('')
 const toastTone = ref<'success' | 'danger'>('success')
 let toastTimer: ReturnType<typeof setTimeout> | undefined
@@ -76,6 +93,7 @@ const connectionTab = computed(() =>
   || (props.module === 'support' && props.tab === 'connections')
   || (props.module === 'report' && props.tab === 'sources')
   || (props.module === 'hr' && props.tab === 'authorization'))
+const knowledgeSourceTab = computed(() => props.module === 'knowledge' && props.tab === 'sources')
 
 const providerOptions = computed(() => ({
   knowledge: ['SHAREPOINT', 'CONFLUENCE', 'NOTION', 'S3', 'MINIO'],
@@ -87,6 +105,7 @@ const providerOptions = computed(() => ({
 
 watch([() => props.module, () => props.tab], () => {
   data.value = null
+  knowledgeSourceIssues.value = []
   errorCode.value = ''
   provider.value = providerOptions.value[0] ?? ''
   void load()
@@ -100,6 +119,11 @@ async function load(): Promise<void> {
     const response = await api<unknown>(readEndpoint.value)
     data.value = response.data
     requestId.value = response.requestId
+    if (knowledgeSourceTab.value) {
+      const issueResponse = await api<KnowledgeSourceIssue[]>('/api/knowledge-copilot/sources/issues')
+      knowledgeSourceIssues.value = issueResponse.data ?? []
+      requestId.value = issueResponse.requestId ?? requestId.value
+    }
   } catch (error) {
     errorCode.value = error instanceof ApiError ? error.errorCode : 'generic'
     requestId.value = error instanceof ApiError ? error.requestId : null
@@ -187,7 +211,7 @@ const controlledAction = computed(() => {
       label: 'common.syncNow',
       needsId: true,
       request: (id) => ({
-        path: `/api/knowledge-copilot/sources/${encodeURIComponent(id)}/sync`,
+        path: `/api/knowledge-copilot/sources/${encodeURIComponent(id)}/sync${fullSourceSync.value ? '?full=true' : ''}`,
         method: 'POST',
       }),
     },
@@ -252,14 +276,43 @@ async function runControlledAction(): Promise<void> {
     requestId.value = response.requestId
     actionConfirmOpen.value = false
     showToast(t('common.operationSucceeded'))
+    if (knowledgeSourceTab.value) await load()
   } catch (error) {
     errorCode.value = error instanceof ApiError ? error.errorCode : 'generic'
     requestId.value = error instanceof ApiError ? error.requestId : null
     actionConfirmOpen.value = false
     showToast(localizedError.value, 'danger')
   } finally {
+    fullSourceSync.value = false
     loading.value = false
   }
+}
+
+function requestControlledAction(): void {
+  fullSourceSync.value = false
+  actionConfirmOpen.value = true
+}
+
+function retryKnowledgeSource(issue: KnowledgeSourceIssue): void {
+  resourceId.value = String(issue.connectionId)
+  fullSourceSync.value = true
+  actionConfirmOpen.value = true
+}
+
+function knowledgeIssueStatus(issue: KnowledgeSourceIssue): string {
+  if (issue.conflictStatus && issue.conflictStatus !== 'NONE') return issue.conflictStatus
+  if (!['CURRENT', 'UPDATED'].includes(issue.syncStatus)) return issue.syncStatus
+  if (issue.indexStatus && issue.indexStatus !== 'INDEXED') return issue.indexStatus
+  return issue.syncStatus
+}
+
+function cancelControlledAction(): void {
+  fullSourceSync.value = false
+  actionConfirmOpen.value = false
+}
+
+function displayDate(value: string | null): string {
+  return value ? new Date(value).toLocaleString(locale.value) : '—'
 }
 
 onUnmounted(() => { if (toastTimer) clearTimeout(toastTimer) })
@@ -300,7 +353,7 @@ onUnmounted(() => { if (toastTimer) clearTimeout(toastTimer) })
       <button class="button button--primary" type="submit" :disabled="loading">{{ t('common.save') }}</button>
     </form>
 
-    <form v-if="controlledAction && isAdmin" class="connection-form" @submit.prevent="actionConfirmOpen = true">
+    <form v-if="controlledAction && isAdmin" class="connection-form" @submit.prevent="requestControlledAction">
       <h3>{{ t('common.controlledAction') }}</h3>
       <div class="form-grid">
         <label v-if="controlledAction.needsId">
@@ -317,6 +370,22 @@ onUnmounted(() => { if (toastTimer) clearTimeout(toastTimer) })
       </button>
       <p class="field-hint">{{ t('common.reviewBeforeConfirm') }}</p>
     </form>
+
+    <section v-if="knowledgeSourceTab" class="workflow-card">
+      <div class="section-heading">
+        <div><h3>{{ t('knowledge.sourceIssues') }}</h3><p>{{ t('knowledge.sourceIssuesDescription') }}</p></div>
+        <StatusBadge :label="String(knowledgeSourceIssues.length)" :tone="knowledgeSourceIssues.length ? 'warning' : 'success'" />
+      </div>
+      <div v-if="knowledgeSourceIssues.length" class="record-grid">
+        <article v-for="issue in knowledgeSourceIssues" :key="issue.itemId">
+          <div class="section-heading"><h4>{{ issue.connectionName }}</h4><StatusBadge :label="knowledgeIssueStatus(issue)" tone="warning" /></div>
+          <p>{{ issue.sourceItemId }}</p>
+          <small>{{ t('knowledge.lastSyncedAt') }}: {{ displayDate(issue.lastSyncedAt) }} · {{ t('knowledge.expiresAt') }}: {{ displayDate(issue.expiresAt) }}</small>
+          <button class="button button--secondary" type="button" :disabled="loading" @click="retryKnowledgeSource(issue)">{{ t('knowledge.retrySourceSync') }}</button>
+        </article>
+      </div>
+      <p v-else class="empty-state">{{ t('knowledge.noSourceIssues') }}</p>
+    </section>
 
     <section v-if="downloadFormats.length" class="download-actions">
       <h3>{{ t('common.download') }}</h3>
@@ -349,7 +418,7 @@ onUnmounted(() => { if (toastTimer) clearTimeout(toastTimer) })
       :risk="t('common.reviewBeforeConfirm')"
       :busy="loading"
       @confirm="runControlledAction"
-      @cancel="actionConfirmOpen = false"
+      @cancel="cancelControlledAction"
     />
   </section>
   <ToastMessage :message="toast" :tone="toastTone" />

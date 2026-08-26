@@ -56,6 +56,19 @@ async function mockSession(page: Page): Promise<void> {
       }),
     })
   })
+  await page.route('**/api/resume-copilot/assessments/review-queue?limit=50', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: [],
+        success: true,
+        errorCode: null,
+        message: null,
+        requestId: 'e2e-empty-assessment-review-queue',
+        timestamp: new Date().toISOString(),
+      }),
+    })
+  })
 }
 
 async function mockReviewerSession(page: Page): Promise<void> {
@@ -306,6 +319,76 @@ test('login and Admin expose the same persistent language switch', async ({ page
   await expect(page.getByText(/available only in public-demo mode/)).toBeVisible()
 })
 
+test('Admin reruns five-module readiness, saves evidence, and routes remediation', async ({ page }) => {
+  await mockSession(page)
+  const generatedAt = new Date().toISOString()
+  const validUntil = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+  const checks = [
+    { checkId: 'DATA_STALE_HANDOFF_CLAIMS', module: 'DATA', status: 'BLOCKER', affectedCount: 2, threshold: 'PT15M', actionPath: '/data?tab=handoff' },
+    { checkId: 'KNOWLEDGE_FAILED_SYNC_RUNS', module: 'KNOWLEDGE', status: 'WARNING', affectedCount: 1, threshold: 'PT168H', actionPath: '/knowledge?tab=sources' },
+    { checkId: 'SUPPORT_BREACHED_SLA', module: 'SUPPORT', status: 'PASS', affectedCount: 0, threshold: null, actionPath: '/support?tab=quality' },
+    { checkId: 'REPORT_FAILED_RUNS', module: 'REPORT', status: 'PASS', affectedCount: 0, threshold: 'PT168H', actionPath: '/report?tab=schedules' },
+    { checkId: 'HR_OVERDUE_ASSESSMENT_REVIEWS', module: 'HR', status: 'WARNING', affectedCount: 1, threshold: null, actionPath: '/hr?section=recruiting&tab=assessment' },
+  ]
+  const live = {
+    schemaVersion: 2, applicationVersion: '2.4.0', runtimeMode: 'self-hosted',
+    status: 'BLOCKED', passedCount: 2, warningCount: 2, blockerCount: 1,
+    checks, contentHash: 'a'.repeat(64), generatedAt, validUntil,
+  }
+  await page.route('**/api/admin/diagnostics', async (route) => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({ data: { runtimeMode: 'self-hosted' }, success: true, requestId: 'readiness-diagnostics', timestamp: generatedAt }),
+  }))
+  await page.route('**/api/admin/readiness', async (route) => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({ data: live, success: true, requestId: 'readiness-live', timestamp: generatedAt }),
+  }))
+  await page.route('**/api/admin/readiness/snapshots?page=0&size=20', async (route) => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({ data: { content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 }, success: true, requestId: 'readiness-history', timestamp: generatedAt }),
+  }))
+  let snapshotCreated = false
+  await page.route('**/api/admin/readiness/snapshots', async (route) => {
+    expect(route.request().postDataJSON()).toEqual({ purpose: '生产发布前复核' })
+    snapshotCreated = true
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: { ...live, id: 24, snapshotReference: 'b512bd37-dc00-4922-bcab-f30350ac4641', purpose: '生产发布前复核', generatedBy: 'fictional.operator' },
+        success: true, requestId: 'readiness-snapshot-created', timestamp: generatedAt,
+      }),
+    })
+  })
+  await page.route('**/api/data-copilot/query-results', async (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: [], success: true, requestId: 'readiness-data-results', timestamp: generatedAt }) }))
+  await page.route('**/api/resume-copilot/jobs/confirmed', async (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: [], success: true, requestId: 'readiness-confirmed-jobs', timestamp: generatedAt }) }))
+  await page.route('**/api/resume-copilot/assessments/review-queue?limit=50', async (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({
+    data: [{ assessmentId: 240, jobId: 24, submissionId: 42, jobTitle: '虚构逾期评估', candidateReference: 'candidate-240', criteriaVersion: 1, status: 'NEEDS_REVIEW', reviewReasons: ['等待人工复核'], reviewerActorId: null, updatedAt: generatedAt }],
+    success: true, requestId: 'readiness-assessment-queue', timestamp: generatedAt,
+  }) }))
+
+  await page.goto('/admin')
+  await page.getByRole('button', { name: '企业就绪' }).click()
+  await expect(page).toHaveURL(/\/admin\?tab=readiness/)
+  await expect(page.getByText('结果交接领取超时')).toBeVisible()
+  await expect(page.getByText('知识同步失败未恢复')).toBeVisible()
+  await expect(page.getByText('readiness-live')).toBeVisible()
+  await page.getByLabel('快照用途').fill('生产发布前复核')
+  await page.getByRole('button', { name: '重新检查并保存快照' }).click()
+  await expect(page.getByText('企业就绪快照已保存。')).toBeVisible()
+  await expect(page.getByText('生产发布前复核', { exact: true })).toBeVisible()
+  expect(snapshotCreated).toBe(true)
+
+  await page.locator('.readiness-check').filter({ hasText: '候选人评估复核到期' }).getByRole('link', { name: '进入整改' }).click()
+  await expect(page).toHaveURL(/\/hr\?section=recruiting&tab=assessment/)
+  await expect(page.getByText('虚构逾期评估', { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: '领取并打开复核' })).toBeVisible()
+
+  await page.goto('/admin?tab=readiness')
+  await page.getByRole('link', { name: '进入整改' }).first().click()
+  await expect(page).toHaveURL(/\/data\?tab=handoff/)
+  await expect(page.getByRole('tab', { name: '结果交接' })).toHaveAttribute('aria-selected', 'true')
+})
+
 test('keeps processing results scoped to the tab that produced them', async ({ page }) => {
   await mockSession(page)
   await page.route('**/api/knowledge-copilot/questions', async (route) => {
@@ -317,6 +400,9 @@ test('keeps processing results scoped to the tab that produced them', async ({ p
   await page.route('**/api/knowledge-copilot/sources', async (route) => {
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: [], success: true, requestId: 'sources-tab', timestamp: new Date().toISOString() }) })
   })
+  await page.route('**/api/knowledge-copilot/sources/issues', async (route) => {
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: [], success: true, requestId: 'source-issues-tab', timestamp: new Date().toISOString() }) })
+  })
   await page.goto('/knowledge')
   await page.getByLabel('知识问题').fill('试用期多久？')
   await page.getByRole('button', { name: '检索并回答' }).click()
@@ -324,6 +410,44 @@ test('keeps processing results scoped to the tab that produced them', async ({ p
   await page.getByRole('tab', { name: '外部来源' }).click()
   await expect(page.getByText('试用期为三个月。', { exact: true })).toHaveCount(0)
   await expect(page.getByText('本次处理结果')).toHaveCount(0)
+})
+
+test('requires confirmation and runs a full sync for a knowledge source issue', async ({ page }) => {
+  await mockSession(page)
+  await page.route('**/api/knowledge-copilot/sources', async (route) => {
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({
+      data: [{ id: 7, displayName: '运营知识库' }], success: true,
+      requestId: 'sources-recovery', timestamp: new Date().toISOString(),
+    }) })
+  })
+  await page.route('**/api/knowledge-copilot/sources/issues', async (route) => {
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({
+      data: [{
+        itemId: 42, connectionId: 7, connectionName: '运营知识库', sourceItemId: 'refund.md',
+        syncStatus: 'CURRENT', documentId: 88, indexStatus: 'FAILED', conflictStatus: 'NONE',
+        sourceUpdatedAt: null, lastSyncedAt: new Date().toISOString(), expiresAt: null,
+        documentUpdatedAt: new Date().toISOString(),
+      }],
+      success: true, requestId: 'source-issues-recovery', timestamp: new Date().toISOString(),
+    }) })
+  })
+  let fullRecoveryRequested = false
+  await page.route('**/api/knowledge-copilot/sources/7/sync?full=true', async (route) => {
+    fullRecoveryRequested = true
+    expect(route.request().method()).toBe('POST')
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({
+      data: { runId: 99, status: 'COMPLETED' }, success: true,
+      requestId: 'source-full-recovery', timestamp: new Date().toISOString(),
+    }) })
+  })
+
+  await page.goto('/knowledge?tab=sources')
+  await expect(page.locator('.status-badge').filter({ hasText: 'FAILED' })).toBeVisible()
+  await page.getByRole('button', { name: '确认全量恢复此来源' }).click()
+  await page.getByRole('dialog').getByRole('button', { name: '立即同步' }).click()
+
+  await expect.poll(() => fullRecoveryRequested).toBe(true)
+  await expect(page.getByText('操作已完成')).toBeVisible()
 })
 
 test('shows and completes the support draft review flow', async ({ page }) => {

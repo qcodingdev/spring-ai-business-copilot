@@ -18,6 +18,11 @@ source preview when one is selected, and still supports typed evidence and CSV/J
 upload. Quick starts fill both title and source before generation. Records, controlled
 sources, schedules, and exports preserve evidence and an explicit next step.
 
+The 2.4 development line blocks readiness when an enabled schedule remains claimed
+beyond its lease, and warns on failed runs without a later successful draft or drafts overdue for human review.
+The remediation routes return to schedules or records; no readiness action publishes
+a report.
+
 API: `POST /api/report-copilot/source-previews`, `POST /source-imports/preview`, `POST /reports/generate|generate-from-file`, `POST /reports/{id}/confirm|cancel`, `GET /reports/{id}/markdown|html`.
 
 Test: `./mvnw -pl modules/report-copilot -am test`
@@ -29,3 +34,6 @@ Test: `./mvnw -pl modules/report-copilot -am test`
 2.3 双语工作台把 Data 结果交接放在生成页最上方，选择后自动填充标题与来源预览；同时保留
 手工填写和 CSV/JSON 上传，快捷开始也会同时填充标题与来源。记录、受控来源、调度和导出
 持续展示来源证据与明确下一步；确认后仍不会自动发布。
+
+2.4 开发线把已启用调度超过租约仍被领取列为企业就绪阻断项，把尚未被后续成功草稿恢复的
+失败运行和超过人工复核窗口的草稿列为关注项。整改回到调度或报告记录页面，就绪操作不会发布报告。

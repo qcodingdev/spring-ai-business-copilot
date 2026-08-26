@@ -47,6 +47,8 @@ public class JdbcKnowledgeChunkRepository implements KnowledgeChunkRepository {
             WHERE d.enabled = TRUE
               AND d.current_version = TRUE
               AND d.index_status = 'INDEXED'
+              AND (d.expires_at IS NULL OR d.expires_at > now())
+              AND d.conflict_status = 'NONE'
               AND (d.visibility_scope = 'ALL'
                    OR (d.visibility_scope = 'HR_REVIEWER' AND ?)
                    OR (d.visibility_scope = 'ADMIN' AND ?))
@@ -76,6 +78,8 @@ public class JdbcKnowledgeChunkRepository implements KnowledgeChunkRepository {
             WHERE d.enabled = TRUE
               AND d.current_version = TRUE
               AND d.index_status = 'INDEXED'
+              AND (d.expires_at IS NULL OR d.expires_at > now())
+              AND d.conflict_status = 'NONE'
               AND (d.visibility_scope = 'ALL'
                    OR (d.visibility_scope = 'HR_REVIEWER' AND ?)
                    OR (d.visibility_scope = 'ADMIN' AND ?))

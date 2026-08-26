@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute, useRouter } from 'vue-router'
 import { api, ApiError, jsonBody } from '@/api/client'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import EnterpriseReadinessPanel from '@/components/EnterpriseReadinessPanel.vue'
 import KnowledgeDocumentAdmin from '@/components/KnowledgeDocumentAdmin.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import RequestId from '@/components/RequestId.vue'
@@ -11,12 +13,17 @@ import StatusBadge from '@/components/StatusBadge.vue'
 import ToastMessage from '@/components/ToastMessage.vue'
 import { useSession } from '@/composables/useSession'
 
-type AdminTab = 'overview' | 'observability' | 'documents' | 'experience'
+type AdminTab = 'overview' | 'readiness' | 'observability' | 'documents' | 'experience'
 interface DemoJob { id: string; jobType: string; status: string; requestedBy?: string; summaryJson?: string; errorCategory?: string; createdAt?: string; finishedAt?: string }
 
 const { t, te, locale } = useI18n()
 const { session } = useSession()
-const activeTab = ref<AdminTab>('overview')
+const route = useRoute()
+const router = useRouter()
+const tabs: AdminTab[] = ['overview', 'readiness', 'observability', 'documents', 'experience']
+const initialTab = String(route.query.tab ?? '')
+const activeTab = ref<AdminTab>(tabs.includes(initialTab as AdminTab) ? initialTab as AdminTab : 'overview')
+const readinessPanel = ref<{ load: () => Promise<void> } | null>(null)
 const diagnostics = ref<Record<string, any> | null>(null)
 const loading = ref(false)
 const requestId = ref<string | null>(null)
@@ -30,7 +37,6 @@ const toastTone = ref<'success' | 'danger' | 'info'>('info')
 let toastTimer: ReturnType<typeof setTimeout> | undefined
 let jobTimer: ReturnType<typeof setTimeout> | undefined
 
-const tabs: AdminTab[] = ['overview', 'observability', 'documents', 'experience']
 const isPublicDemo = computed(() => session.value?.publicDemo === true)
 const usage = computed<Record<string, any>[]>(() => diagnostics.value?.usage ?? [])
 const demoJobs = computed<DemoJob[]>(() => diagnostics.value?.demoJobs ?? [])
@@ -59,6 +65,19 @@ async function load(): Promise<void> {
   } finally {
     loading.value = false
   }
+}
+
+async function refresh(): Promise<void> {
+  if (activeTab.value === 'readiness' && readinessPanel.value) {
+    await Promise.all([load(), readinessPanel.value.load()])
+    return
+  }
+  await load()
+}
+
+async function selectTab(tab: AdminTab): Promise<void> {
+  activeTab.value = tab
+  await router.replace({ query: { ...route.query, tab } })
 }
 
 async function pollJob(jobId: string): Promise<void> {
@@ -139,6 +158,10 @@ function parsedSummary(job: DemoJob): string {
   try { return JSON.stringify(JSON.parse(job.summaryJson), null, 2) } catch { return job.summaryJson }
 }
 
+watch(() => route.query.tab, (value) => {
+  const requested = String(value ?? '') as AdminTab
+  activeTab.value = tabs.includes(requested) ? requested : 'overview'
+})
 onMounted(load)
 onUnmounted(() => { if (toastTimer) clearTimeout(toastTimer); if (jobTimer) clearTimeout(jobTimer) })
 </script>
@@ -146,11 +169,11 @@ onUnmounted(() => { if (toastTimer) clearTimeout(toastTimer); if (jobTimer) clea
 <template>
   <RoleGuard :roles="['ADMIN']">
     <PageHeader :title="t('admin.title')" :description="t('admin.description')">
-      <button class="button button--secondary" type="button" :disabled="loading" @click="load">{{ t('common.refresh') }}</button>
+      <button class="button button--secondary" type="button" :disabled="loading" @click="refresh">{{ t('common.refresh') }}</button>
     </PageHeader>
     <div class="admin-layout">
       <nav class="admin-subnav" :aria-label="t('admin.submenu')">
-        <button v-for="tab in tabs" :key="tab" type="button" :class="{ active: activeTab === tab }" @click="activeTab = tab">
+        <button v-for="tab in tabs" :key="tab" type="button" :class="{ active: activeTab === tab }" @click="selectTab(tab)">
           {{ t(`admin.tabs.${tab}`) }}
         </button>
       </nav>
@@ -171,6 +194,8 @@ onUnmounted(() => { if (toastTimer) clearTimeout(toastTimer); if (jobTimer) clea
           <div class="status-grid"><div v-for="(count, name) in diagnostics?.enterpriseExpansion ?? {}" :key="String(name)"><span>{{ name }}</span><strong>{{ number(count) }}</strong></div></div>
         </section>
       </div>
+
+      <EnterpriseReadinessPanel v-else-if="activeTab === 'readiness'" ref="readinessPanel" />
 
       <div v-else-if="activeTab === 'observability'" class="admin-content">
         <section class="panel admin-section">
@@ -207,7 +232,7 @@ onUnmounted(() => { if (toastTimer) clearTimeout(toastTimer); if (jobTimer) clea
         </section>
         <section class="panel admin-section"><h2>{{ t('admin.recentJobs') }}</h2><div class="table-scroll"><table class="data-table"><thead><tr><th>ID</th><th>{{ t('admin.jobType') }}</th><th>{{ t('common.status') }}</th><th>{{ t('admin.requestedBy') }}</th><th>{{ t('admin.createdAt') }}</th></tr></thead><tbody><tr v-for="job in demoJobs" :key="job.id"><td><code>{{ job.id }}</code></td><td>{{ job.jobType }}</td><td>{{ job.status }}</td><td>{{ job.requestedBy }}</td><td>{{ job.createdAt }}</td></tr></tbody></table></div></section>
       </div>
-      <RequestId v-if="activeTab !== 'documents'" :value="requestId" />
+      <RequestId v-if="activeTab !== 'documents' && activeTab !== 'readiness'" :value="requestId" />
     </div>
 
     <ConfirmDialog :open="initializeOpen" :operation="t('admin.initialize')" target="fictional-demo-dataset" current-state="CURRENT_DATA_RETAINED" target-state="INITIALIZING" :impact="t('admin.initializeImpact')" :recoverable="true" :risk="t('admin.initializeRisk')" :busy="loading" @confirm="initialize" @cancel="initializeOpen = false" />

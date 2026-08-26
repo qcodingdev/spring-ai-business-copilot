@@ -101,4 +101,18 @@ class HrEnterpriseServiceTest {
                 anyString(), org.mockito.ArgumentMatchers.<Class<Long>>any(),
                 org.mockito.ArgumentMatchers.<Object[]>any());
     }
+
+    @Test
+    void rejectsOnboardingTaskWithoutABoundedDueDate() {
+        HrEnterpriseService.ChecklistCommand command = new HrEnterpriseService.ChecklistCommand(
+                "engineer-onboarding", "工程师入职清单", "ENGINEER",
+                List.of(new HrEnterpriseService.ChecklistItem(
+                        "read-handbook", "阅读员工手册", "查看最新制度",
+                        true, "EMPLOYEE", 366)),
+                List.of("knowledge:employee-handbook"));
+
+        assertThatThrownBy(() -> service.saveChecklist(command))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("1 到 365 天");
+    }
 }

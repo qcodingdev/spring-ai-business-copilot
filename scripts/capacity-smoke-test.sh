@@ -3,17 +3,18 @@ set -Eeuo pipefail
 
 # 对已启动应用执行不触发模型费用的认证读请求基线，适合发布前快速发现线程池或连接池退化。
 base_url="${BUSINESS_COPILOT_BASE_URL:-http://localhost:8080}"
-username="${BUSINESS_COPILOT_SMOKE_USERNAME:-operator}"
-password="${BUSINESS_COPILOT_SMOKE_PASSWORD:-operator-change-me}"
+username="${BUSINESS_COPILOT_SMOKE_USERNAME:-admin}"
+password="${BUSINESS_COPILOT_SMOKE_PASSWORD:-admin-change-me}"
+endpoint_path="${BUSINESS_COPILOT_CAPACITY_PATH:-/api/admin/readiness}"
+safe_endpoint_pattern='^/api/[A-Za-z0-9_/?=&.-]+$'
 request_count="${BUSINESS_COPILOT_CAPACITY_REQUESTS:-50}"
 concurrency="${BUSINESS_COPILOT_CAPACITY_CONCURRENCY:-5}"
 p95_limit_seconds="${BUSINESS_COPILOT_CAPACITY_P95_SECONDS:-1.5}"
 cookie_file="$(mktemp)"
-login_page="$(mktemp)"
 results_file="$(mktemp)"
 
 cleanup() {
-  rm -f "$cookie_file" "$login_page" "$results_file"
+  rm -f "$cookie_file" "$results_file"
 }
 trap cleanup EXIT
 
@@ -37,11 +38,17 @@ if ! awk -v limit="$p95_limit_seconds" 'BEGIN { exit !(limit ~ /^[0-9]+([.][0-9]
   echo "容量冒烟参数错误：P95 阈值必须是大于 0 的秒数。" >&2
   exit 1
 fi
+if [[ ! "$endpoint_path" =~ $safe_endpoint_pattern ]]; then
+  echo "容量冒烟参数错误：接口路径必须是安全的 /api/ 路径。" >&2
+  exit 1
+fi
 
-curl --fail --silent --show-error --cookie-jar "$cookie_file" "$base_url/login" >"$login_page"
-csrf_token="$(sed -n 's/.*name="_csrf"[^>]*value="\([^"]*\)".*/\1/p' "$login_page" | head -n 1)"
+curl --fail --silent --show-error --cookie-jar "$cookie_file" "$base_url/login" >/dev/null
+curl --fail --silent --show-error --cookie "$cookie_file" --cookie-jar "$cookie_file" \
+  "$base_url/api/session" >/dev/null
+csrf_token="$(awk '$6 == "XSRF-TOKEN" { token = $7 } END { print token }' "$cookie_file")"
 if [[ -z "$csrf_token" ]]; then
-  echo "容量冒烟失败：登录页未生成 CSRF token。" >&2
+  echo "容量冒烟失败：匿名会话未生成 CSRF cookie。" >&2
   exit 1
 fi
 
@@ -54,10 +61,10 @@ if [[ "$login_status" != "302" ]]; then
   exit 1
 fi
 
-export base_url cookie_file
+export base_url cookie_file endpoint_path
 awk -v count="$request_count" 'BEGIN { for (i = 1; i <= count; i++) print i }' |
   xargs -P "$concurrency" -I '{}' sh -c \
-    'curl --silent --output /dev/null --write-out "%{http_code} %{time_total}\n" --cookie "$cookie_file" "$base_url/api/data-copilot/schema"' \
+    'curl --silent --output /dev/null --write-out "%{http_code} %{time_total}\n" --cookie "$cookie_file" "$base_url$endpoint_path"' \
     >>"$results_file"
 
 failed="$(awk '$1 != 200 { count++ } END { print count + 0 }' "$results_file")"
@@ -73,4 +80,4 @@ if ! awk -v actual="$p95" -v limit="$p95_limit_seconds" 'BEGIN { exit !(actual <
   exit 1
 fi
 
-echo "容量冒烟通过：请求数=$request_count，并发=$concurrency，失败=0，P95=${p95}s。"
+echo "容量冒烟通过：接口=${endpoint_path}，请求数=${request_count}，并发=${concurrency}，失败=0，P95=${p95}s。"

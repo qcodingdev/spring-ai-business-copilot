@@ -28,6 +28,11 @@ result snapshot and audit record remain available under execution records; and a
 masked, actor-owned result can be handed to Report Copilot through a one-time
 `READY` reference that becomes `CONSUMED` only after report generation succeeds.
 
+The 2.4 development line contributes two Admin readiness checks: a `CLAIMED`
+handoff beyond its 15-minute lease is a blocker, while a query result that remains
+past its configurable cleanup grace is a warning. Both link back to the existing
+handoff or records tab; Admin does not mutate Data state directly.
+
 Test: `./mvnw -pl modules/data-copilot -am test`
 
 ## 简体中文
@@ -45,3 +50,7 @@ API：`POST /api/data-copilot/sql-candidates`、`POST /api/data-copilot/sql-cand
 `POST /api/data-copilot/query-results/{id}/report-handoff`。
 
 Vue 工作台已把三个企业阶段串起来：管理员审批版本化模板；操作者启动并确认模板查询；执行记录同时保留结果快照和审计记录；脱敏且绑定操作者的结果可以通过一次性的 `READY` 引用交给 Report Copilot，报告生成成功后才变为 `CONSUMED`。
+
+2.4 开发线把领取超过 15 分钟租约的 `CLAIMED` 交接列为企业就绪阻断项，把超过可配置
+清理宽限仍存在的过期查询结果列为关注项；整改仍回到结果交接或执行记录页面，Admin 不直接
+修改 Data 状态。

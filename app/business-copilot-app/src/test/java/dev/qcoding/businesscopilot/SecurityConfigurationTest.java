@@ -35,7 +35,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         SecurityConfigurationTest.ReviewerActionProbeController.class,
         SecurityConfigurationTest.ResumeDeleteProbeController.class,
         SecurityConfigurationTest.KnowledgeDeleteProbeController.class,
-        SecurityConfigurationTest.EnterpriseProbeController.class
+        SecurityConfigurationTest.EnterpriseProbeController.class,
+        SecurityConfigurationTest.AdminReadinessProbeController.class
 })
 class SecurityConfigurationTest {
 
@@ -334,6 +335,30 @@ class SecurityConfigurationTest {
     }
 
     @Test
+    void enterpriseReadinessAssessmentAndEvidenceAreAdminOnly() throws Exception {
+        mockMvc.perform(get("/api/admin/readiness")
+                        .with(user("operator").roles("OPERATOR")))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/admin/readiness/snapshots")
+                        .with(user("operator").roles("OPERATOR"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/admin/readiness")
+                        .with(user("admin").roles("ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ready"));
+        mockMvc.perform(post("/api/admin/readiness/snapshots")
+                        .with(user("admin").roles("ADMIN"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("saved"));
+    }
+
+    @Test
     void reviewerCanListAssignedInterviewSessionsButOperatorCannotReadReviewMetrics()
             throws Exception {
         mockMvc.perform(get("/api/resume-copilot/enterprise/interview-sessions")
@@ -466,6 +491,21 @@ class SecurityConfigurationTest {
         @GetMapping("/api/resume-copilot/enterprise/interview-sessions/{sessionId}/members")
         java.util.Map<String, String> interviewMembers(@PathVariable("sessionId") String sessionId) {
             return java.util.Map.of("status", "ok", "sessionId", sessionId);
+        }
+    }
+
+    @RestController
+    @RequestMapping("/api/admin/readiness")
+    static class AdminReadinessProbeController {
+
+        @GetMapping
+        java.util.Map<String, String> assess() {
+            return java.util.Map.of("status", "ready");
+        }
+
+        @PostMapping("/snapshots")
+        java.util.Map<String, String> snapshot() {
+            return java.util.Map.of("status", "saved");
         }
     }
 }

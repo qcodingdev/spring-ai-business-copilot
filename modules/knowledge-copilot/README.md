@@ -24,6 +24,17 @@ task-time budgets. Missing/repeated cursors or over-budget trees fail closed ins
 of indexing partial content as a complete document. Local HTTP contract tests cover
 SharePoint delta/content/ACL, Confluence page/ACL, and Notion pagination/recursion.
 
+The 2.4 development line makes lifecycle filtering identical across PostgreSQL
+text, keyword, and pgvector retrieval: expired or conflicted current documents are
+never candidates. A successful unchanged external sync renews the current document;
+failed material remains fail-closed until an administrator confirms a full recovery
+sync. The source issue queue also includes failed and stale indexing, conditionally
+cancels an orphaned processing attempt, and prevents its late result from overwriting
+the replacement vectors or lifecycle state. Vector replacement and task/document
+completion are committed atomically behind a locked live lease.
+Admin readiness blocks on stale syncs or unsafe current documents and warns only on
+failed syncs that have no later successful recovery.
+
 API: `POST/GET /api/knowledge-copilot/documents`, `POST /api/knowledge-copilot/documents/{id}/reindex`, `PATCH /api/knowledge-copilot/documents/{id}/enabled`, `POST /api/knowledge-copilot/questions`, `POST /api/knowledge-copilot/answers/{answerId}/feedback`, `GET /api/knowledge-copilot/quality-queue`, `POST /api/knowledge-copilot/quality-queue/{answerId}/review`, and `GET /api/knowledge-copilot/quality-metrics`.
 
 Test: `./mvnw -pl modules/knowledge-copilot -am test`
@@ -40,3 +51,9 @@ REST 来源统一执行 HTTPS/DNS/IP、超时、响应、分页、条目、JSON 
 任务超时预算内读取全部分页块与嵌套子块。游标缺失、重复或页面树超过预算时失败关闭，
 不会把部分内容索引成完整文档。本地 HTTP 契约测试覆盖 SharePoint 增量/正文/ACL、
 Confluence 页面/ACL 和 Notion 分页/递归。
+
+2.4 开发线统一 PostgreSQL 文本、关键词和 pgvector 检索的生命周期条件：过期或冲突的当前
+资料不再进入任何候选。外部来源内容未变化时续期当前资料；失败资料继续失败关闭，直到管理员在来源问题卡片确认全量
+恢复。来源页同时展示索引失败和超时，对孤儿 `PROCESSING` 任务条件取消后建立替换任务。向量替换与任务/文档完成状态在锁定有效租约后原子提交，
+阻止旧工作线程的迟到结果删除或覆盖新任务的向量和状态。企业就绪对卡住
+同步和不可安全检索资料给出阻断，只对尚未被后续成功同步恢复的失败给出关注项。

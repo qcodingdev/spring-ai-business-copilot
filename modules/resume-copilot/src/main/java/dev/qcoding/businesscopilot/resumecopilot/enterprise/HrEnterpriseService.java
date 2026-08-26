@@ -19,6 +19,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -483,6 +484,11 @@ public class HrEnterpriseService {
             throw new BusinessException(ErrorCode.VALIDATION_ERROR,
                     "入职清单必须至少包含一个必办事项");
         }
+        if (command.items().stream().anyMatch(
+                item -> item.dueInDays() < 1 || item.dueInDays() > 365)) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR,
+                    "入职清单事项期限必须为 1 到 365 天");
+        }
         String actorId = actorProvider.currentActor().actorId();
         String checklistKey = command.checklistKey().trim();
         advisoryLock("hr-onboarding:" + checklistKey);
@@ -577,10 +583,11 @@ public class HrEnterpriseService {
         for (ChecklistItem item : checklist.items()) {
             jdbcTemplate.update("""
                     INSERT INTO hr_onboarding_tasks(
-                        instance_id, item_key, title, guidance, required, owner_role
-                    ) VALUES (?, ?, ?, ?, ?, ?)
+                        instance_id, item_key, title, guidance, required, owner_role, due_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
                     """, instance.id(), item.itemKey().trim(), item.title().trim(),
-                    trimToNull(item.guidance()), item.required(), trimToNull(item.ownerRole()));
+                    trimToNull(item.guidance()), item.required(), trimToNull(item.ownerRole()),
+                    Timestamp.from(instance.createdAt().plus(Duration.ofDays(item.dueInDays()))));
         }
         return instanceWithTasks(instance);
     }
@@ -777,14 +784,15 @@ public class HrEnterpriseService {
     private OnboardingInstance instanceWithTasks(OnboardingInstance instance) {
         List<OnboardingTask> tasks = jdbcTemplate.query("""
                 SELECT id, instance_id, item_key, title, guidance, required, owner_role,
-                       status, evidence_reference, completed_by, completed_at
+                       status, evidence_reference, completed_by, completed_at, due_at
                 FROM hr_onboarding_tasks WHERE instance_id = ? ORDER BY id
                 """, (rs, rowNum) -> new OnboardingTask(
                 rs.getLong("id"), rs.getLong("instance_id"), rs.getString("item_key"),
                 rs.getString("title"), rs.getString("guidance"), rs.getBoolean("required"),
                 rs.getString("owner_role"), rs.getString("status"),
                 rs.getString("evidence_reference"), rs.getString("completed_by"),
-                instant(rs.getTimestamp("completed_at"))), instance.id());
+                instant(rs.getTimestamp("completed_at")),
+                instant(rs.getTimestamp("due_at"))), instance.id());
         List<String> knowledgeReferences = jdbcTemplate.queryForObject("""
                 SELECT knowledge_references::text FROM hr_onboarding_checklists WHERE id = ?
                 """, (rs, rowNum) -> {
@@ -939,7 +947,18 @@ public class HrEnterpriseService {
                             String consentReference, Instant sourceUpdatedAt,
                             String importedBy, Instant importedAt) { }
     public record ChecklistItem(String itemKey, String title, String guidance,
-                                boolean required, String ownerRole) { }
+                                boolean required, String ownerRole, int dueInDays) {
+        public ChecklistItem(String itemKey, String title, String guidance,
+                             boolean required, String ownerRole) {
+            this(itemKey, title, guidance, required, ownerRole, 1);
+        }
+
+        public ChecklistItem {
+            if (dueInDays == 0) {
+                dueInDays = 1;
+            }
+        }
+    }
     public record ChecklistCommand(String checklistKey, String title, String roleScope,
                                    List<ChecklistItem> items, List<String> knowledgeReferences) { }
     public record OnboardingChecklist(long id, String checklistKey, long version, String title,
@@ -954,7 +973,7 @@ public class HrEnterpriseService {
     public record OnboardingTask(long id, long instanceId, String itemKey, String title,
                                  String guidance, boolean required, String ownerRole,
                                  String status, String evidenceReference,
-                                 String completedBy, Instant completedAt) { }
+                                 String completedBy, Instant completedAt, Instant dueAt) { }
     private record ApprovalTarget(String objectKey, String ownerActorId) { }
     private record SessionRow(InterviewSession session) { }
 }
