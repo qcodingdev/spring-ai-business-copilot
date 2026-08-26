@@ -16,6 +16,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.sql.PreparedStatement;
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.HexFormat;
 import java.util.List;
@@ -25,9 +26,16 @@ import java.util.UUID;
 public class ResumeRepository {
     private static final Logger log = LoggerFactory.getLogger(ResumeRepository.class);
     private final JdbcTemplate jdbcTemplate;
+    private final Duration reviewSla;
 
     public ResumeRepository(JdbcTemplate jdbcTemplate) {
+        this(jdbcTemplate, Duration.ofHours(24));
+    }
+
+    public ResumeRepository(JdbcTemplate jdbcTemplate, Duration reviewSla) {
         this.jdbcTemplate = jdbcTemplate;
+        this.reviewSla = reviewSla == null || reviewSla.isZero() || reviewSla.isNegative()
+                ? Duration.ofHours(24) : reviewSla;
     }
 
     public ResumeJobEntity insertJob(ResumeJobEntity job) {
@@ -195,9 +203,10 @@ public class ResumeRepository {
             PreparedStatement statement = connection.prepareStatement(
                     "INSERT INTO resume_assessments (job_id, submission_id, content_json, status, review_reasons, "
                             + "review_token_digest, owner_actor_id, review_queue, reviewer_actor_id, expires_at, "
+                            + "review_due_at, "
                             + "criteria_version, original_content_json, corrected_content_json, reviewer_feedback, "
                             + "decision_outcome, reviewed_at, created_at, updated_at) "
-                            + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                            + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     new String[]{"id"});
             statement.setLong(1, assessment.getJobId());
             statement.setLong(2, assessment.getSubmissionId());
@@ -209,14 +218,15 @@ public class ResumeRepository {
             statement.setBoolean(8, assessment.isReviewQueue());
             statement.setString(9, assessment.getReviewerActorId());
             statement.setTimestamp(10, timestamp(assessment.getExpiresAt()));
-            statement.setInt(11, assessment.getCriteriaVersion());
-            statement.setString(12, assessment.getOriginalContentJson());
-            statement.setString(13, assessment.getCorrectedContentJson());
-            statement.setString(14, assessment.getReviewerFeedback());
-            statement.setString(15, assessment.getDecisionOutcome());
-            statement.setTimestamp(16, timestamp(assessment.getReviewedAt()));
-            statement.setTimestamp(17, timestamp(assessment.getCreatedAt()));
-            statement.setTimestamp(18, timestamp(assessment.getUpdatedAt()));
+            statement.setTimestamp(11, timestamp(assessment.getCreatedAt().plus(reviewSla)));
+            statement.setInt(12, assessment.getCriteriaVersion());
+            statement.setString(13, assessment.getOriginalContentJson());
+            statement.setString(14, assessment.getCorrectedContentJson());
+            statement.setString(15, assessment.getReviewerFeedback());
+            statement.setString(16, assessment.getDecisionOutcome());
+            statement.setTimestamp(17, timestamp(assessment.getReviewedAt()));
+            statement.setTimestamp(18, timestamp(assessment.getCreatedAt()));
+            statement.setTimestamp(19, timestamp(assessment.getUpdatedAt()));
             return statement;
         }, keys);
         assessment.setId(keys.getKey().longValue());

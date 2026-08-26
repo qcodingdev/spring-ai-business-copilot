@@ -7,9 +7,9 @@ import RequestId from '@/components/RequestId.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import ToastMessage from '@/components/ToastMessage.vue'
 
-type OverallStatus = 'READY' | 'ATTENTION' | 'BLOCKED'
+type OverallStatus = 'READY' | 'ATTENTION' | 'BLOCKED' | 'NOT_CONFIGURED'
 type CheckStatus = 'PASS' | 'WARNING' | 'BLOCKER'
-type ModuleName = 'DATA' | 'KNOWLEDGE' | 'SUPPORT' | 'REPORT' | 'HR'
+type ModuleName = 'PLATFORM' | 'DATA' | 'KNOWLEDGE' | 'SUPPORT' | 'REPORT' | 'HR'
 
 interface ReadinessCheck {
   checkId: string
@@ -64,7 +64,7 @@ const toast = ref('')
 const toastTone = ref<'success' | 'danger' | 'info'>('info')
 let toastTimer: ReturnType<typeof setTimeout> | undefined
 
-const moduleOrder: ModuleName[] = ['DATA', 'KNOWLEDGE', 'SUPPORT', 'REPORT', 'HR']
+const moduleOrder: ModuleName[] = ['PLATFORM', 'DATA', 'KNOWLEDGE', 'SUPPORT', 'REPORT', 'HR']
 const groupedChecks = computed(() => moduleOrder
   .map((module) => ({ module, checks: assessment.value?.checks.filter((check) => check.module === module) ?? [] }))
   .filter((group) => group.checks.length > 0))
@@ -157,6 +157,7 @@ async function createSnapshot(): Promise<void> {
     const previousPage = historyPage.value
     if (previousPage === 0) {
       snapshots.value = [response.data, ...snapshots.value.filter((item) => item.id !== response.data.id)]
+        .slice(0, 20)
     }
     historyTotalElements.value += 1
     historyTotalPages.value = Math.max(1, Math.ceil(historyTotalElements.value / 20))

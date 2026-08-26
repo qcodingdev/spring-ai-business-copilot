@@ -1,22 +1,23 @@
 # 2.4.0 企业运行就绪升级路线
 
 1. 以 GitHub/Gitee 一致的正式 v2.3.1 主干后续提交为唯一开发基线。
-2. 全项目切换到 2.4.0-SNAPSHOT，仅使用一个 feature/v2.4-enterprise-readiness
-   开发分支。
+2. 开发阶段全项目使用 2.4.0-SNAPSHOT 和单一 `feature/v2.4-enterprise-readiness`
+   分支；正式发布收口为 2.4.0，并保留 `v2.4.0` 长期版本分支。
 3. 修复 Knowledge 文本、关键词、向量检索未排除过期/冲突资料的问题，并让成功的
    未变化来源同步续期当前文档。
-4. 增加 Flyway V32 不可变就绪快照，保存稳定检查编号、等级、计数、整改路由、
+4. 增加 Flyway V32 追加式就绪快照，保存稳定检查编号、等级、计数、整改路由、
    生成者、有效期和内容哈希。
-5. 增加 Data、Knowledge、Support、Report、HR 五模块就绪检查，统一输出
-   READY、ATTENTION、BLOCKED。
+5. 增加模型/五模块配置前置条件和 13 项运行检查，统一输出
+   NOT_CONFIGURED、READY、ATTENTION、BLOCKED。
 6. 在 Admin 增加双语就绪页面，完成实时检查、整改跳转、用途化留证和历史回看。
 7. 增加快照保留清理，不保存 Prompt、SQL、正文、简历、密钥或供应商原始异常。
-8. 执行前端、固定评测、Reactor/SBOM、PostgreSQL V1/V28/V31→V32、MySQL、
+8. 增加 V33：Knowledge 同步单活动任务、ACL 同步、真实复核截止时间和 readiness 索引；执行前端、
+   固定评测、Reactor/SBOM、PostgreSQL V1/V28/V31/V32→V33、MySQL、
    Docker 和打包 E2E 门禁。
 
 ## 兼容边界
 
-- 2.3.1 可以原地升级，V32 只新增就绪快照表。
+- 2.3.1 可以原地升级；V32 新增快照表，V33 增加约束、索引和截止时间字段，不删除业务数据。
 - 不修改五模块既有业务状态机和 API 的成功语义。
 - Admin 只聚合并留存安全计数；整改仍走原模块权限和人工确认。
 - 真实模型、企业身份、供应商租户、容量和生产值班继续由部署方验收。

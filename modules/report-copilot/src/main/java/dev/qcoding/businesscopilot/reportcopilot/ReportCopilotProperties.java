@@ -26,7 +26,29 @@ public record ReportCopilotProperties(
         int maxImportBytes,
         Duration sourceFreshnessTtl,
         String defaultTemplateId,
-        String defaultTemplateVersion) {
+        String defaultTemplateVersion,
+        Duration reviewSla) {
+
+    public ReportCopilotProperties(boolean enabled,
+                                   int maxPeriodDays,
+                                   int maxSourceCount,
+                                   int maxSourceLength,
+                                   int maxMetricSources,
+                                   int maxTaskSources,
+                                   int maxMeetingNoteSources,
+                                   Duration draftTtl,
+                                   Set<ReportType> allowedReportTypes,
+                                   boolean markdownExportEnabled,
+                                   boolean htmlExportEnabled,
+                                   int maxImportBytes,
+                                   Duration sourceFreshnessTtl,
+                                   String defaultTemplateId,
+                                   String defaultTemplateVersion) {
+        this(enabled, maxPeriodDays, maxSourceCount, maxSourceLength, maxMetricSources,
+                maxTaskSources, maxMeetingNoteSources, draftTtl, allowedReportTypes,
+                markdownExportEnabled, htmlExportEnabled, maxImportBytes, sourceFreshnessTtl,
+                defaultTemplateId, defaultTemplateVersion, Duration.ofHours(24));
+    }
 
     public ReportCopilotProperties(boolean enabled,
                                    int maxPeriodDays,
@@ -41,7 +63,7 @@ public record ReportCopilotProperties(
         this(enabled, maxPeriodDays, maxSourceCount, maxSourceLength, maxMetricSources,
                 maxTaskSources, maxMeetingNoteSources, draftTtl, allowedReportTypes,
                 markdownExportEnabled, true, 1_048_576, Duration.ofDays(7),
-                "evidence-weekly", "2.0");
+                "evidence-weekly", "2.0", Duration.ofHours(24));
     }
 
     @ConstructorBinding
@@ -84,6 +106,9 @@ public record ReportCopilotProperties(
         }
         if (defaultTemplateVersion == null || defaultTemplateVersion.isBlank()) {
             defaultTemplateVersion = "2.0";
+        }
+        if (reviewSla == null || reviewSla.isNegative() || reviewSla.isZero()) {
+            reviewSla = Duration.ofHours(24);
         }
     }
 }

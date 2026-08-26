@@ -7,6 +7,7 @@ import dev.qcoding.businesscopilot.commonweb.api.BusinessException;
 import dev.qcoding.businesscopilot.commonweb.api.ErrorCode;
 import dev.qcoding.businesscopilot.knowledgecopilot.document.DocumentUploadService;
 import dev.qcoding.businesscopilot.knowledgecopilot.document.KnowledgeVisibilityScope;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
@@ -135,13 +136,25 @@ public class KnowledgeSourceSyncService {
                 .orElseThrow(() -> new BusinessException(
                         ErrorCode.STATE_CONFLICT, "当前来源适配器尚未装配"));
         String actorId = actorProvider.currentActor().actorId();
+        if (fullResync) {
+            cancelStaleActiveRun(connectionId);
+        }
         String cursor = fullResync ? null : latestCursor(connectionId);
-        Long runId = jdbcTemplate.queryForObject("""
-                INSERT INTO knowledge_sync_runs (
-                    connection_id, status, cursor_before, requested_by
-                ) VALUES (?, 'RUNNING', ?, ?)
-                RETURNING id
-                """, Long.class, connectionId, cursor, actorId);
+        Long runId;
+        try {
+            runId = jdbcTemplate.queryForObject("""
+                    INSERT INTO knowledge_sync_runs (
+                        connection_id, status, cursor_before, requested_by
+                    ) VALUES (?, 'RUNNING', ?, ?)
+                    RETURNING id
+                    """, Long.class, connectionId, cursor, actorId);
+        } catch (DuplicateKeyException ex) {
+            throw new BusinessException(ErrorCode.STATE_CONFLICT,
+                    "该知识来源已有同步任务正在运行");
+        }
+        if (runId == null) {
+            throw new IllegalStateException("知识来源同步任务创建失败");
+        }
         int fetched = 0;
         int created = 0;
         int updated = 0;
@@ -205,6 +218,18 @@ public class KnowledgeSourceSyncService {
         }
     }
 
+    private void cancelStaleActiveRun(long connectionId) {
+        jdbcTemplate.update("""
+                UPDATE knowledge_sync_runs
+                SET status = 'CANCELED', finished_at = now(),
+                    error_category = 'STALE_SYNC_RECOVERED'
+                WHERE connection_id = ?
+                  AND status IN ('PENDING', 'RUNNING')
+                  AND started_at <= ?
+                """, connectionId,
+                Timestamp.from(Instant.now().minus(indexStaleAfter)));
+    }
+
     public List<SourceIssue> issues() {
         Timestamp staleBefore = Timestamp.from(Instant.now().minus(indexStaleAfter));
         return jdbcTemplate.query("""
@@ -266,6 +291,7 @@ public class KnowledgeSourceSyncService {
         jdbcTemplate.update("""
                 UPDATE knowledge_documents
                 SET source_item_ref = ?, source_updated_at = ?, expires_at = ?,
+                    visibility_scope = ?,
                     conflict_status = 'NONE',
                     enabled = CASE WHEN index_status = 'INDEXED' THEN TRUE ELSE enabled END,
                     updated_at = now()
@@ -273,6 +299,7 @@ public class KnowledgeSourceSyncService {
                 """, connection.connectionKey() + ":" + item.sourceItemId(),
                 timestamp(item.sourceUpdatedAt()),
                 Timestamp.from(Instant.now().plus(SOURCE_DOCUMENT_TTL)),
+                visibility.name(),
                 logicalDocumentId);
         if (unchanged) {
             return Change.NONE;

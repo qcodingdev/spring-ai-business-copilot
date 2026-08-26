@@ -20,9 +20,9 @@ class EnterpriseReadinessRetentionServiceTest {
         when(repository.deleteGeneratedBefore(argThat(cutoff ->
                 cutoff.isBefore(Instant.now().minus(Duration.ofDays(89)))))).thenReturn(3);
         EnterpriseReadinessProperties properties = new EnterpriseReadinessProperties(
-                "2.4.0-SNAPSHOT", Duration.ofHours(24), Duration.ofDays(90),
+                "2.4.0", Duration.ofHours(24), Duration.ofDays(90),
                 Duration.ofMinutes(15), Duration.ofHours(1),
-                Duration.ofHours(24), Duration.ofDays(7));
+                Duration.ofDays(7));
         EnterpriseReadinessRetentionService service =
                 new EnterpriseReadinessRetentionService(repository, properties);
 
@@ -38,7 +38,7 @@ class EnterpriseReadinessRetentionServiceTest {
                 .thenThrow(new IllegalStateException("database unavailable"));
         EnterpriseReadinessRetentionService service = new EnterpriseReadinessRetentionService(
                 repository, new EnterpriseReadinessProperties(
-                        null, null, null, null, null, null, null));
+                        null, null, null, null, null, null));
 
         assertThat(service.cleanup()).isZero();
     }

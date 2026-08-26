@@ -147,6 +147,14 @@ public class JdbcKnowledgeDocumentRepository implements KnowledgeDocumentReposit
     }
 
     @Override
+    public boolean updateManagedVisibility(Long id, KnowledgeVisibilityScope visibilityScope) {
+        return jdbcTemplate.update(
+                "UPDATE knowledge_documents SET visibility_scope = ?, updated_at = ? "
+                        + "WHERE id = ? AND system_managed = TRUE",
+                visibilityScope.name(), Timestamp.from(java.time.Instant.now()), id) == 1;
+    }
+
+    @Override
     public int nextVersion(java.util.UUID logicalDocumentId) {
         Integer value = jdbcTemplate.queryForObject(
                 "SELECT COALESCE(MAX(version_no), 0) + 1 FROM knowledge_documents WHERE logical_document_id = ?",

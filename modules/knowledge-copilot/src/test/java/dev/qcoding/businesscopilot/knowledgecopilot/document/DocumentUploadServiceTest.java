@@ -113,6 +113,8 @@ class DocumentUploadServiceTest {
         when(extractor.extract(any(), any(), any()))
                 .thenReturn(new ExtractedDocument(DocumentFormat.MARKDOWN, content, content.length()));
         when(documentRepository.findCurrent(logicalId)).thenReturn(Optional.of(current));
+        when(documentRepository.updateManagedVisibility(1L, KnowledgeVisibilityScope.ADMIN))
+                .thenReturn(true);
         when(chunkRepository.findByDocumentId(1L)).thenReturn(List.of(
                 new KnowledgeChunk(11L, 1L, "Guide", 0, "Body", "Body", 1, null)));
         when(indexingService.ensureQueued(eq(1L), any(Duration.class)))
@@ -120,12 +122,13 @@ class DocumentUploadServiceTest {
 
         DocumentUploadResponse response = service.ingestSystemDocument(
                 "guide.md", "text/markdown", content.getBytes(StandardCharsets.UTF_8),
-                "HR_POLICY", logicalId, KnowledgeVisibilityScope.ALL);
+                "HR_POLICY", logicalId, KnowledgeVisibilityScope.ADMIN);
 
         assertThat(response.indexJobId()).isEqualTo(10L);
         assertThat(response.indexStatus()).isEqualTo("PENDING");
         verify(indexingService, never()).enqueue(1L);
         verify(documentRepository, never()).save(any());
+        verify(documentRepository).updateManagedVisibility(1L, KnowledgeVisibilityScope.ADMIN);
     }
 
     @Test

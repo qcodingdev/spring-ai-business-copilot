@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.3.1"><img alt="Release v2.3.1" src="https://img.shields.io/badge/Release-v2.3.1-2563EB"></a>
+  <a href="https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.4.0"><img alt="Release v2.4.0" src="https://img.shields.io/badge/Release-v2.4.0-2563EB"></a>
   <a href="https://openjdk.org/projects/jdk/21/"><img alt="Java 21" src="https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&amp;logoColor=white"></a>
   <a href="https://spring.io/projects/spring-boot"><img alt="Spring Boot 4.1" src="https://img.shields.io/badge/Spring%20Boot-4.1-6DB33F?logo=springboot&amp;logoColor=white"></a>
   <a href="https://spring.io/projects/spring-ai"><img alt="Spring AI 2.0" src="https://img.shields.io/badge/Spring%20AI-2.0-6DB33F"></a>
@@ -18,28 +18,26 @@
   <a href="#quick-start">Quick start</a> ·
   <a href="#current-business-capabilities">Capabilities</a> ·
   <a href="#architecture">Architecture</a> ·
-  <a href="https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.3.1">Stable v2.3.1</a> ·
+  <a href="https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.4.0">Stable v2.4.0</a> ·
   <a href="https://gitee.com/qcodingdev/spring-ai-business-copilot">Gitee</a>
 </p>
 
 ![Spring AI Business Copilot 2.3 workbench](assets/workbench-demo.gif)
 
-> **Stable release:** `v2.3.1` retains the five governed enterprise workflows and hardens external integrations. It retrieves complete paginated and nested Notion page content, adds deterministic provider-contract coverage, and runs recurring dependency and container security checks. Production deployment still requires deployment-owned identity, secrets, network policy, retention settings, and vendor sandbox acceptance.
-
-> **Development line:** the current source version is `2.4.0-SNAPSHOT`. It adds an Admin-only five-module readiness loop: stable checks classify blockers and warnings, link back to the existing remediation screens, rerun on the server, and persist immutable, content-safe evidence snapshots. `v2.3.1` remains the latest formal release until the 2.4 release gates are complete.
+> **Stable release:** `v2.4.0` adds an Admin-only five-module readiness loop: configuration prerequisites prevent empty deployments from reporting `READY`, operational checks link back to existing remediation screens, and the server persists retention-bounded, append-only, content-safe application evidence snapshots. Production deployment still requires deployment-owned identity, secrets, network policy, retention settings, real-model evaluation, and vendor sandbox acceptance.
 
 ## One workbench for five enterprise domains
 
 Spring AI Business Copilot has grown from the original Data Copilot into a unified workbench for data analysis, enterprise knowledge, customer operations, business reporting, recruiting, and employee services. Each domain can run independently, while data handoffs, grounded knowledge, human review, and persisted state connect them into operational workflows.
 
-The `2.3` line productized these existing capabilities rather than adding more modules. `2.3.1` strengthened the external-integration and maintenance baseline; the `2.4.0-SNAPSHOT` line now adds enterprise-readiness evidence without introducing a sixth business domain:
+The `2.3` line productized these existing capabilities rather than adding more modules. `2.3.1` strengthened the external-integration and maintenance baseline; `2.4.0` adds enterprise-readiness evidence without introducing a sixth business domain:
 
 - **Unified enterprise workbench:** a bilingual Vue 3 + TypeScript interface brings together the overview, five business domains, and system administration, with actions scoped to `ADMIN`, `OPERATOR`, and `REVIEWER` roles.
 - **Cross-domain collaboration:** Data results flow into Report; Knowledge grounds support and employee-policy answers; external tickets, knowledge sources, report inputs, and ATS records enter controlled module workflows.
 - **Complete human review:** SQL execution, knowledge-quality disposition, support drafts, report confirmation, and recruiting assessments retain evidence, risk, state, human edits, and confirmation records.
 - **Diagnosable delivery:** administration covers runtime health, AI call chains, token/latency visibility, knowledge documents, and experience data; Docker Compose, automated tests, SBOM, and security gates cover delivery.
 - **Maintained integrations:** Notion uses the current `2026-03-11` API contract and bounded full-page traversal; direct contracts cover SharePoint, Confluence, Notion, Jira Service Management, Zendesk, ServiceNow, Feishu, and WeCom.
-- **Readiness evidence:** thirteen checks cover stale claims, uncertain writebacks, invalid knowledge, unrecovered failures, SLA breaches, and overdue reviews across all five modules; Admin can remediate, rerun, and retain append-only evidence with bounded validity and retention.
+- **Readiness evidence:** seven model/module prerequisites and thirteen operational checks cover configuration, stale claims, uncertain writebacks, invalid knowledge, unrecovered failures, SLA breaches, and due reviews; Admin can remediate, rerun, and retain append-only application evidence with bounded validity and retention.
 
 ## Current business capabilities
 
@@ -56,7 +54,7 @@ The `2.3` line productized these existing capabilities rather than adding more m
 Requirements: Docker with Compose support.
 
 ```bash
-git clone --branch v2.3.1 --single-branch \
+git clone --branch v2.4.0 --single-branch \
   https://github.com/qcodingdev/spring-ai-business-copilot.git
 cd spring-ai-business-copilot/examples
 cp .env.example .env
@@ -108,7 +106,7 @@ Chat and embedding endpoints are independent because many OpenAI-compatible chat
 4. **Report:** select a prepared Data handoff or enter/upload a source, generate a draft, review evidence, and confirm the report.
 5. **HR:** draft and confirm job criteria, review a fictional resume, and inspect the grouped recruiting and employee-service navigation.
 
-Administrators on the development line can then open **System administration → Enterprise readiness**, follow any remediation link back to these five workflows, rerun the checks, and save a purpose-bound evidence snapshot.
+Administrators can then open **System administration → Enterprise readiness**, follow any remediation link back to these five workflows, rerun the checks, and save a purpose-bound evidence snapshot.
 
 ## Product tour
 
@@ -132,7 +130,7 @@ All visuals use fictional data captured from the runnable Docker Compose applica
 - Data Copilot combines application guardrails with an independently restricted database reader.
 - Request IDs, model and policy metadata, latency, lifecycle state, and bounded audit retention keep failures diagnosable.
 - External connections fail closed through HTTPS allowlists, DNS/IP checks, redirect blocking, bounded responses, and environment-only secret references.
-- Knowledge retrieval excludes expired or conflicted documents across text, keyword, and vector paths; incomplete readiness probe sets fail closed instead of reporting a false `READY` state.
+- Knowledge retrieval excludes expired or conflicted documents across text, keyword, and vector paths; source ACL changes update retrieval visibility even when content is unchanged; missing model/module prerequisites return `NOT_CONFIGURED` instead of a false `READY` state.
 
 ## Architecture
 
@@ -186,7 +184,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow and focused 
 
 | Resource | Link |
 |---|---|
-| Stable release | [v2.3.1](https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.3.1) |
+| Stable release | [v2.4.0](https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.4.0) |
 | Release history | [CHANGELOG.md](CHANGELOG.md) · [GitHub Releases](https://github.com/qcodingdev/spring-ai-business-copilot/releases) |
 | Upgrade and verification | [2.3.0 → 2.3.1](docs/upgrade-2.3.0-to-2.3.1.md) · [2.3.1 → 2.4.0](docs/upgrade-2.3.1-to-2.4.0.md) · [2.4 design](docs/2.4-enterprise-readiness-design.md) · [2.4 local validation](docs/local-validation-2.4.0.md) |
 | Questions and bugs | [GitHub Issues](https://github.com/qcodingdev/spring-ai-business-copilot/issues) |

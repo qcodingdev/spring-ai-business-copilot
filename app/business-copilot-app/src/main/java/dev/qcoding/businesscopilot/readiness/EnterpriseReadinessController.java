@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Admin-only live assessment, evidence creation and immutable history. */
+/** Admin-only live assessment, evidence creation and retention-bounded append-only history. */
 @Validated
 @RestController
 @RequestMapping("/api/admin/readiness")

@@ -126,8 +126,10 @@ public class ReportCopilotAutoConfiguration {
     public ReportDraftRepository reportDraftRepository(JdbcTemplate jdbcTemplate,
                                                         CurrentActorProvider actorProvider,
                                                         ConfirmationTokenService tokenService,
-                                                        ObjectMapper objectMapper) {
-        return new JdbcReportDraftRepository(jdbcTemplate, actorProvider, tokenService, objectMapper);
+                                                        ObjectMapper objectMapper,
+                                                        ReportCopilotProperties properties) {
+        return new JdbcReportDraftRepository(
+                jdbcTemplate, actorProvider, tokenService, objectMapper, properties.reviewSla());
     }
 
     @Bean

@@ -17,7 +17,6 @@ public class JdbcEnterpriseReadinessProbeRepository implements EnterpriseReadine
                 SELECT ?::timestamptz AS now_at,
                        ?::timestamptz AS stale_before,
                        ?::timestamptz AS expired_result_before,
-                       ?::timestamptz AS review_before,
                        ?::timestamptz AS failed_since
             )
             SELECT
@@ -75,16 +74,16 @@ public class JdbcEnterpriseReadinessProbeRepository implements EnterpriseReadine
                    )) AS report_failed_runs,
                 (SELECT COUNT(*) FROM report_drafts draft
                  WHERE draft.status IN ('DRAFTED', 'NEEDS_REVIEW')
-                   AND draft.created_at <= boundary.review_before) AS report_overdue_reviews,
+                   AND draft.review_due_at <= boundary.now_at) AS report_overdue_reviews,
                 (SELECT COUNT(*) FROM resume_assessments assessment
                  WHERE assessment.status IN ('DRAFTED', 'NEEDS_REVIEW')
-                   AND assessment.created_at <= boundary.review_before) AS hr_overdue_assessment_reviews,
+                   AND assessment.review_due_at <= boundary.now_at) AS hr_overdue_assessment_reviews,
                 (SELECT COUNT(*) FROM hr_onboarding_tasks task
                  JOIN hr_onboarding_instances instance ON instance.id = task.instance_id
                  WHERE instance.status = 'IN_PROGRESS'
                    AND task.required = TRUE
                    AND task.status = 'PENDING'
-                   AND task.created_at <= boundary.review_before) AS hr_overdue_onboarding_tasks
+                   AND task.due_at <= boundary.now_at) AS hr_overdue_onboarding_tasks
             FROM boundaries boundary
             """;
 
@@ -115,7 +114,6 @@ public class JdbcEnterpriseReadinessProbeRepository implements EnterpriseReadine
         }, Timestamp.from(now),
                 Timestamp.from(now.minus(properties.staleOperationAfter())),
                 Timestamp.from(now.minus(properties.expiredResultGrace())),
-                Timestamp.from(now.minus(properties.reviewBacklogAfter())),
                 Timestamp.from(now.minus(properties.failedRunLookback())));
         if (result == null) {
             throw new IllegalStateException("企业运行就绪检查未返回结果");

@@ -10,14 +10,25 @@ public record ResumeCopilotProperties(boolean enabled, int maxJobDescriptionLeng
                                       int maxCriteriaCount, int maxEvidenceCount, Duration reviewTokenTtl,
                                       boolean protectedAttributeGuardEnabled,
                                       Duration submissionRetention,
-                                      int maxReviewerFeedbackLength) {
+                                      int maxReviewerFeedbackLength,
+                                      Duration reviewSla) {
+
+    public ResumeCopilotProperties(boolean enabled, int maxJobDescriptionLength, int maxResumeLength,
+                                   int maxCriteriaCount, int maxEvidenceCount, Duration reviewTokenTtl,
+                                   boolean protectedAttributeGuardEnabled,
+                                   Duration submissionRetention,
+                                   int maxReviewerFeedbackLength) {
+        this(enabled, maxJobDescriptionLength, maxResumeLength, maxCriteriaCount,
+                maxEvidenceCount, reviewTokenTtl, protectedAttributeGuardEnabled,
+                submissionRetention, maxReviewerFeedbackLength, Duration.ofHours(24));
+    }
 
     public ResumeCopilotProperties(boolean enabled, int maxJobDescriptionLength, int maxResumeLength,
                                    int maxCriteriaCount, int maxEvidenceCount, Duration reviewTokenTtl,
                                    boolean protectedAttributeGuardEnabled) {
         this(enabled, maxJobDescriptionLength, maxResumeLength, maxCriteriaCount,
                 maxEvidenceCount, reviewTokenTtl, protectedAttributeGuardEnabled,
-                Duration.ofDays(30), 4000);
+                Duration.ofDays(30), 4000, Duration.ofHours(24));
     }
 
     @ConstructorBinding
@@ -34,6 +45,9 @@ public record ResumeCopilotProperties(boolean enabled, int maxJobDescriptionLeng
         }
         if (maxReviewerFeedbackLength <= 0) {
             maxReviewerFeedbackLength = 4000;
+        }
+        if (reviewSla == null || reviewSla.isZero() || reviewSla.isNegative()) {
+            reviewSla = Duration.ofHours(24);
         }
     }
 }

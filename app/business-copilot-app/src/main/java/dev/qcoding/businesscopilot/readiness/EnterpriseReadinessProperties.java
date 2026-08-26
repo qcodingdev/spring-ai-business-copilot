@@ -12,30 +12,41 @@ public record EnterpriseReadinessProperties(
         Duration snapshotRetention,
         Duration staleOperationAfter,
         Duration expiredResultGrace,
-        Duration reviewBacklogAfter,
         Duration failedRunLookback) {
 
     public EnterpriseReadinessProperties {
         if (applicationVersion == null || applicationVersion.isBlank()) {
-            applicationVersion = "2.4.0-SNAPSHOT";
+            applicationVersion = "2.4.0";
         } else {
             applicationVersion = applicationVersion.trim();
         }
         if (applicationVersion.length() > 64) {
             throw new IllegalArgumentException("企业运行就绪应用版本不能超过 64 个字符");
         }
-        snapshotValidity = positiveOr(snapshotValidity, Duration.ofHours(24));
-        snapshotRetention = positiveOr(snapshotRetention, Duration.ofDays(90));
+        snapshotValidity = validatedOrDefault(
+                "snapshot-validity", snapshotValidity, Duration.ofHours(24));
+        snapshotRetention = validatedOrDefault(
+                "snapshot-retention", snapshotRetention, Duration.ofDays(90));
         if (snapshotRetention.compareTo(snapshotValidity) <= 0) {
-            snapshotRetention = snapshotValidity.plus(Duration.ofDays(1));
+            throw new IllegalArgumentException(
+                    "snapshot-retention 必须大于 snapshot-validity");
         }
-        staleOperationAfter = positiveOr(staleOperationAfter, Duration.ofMinutes(15));
-        expiredResultGrace = positiveOr(expiredResultGrace, Duration.ofHours(1));
-        reviewBacklogAfter = positiveOr(reviewBacklogAfter, Duration.ofHours(24));
-        failedRunLookback = positiveOr(failedRunLookback, Duration.ofDays(7));
+        staleOperationAfter = validatedOrDefault(
+                "stale-operation-after", staleOperationAfter, Duration.ofMinutes(15));
+        expiredResultGrace = validatedOrDefault(
+                "expired-result-grace", expiredResultGrace, Duration.ofHours(1));
+        failedRunLookback = validatedOrDefault(
+                "failed-run-lookback", failedRunLookback, Duration.ofDays(7));
     }
 
-    private static Duration positiveOr(Duration value, Duration fallback) {
-        return value == null || value.isZero() || value.isNegative() ? fallback : value;
+    private static Duration validatedOrDefault(
+            String propertyName, Duration value, Duration fallback) {
+        if (value == null) {
+            return fallback;
+        }
+        if (value.isZero() || value.isNegative()) {
+            throw new IllegalArgumentException(propertyName + " 必须大于 0");
+        }
+        return value;
     }
 }

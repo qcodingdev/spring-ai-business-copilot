@@ -8,6 +8,7 @@ import dev.qcoding.businesscopilot.demo.RuntimeModeProperties;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.context.support.GenericApplicationContext;
+import org.springframework.mock.env.MockEnvironment;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Clock;
@@ -23,6 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -38,7 +40,7 @@ class EnterpriseReadinessServiceTest {
             context.registerBean(EnterpriseReadinessSnapshotRepository.class,
                     () -> mock(EnterpriseReadinessSnapshotRepository.class));
             context.registerBean(EnterpriseReadinessProperties.class,
-                    () -> new EnterpriseReadinessProperties(null, null, null, null, null, null, null));
+                    () -> new EnterpriseReadinessProperties(null, null, null, null, null, null));
             context.registerBean(RuntimeModeProperties.class,
                     () -> new RuntimeModeProperties("self-hosted"));
             context.registerBean(CurrentActorProvider.class,
@@ -67,10 +69,16 @@ class EnterpriseReadinessServiceTest {
         assertThat(first.status()).isEqualTo(EnterpriseReadiness.OverallStatus.BLOCKED);
         assertThat(first.blockerCount()).isEqualTo(1);
         assertThat(first.warningCount()).isEqualTo(1);
-        assertThat(first.passedCount()).isEqualTo(11);
-        assertThat(first.checks()).hasSize(13);
-        assertThat(first.checks().getFirst().affectedCount()).isEqualTo(2);
-        assertThat(first.checks().getFirst().threshold()).isEqualTo("PT15M");
+        assertThat(first.passedCount()).isEqualTo(18);
+        assertThat(first.checks()).hasSize(20);
+        EnterpriseReadiness.Check staleHandoff = first.checks().stream()
+                .filter(check -> check.checkId().equals("DATA_STALE_HANDOFF_CLAIMS"))
+                .findFirst().orElseThrow();
+        assertThat(staleHandoff.affectedCount()).isEqualTo(2);
+        assertThat(staleHandoff.threshold()).isEqualTo("PT15M");
+        assertThat(first.checks().stream()
+                .filter(check -> check.checkId().equals("DATA_EXPIRED_RESULTS"))
+                .findFirst().orElseThrow().threshold()).isEqualTo("PT1H");
         assertThat(first.contentHash()).hasSize(64).isEqualTo(second.contentHash());
         assertThat(first.generatedAt()).isEqualTo(NOW);
         assertThat(first.validUntil()).isEqualTo(NOW.plus(Duration.ofHours(24)));
@@ -93,6 +101,7 @@ class EnterpriseReadinessServiceTest {
         });
         EnterpriseReadinessService service = service(probes, snapshots);
 
+        EnterpriseReadiness.Assessment liveAssessment = service.assess();
         EnterpriseReadiness.Snapshot snapshot = service.createSnapshot("  生产前复核  ");
 
         ArgumentCaptor<EnterpriseReadiness.SnapshotDraft> draft =
@@ -101,8 +110,31 @@ class EnterpriseReadinessServiceTest {
         assertThat(draft.getValue().purpose()).isEqualTo("生产前复核");
         assertThat(draft.getValue().generatedBy()).isEqualTo("admin-1");
         assertThat(snapshot.status()).isEqualTo(EnterpriseReadiness.OverallStatus.READY);
-        assertThat(snapshot.passedCount()).isEqualTo(13);
-        verify(probes).probe(any(), any());
+        assertThat(snapshot.passedCount()).isEqualTo(20);
+        assertThat(snapshot.contentHash()).hasSize(64);
+        assertThat(snapshot.contentHash()).isEqualTo(draft.getValue().assessment().contentHash());
+        assertThat(snapshot.contentHash()).isNotEqualTo(liveAssessment.contentHash());
+        verify(probes, times(2)).probe(any(), any());
+    }
+
+    @Test
+    void missingModelsAndDisabledModulesCannotReportReady() {
+        EnterpriseReadinessProbeRepository probes = mock(EnterpriseReadinessProbeRepository.class);
+        when(probes.probe(any(), any())).thenReturn(zeroCounts());
+        MockEnvironment environment = new MockEnvironment()
+                .withProperty("spring.ai.model.chat", "none")
+                .withProperty("spring.ai.model.embedding", "none")
+                .withProperty("business-copilot.support-copilot.enabled", "false");
+
+        EnterpriseReadiness.Assessment assessment = service(
+                probes, mock(EnterpriseReadinessSnapshotRepository.class), environment).assess();
+
+        assertThat(assessment.status()).isEqualTo(EnterpriseReadiness.OverallStatus.NOT_CONFIGURED);
+        assertThat(assessment.blockerCount()).isEqualTo(3);
+        assertThat(assessment.checks()).filteredOn(check -> check.affectedCount() > 0)
+                .extracting(EnterpriseReadiness.Check::checkId)
+                .containsExactly("CHAT_MODEL_NOT_CONFIGURED", "EMBEDDING_MODEL_NOT_CONFIGURED",
+                        "SUPPORT_MODULE_DISABLED");
     }
 
     @Test
@@ -135,20 +167,25 @@ class EnterpriseReadinessServiceTest {
     }
 
     @Test
-    void invalidWindowsFallBackToSafeDefaults() {
-        EnterpriseReadinessProperties properties = new EnterpriseReadinessProperties(
-                " ", Duration.ZERO, Duration.ofHours(1), Duration.ZERO,
-                Duration.ZERO, Duration.ofSeconds(-1), null);
+    void invalidWindowsFailFastInsteadOfChangingRetentionPolicy() {
+        EnterpriseReadinessProperties defaults = new EnterpriseReadinessProperties(
+                " ", null, null, null, null, null);
 
-        assertThat(properties.applicationVersion()).isEqualTo("2.4.0-SNAPSHOT");
-        assertThat(properties.snapshotValidity()).isEqualTo(Duration.ofHours(24));
-        assertThat(properties.snapshotRetention()).isEqualTo(Duration.ofHours(48));
-        assertThat(properties.staleOperationAfter()).isEqualTo(Duration.ofMinutes(15));
-        assertThat(properties.expiredResultGrace()).isEqualTo(Duration.ofHours(1));
-        assertThat(properties.reviewBacklogAfter()).isEqualTo(Duration.ofHours(24));
-        assertThat(properties.failedRunLookback()).isEqualTo(Duration.ofDays(7));
+        assertThat(defaults.applicationVersion()).isEqualTo("2.4.0");
+        assertThat(defaults.snapshotValidity()).isEqualTo(Duration.ofHours(24));
+        assertThat(defaults.snapshotRetention()).isEqualTo(Duration.ofDays(90));
         assertThatThrownBy(() -> new EnterpriseReadinessProperties(
-                "v".repeat(65), null, null, null, null, null, null))
+                "2.4.0", Duration.ZERO, Duration.ofDays(90),
+                null, null, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("snapshot-validity");
+        assertThatThrownBy(() -> new EnterpriseReadinessProperties(
+                "2.4.0", Duration.ofHours(24), Duration.ofHours(1),
+                null, null, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("snapshot-retention");
+        assertThatThrownBy(() -> new EnterpriseReadinessProperties(
+                "v".repeat(65), null, null, null, null, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("64");
     }
@@ -156,14 +193,33 @@ class EnterpriseReadinessServiceTest {
     private EnterpriseReadinessService service(
             EnterpriseReadinessProbeRepository probes,
             EnterpriseReadinessSnapshotRepository snapshots) {
+        return service(probes, snapshots, configuredEnvironment());
+    }
+
+    private EnterpriseReadinessService service(
+            EnterpriseReadinessProbeRepository probes,
+            EnterpriseReadinessSnapshotRepository snapshots,
+            MockEnvironment environment) {
         EnterpriseReadinessProperties properties = new EnterpriseReadinessProperties(
-                "2.4.0-SNAPSHOT", Duration.ofHours(24), Duration.ofDays(90),
+                "2.4.0", Duration.ofHours(24), Duration.ofDays(90),
                 Duration.ofMinutes(15), Duration.ofHours(1),
-                Duration.ofHours(24), Duration.ofDays(7));
+                Duration.ofDays(7));
         return new EnterpriseReadinessService(
                 probes, snapshots, properties, new RuntimeModeProperties("self-hosted"),
+                environment,
                 () -> new CurrentActor("admin-1", Set.of(BusinessRole.ADMIN)),
                 new ObjectMapper(), Clock.fixed(NOW, ZoneOffset.UTC));
+    }
+
+    private MockEnvironment configuredEnvironment() {
+        return new MockEnvironment()
+                .withProperty("spring.ai.model.chat", "openai")
+                .withProperty("spring.ai.model.embedding", "openai")
+                .withProperty("business-copilot.data-copilot.enabled", "true")
+                .withProperty("business-copilot.knowledge.enabled", "true")
+                .withProperty("business-copilot.support-copilot.enabled", "true")
+                .withProperty("business-copilot.report-copilot.enabled", "true")
+                .withProperty("business-copilot.resume-copilot.enabled", "true");
     }
 
     private Map<String, Long> zeroCounts() {

@@ -24,6 +24,9 @@ public interface KnowledgeDocumentRepository {
     /** 更新文档启用状态，并返回是否更新成功。 */
     boolean updateEnabled(Long id, boolean enabled);
 
+    /** 更新受管文档的检索可见范围，来源 ACL 变化时即使正文未变化也必须同步。 */
+    boolean updateManagedVisibility(Long id, KnowledgeVisibilityScope visibilityScope);
+
     /** 获取逻辑文档的下一个递增版本号。 */
     int nextVersion(java.util.UUID logicalDocumentId);
 

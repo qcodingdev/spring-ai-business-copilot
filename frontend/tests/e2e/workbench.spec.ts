@@ -328,10 +328,10 @@ test('Admin reruns five-module readiness, saves evidence, and routes remediation
     { checkId: 'KNOWLEDGE_FAILED_SYNC_RUNS', module: 'KNOWLEDGE', status: 'WARNING', affectedCount: 1, threshold: 'PT168H', actionPath: '/knowledge?tab=sources' },
     { checkId: 'SUPPORT_BREACHED_SLA', module: 'SUPPORT', status: 'PASS', affectedCount: 0, threshold: null, actionPath: '/support?tab=quality' },
     { checkId: 'REPORT_FAILED_RUNS', module: 'REPORT', status: 'PASS', affectedCount: 0, threshold: 'PT168H', actionPath: '/report?tab=schedules' },
-    { checkId: 'HR_OVERDUE_ASSESSMENT_REVIEWS', module: 'HR', status: 'WARNING', affectedCount: 1, threshold: 'PT24H', actionPath: '/hr?section=recruiting&tab=assessment' },
+    { checkId: 'HR_OVERDUE_ASSESSMENT_REVIEWS', module: 'HR', status: 'WARNING', affectedCount: 1, threshold: null, actionPath: '/hr?section=recruiting&tab=assessment' },
   ]
   const live = {
-    schemaVersion: 1, applicationVersion: '2.4.0-SNAPSHOT', runtimeMode: 'self-hosted',
+    schemaVersion: 2, applicationVersion: '2.4.0', runtimeMode: 'self-hosted',
     status: 'BLOCKED', passedCount: 2, warningCount: 2, blockerCount: 1,
     checks, contentHash: 'a'.repeat(64), generatedAt, validUntil,
   }
@@ -378,7 +378,7 @@ test('Admin reruns five-module readiness, saves evidence, and routes remediation
   await expect(page.getByText('生产发布前复核', { exact: true })).toBeVisible()
   expect(snapshotCreated).toBe(true)
 
-  await page.locator('.readiness-check').filter({ hasText: '候选人评估复核超时' }).getByRole('link', { name: '进入整改' }).click()
+  await page.locator('.readiness-check').filter({ hasText: '候选人评估复核到期' }).getByRole('link', { name: '进入整改' }).click()
   await expect(page).toHaveURL(/\/hr\?section=recruiting&tab=assessment/)
   await expect(page.getByText('虚构逾期评估', { exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: '领取并打开复核' })).toBeVisible()

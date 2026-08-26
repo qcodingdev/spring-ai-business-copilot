@@ -31,9 +31,9 @@ class JdbcEnterpriseReadinessProbeRepositoryTest {
                     return mapper.mapRow(resultSet, 0);
                 });
         EnterpriseReadinessProperties properties = new EnterpriseReadinessProperties(
-                "2.4.0-SNAPSHOT", Duration.ofHours(24), Duration.ofDays(90),
+                "2.4.0", Duration.ofHours(24), Duration.ofDays(90),
                 Duration.ofMinutes(15), Duration.ofHours(1),
-                Duration.ofHours(24), Duration.ofDays(7));
+                Duration.ofDays(7));
         JdbcEnterpriseReadinessProbeRepository repository =
                 new JdbcEnterpriseReadinessProbeRepository(jdbcTemplate);
 
@@ -48,6 +48,10 @@ class JdbcEnterpriseReadinessProbeRepositoryTest {
                         && sql.contains("support_draft_writebacks")
                         && sql.contains("report_schedule_runs")
                         && sql.contains("hr_onboarding_tasks")
+                        && sql.contains("draft.review_due_at <= boundary.now_at")
+                        && sql.contains("assessment.review_due_at <= boundary.now_at")
+                        && sql.contains("task.due_at <= boundary.now_at")
+                        && !sql.contains("review_before")
                         && sql.contains("NOT EXISTS")
                         && sql.contains("recovery.status = 'COMPLETED'")
                         && sql.contains("recovery.status IN ('DRAFTED', 'NEEDS_REVIEW')")

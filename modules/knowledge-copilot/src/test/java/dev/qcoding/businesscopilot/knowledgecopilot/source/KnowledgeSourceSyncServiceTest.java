@@ -5,9 +5,11 @@ import dev.qcoding.businesscopilot.commonsecurity.CurrentActor;
 import dev.qcoding.businesscopilot.commonsecurity.ExternalSecretResolver;
 import dev.qcoding.businesscopilot.commonsecurity.ExternalConnectionSecurityProperties;
 import dev.qcoding.businesscopilot.commonsecurity.ExternalEndpointPolicy;
+import dev.qcoding.businesscopilot.commonweb.api.BusinessException;
 import dev.qcoding.businesscopilot.knowledgecopilot.document.DocumentUploadService;
 import dev.qcoding.businesscopilot.knowledgecopilot.document.KnowledgeVisibilityScope;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import tools.jackson.databind.ObjectMapper;
@@ -24,6 +26,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
@@ -166,10 +169,40 @@ class KnowledgeSourceSyncServiceTest {
         verify(jdbcTemplate).update(
                 argThat(sql -> sql.contains("UPDATE knowledge_documents")
                         && sql.contains("expires_at = ?")
+                        && sql.contains("visibility_scope = ?")
                         && sql.contains("enabled = CASE WHEN index_status = 'INDEXED'")
                         && sql.contains("conflict_status = 'NONE'")),
                 eq("sharepoint-ops:page-100"), any(java.sql.Timestamp.class),
-                any(java.sql.Timestamp.class), eq(logicalDocumentId));
+                any(java.sql.Timestamp.class), eq("ADMIN"), eq(logicalDocumentId));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void rejectsASecondActiveSyncForTheSameConnection() {
+        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+        KnowledgeSourceConnection connection = new KnowledgeSourceConnection(
+                7L, "sharepoint-ops", "运营知识库", KnowledgeSourceProvider.SHAREPOINT,
+                "https://example.sharepoint.com", "site-1", "SHAREPOINT_TOKEN",
+                Map.of(), KnowledgeVisibilityScope.ADMIN, true, "admin");
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Object[].class)))
+                .thenAnswer(invocation -> invocation.<String>getArgument(0)
+                        .contains("knowledge_source_connections WHERE id")
+                        ? List.of(connection) : List.of());
+        when(jdbcTemplate.queryForObject(
+                contains("INSERT INTO knowledge_sync_runs"), eq(Long.class), any(Object[].class)))
+                .thenThrow(new DuplicateKeyException("active sync"));
+        KnowledgeSourceAdapter adapter = mock(KnowledgeSourceAdapter.class);
+        when(adapter.supports(KnowledgeSourceProvider.SHAREPOINT)).thenReturn(true);
+        KnowledgeSourceSyncService service = new KnowledgeSourceSyncService(
+                jdbcTemplate, List.of(adapter), mock(DocumentUploadService.class),
+                () -> new CurrentActor("admin", Set.of(BusinessRole.ADMIN)),
+                mock(ExternalSecretResolver.class), new ObjectMapper(),
+                mock(ExternalEndpointPolicy.class));
+
+        assertThatThrownBy(() -> service.synchronize(7L))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("已有同步任务正在运行");
+        verify(adapter, never()).fetch(any(), any());
     }
 
     @Test
@@ -202,6 +235,10 @@ class KnowledgeSourceSyncServiceTest {
 
         assertThat(service.synchronize(7L, true).status()).isEqualTo("COMPLETED");
         verify(adapter).fetch(connection, null);
+        verify(jdbcTemplate).update(
+                argThat(sql -> sql.contains("error_category = 'STALE_SYNC_RECOVERED'")
+                        && sql.contains("started_at <= ?")),
+                eq(7L), any(Timestamp.class));
         verify(jdbcTemplate, never()).query(
                 contains("SELECT cursor_after"), any(RowMapper.class), any(Object[].class));
     }

@@ -10,11 +10,11 @@ public final class EnterpriseReadiness {
     private EnterpriseReadiness() {
     }
 
-    public enum Module { DATA, KNOWLEDGE, SUPPORT, REPORT, HR }
+    public enum Module { PLATFORM, DATA, KNOWLEDGE, SUPPORT, REPORT, HR }
 
     public enum CheckStatus { PASS, WARNING, BLOCKER }
 
-    public enum OverallStatus { READY, ATTENTION, BLOCKED }
+    public enum OverallStatus { READY, ATTENTION, BLOCKED, NOT_CONFIGURED }
 
     public record Check(
             String checkId,

@@ -82,12 +82,11 @@ business-copilot:
       delete-after: ${BUSINESS_COPILOT_AUDIT_DELETE_AFTER:30d}
       cleanup-cron: ${BUSINESS_COPILOT_AUDIT_CLEANUP_CRON:0 15 3 * * *}
   enterprise-readiness:
-    application-version: ${BUSINESS_COPILOT_APPLICATION_VERSION:2.4.0-SNAPSHOT}
+    application-version: ${BUSINESS_COPILOT_APPLICATION_VERSION:2.4.0}
     snapshot-validity: ${BUSINESS_COPILOT_READINESS_SNAPSHOT_VALIDITY:24h}
     snapshot-retention: ${BUSINESS_COPILOT_READINESS_SNAPSHOT_RETENTION:90d}
     stale-operation-after: ${BUSINESS_COPILOT_READINESS_STALE_OPERATION_AFTER:15m}
     expired-result-grace: ${BUSINESS_COPILOT_READINESS_EXPIRED_RESULT_GRACE:1h}
-    review-backlog-after: ${BUSINESS_COPILOT_READINESS_REVIEW_BACKLOG_AFTER:24h}
     failed-run-lookback: ${BUSINESS_COPILOT_READINESS_FAILED_RUN_LOOKBACK:7d}
     cleanup-cron: ${BUSINESS_COPILOT_READINESS_CLEANUP_CRON:0 45 3 * * *}
   security:
@@ -250,6 +249,7 @@ business-copilot:
     source-freshness-ttl: 7d
     default-template-id: evidence-weekly
     default-template-version: "2.0"
+    review-sla: ${BUSINESS_COPILOT_REPORT_REVIEW_SLA:24h}
   # ── Resume Copilot 配置 ──────────────────────────────────────
   # 仅做单 JD、单简历的证据化辅助评估，不输出分数、排名或招聘决定。
   resume-copilot:
@@ -263,3 +263,4 @@ business-copilot:
     submission-retention: 30d
     retention-cleanup-delay: 1h
     max-reviewer-feedback-length: 4000
+    review-sla: ${BUSINESS_COPILOT_HR_REVIEW_SLA:24h}
