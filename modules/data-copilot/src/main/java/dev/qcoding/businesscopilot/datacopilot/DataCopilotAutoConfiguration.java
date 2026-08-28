@@ -185,13 +185,17 @@ public class DataCopilotAutoConfiguration {
                                                         ReadOnlyQueryExecutor readOnlyQueryExecutor,
                                                         ResultExplanationService resultExplanationService,
                                                         AuditService auditService,
-                                                        DataQueryResultService dataQueryResultService) {
+                                                        DataQueryResultService dataQueryResultService,
+                                                        CurrentActorProvider actorProvider,
+                                                        ObjectAccessPolicy accessPolicy) {
         return new QueryExecutionService(
                 confirmationService,
                 readOnlyQueryExecutor,
                 resultExplanationService,
                 auditService,
-                dataQueryResultService);
+                dataQueryResultService,
+                actorProvider,
+                accessPolicy);
     }
 
     @Bean

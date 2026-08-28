@@ -12,6 +12,9 @@ import org.springframework.beans.factory.ObjectProvider;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Thin wrapper around Spring AI {@link ChatClient} that provides text and structured generation,
  * translating model failures into business-understandable exceptions.
@@ -91,21 +94,24 @@ public class AiChatService {
     public <T> T generateJson(String operation, String prompt, Class<T> type) {
         ChatClient chatClient = requireChatClient();
         try {
-            T result = coordinator.execute("chat", operation, () -> chatClient.prompt()
+            var first = coordinator.execute("chat", operation, () -> chatClient.prompt()
                     .user(localizedPrompt(prompt))
                     .call()
-                    .entity(type, spec -> spec.validateSchema()));
+                    .responseEntity(type, spec -> spec.validateSchema()));
+            recordAttemptUsage(operation, first.response());
+            T result = first.entity();
             if (localeGuard.complies(result, BusinessRequestContextHolder.currentLocale())) {
                 return result;
             }
             log.warn("AI 输出语言不符合请求，执行一次安全重试：操作={}，locale={}",
                     operation, BusinessRequestContextHolder.currentLocale());
-            T retried = coordinator.execute("chat", operation, () -> chatClient.prompt()
+            var retried = coordinator.execute("chat", operation, () -> chatClient.prompt()
                     .user(languageRetryPrompt(prompt))
                     .call()
-                    .entity(type, spec -> spec.validateSchema()));
-            ensureLocale(retried);
-            return retried;
+                    .responseEntity(type, spec -> spec.validateSchema()));
+            recordAttemptUsage(operation, retried.response());
+            ensureLocale(retried.entity());
+            return retried.entity();
         } catch (BusinessException ex) {
             throw ex;
         } catch (RuntimeException ex) {
@@ -124,21 +130,28 @@ public class AiChatService {
         ChatClient chatClient = requireChatClient();
         long startedAt = System.nanoTime();
         try {
+            List<AiInvocationMetadata> attemptMetadata = new ArrayList<>(2);
+            long attemptStartedAt = System.nanoTime();
             var responseEntity = coordinator.execute("chat", operation, () -> chatClient.prompt()
                     .user(localizedPrompt(prompt)).call().responseEntity(type, spec -> spec.validateSchema()));
+            attemptMetadata.add(metadata(responseEntity.response(), attemptStartedAt));
+            recordAttemptUsage(operation, responseEntity.response());
             if (!localeGuard.complies(responseEntity.entity(),
                     BusinessRequestContextHolder.currentLocale())) {
                 log.warn("AI 输出语言不符合请求，执行一次安全重试：操作={}，locale={}",
                         operation, BusinessRequestContextHolder.currentLocale());
+                long retryStartedAt = System.nanoTime();
                 responseEntity = coordinator.execute("chat", operation, () -> chatClient.prompt()
                         .user(languageRetryPrompt(prompt)).call()
                         .responseEntity(type, spec -> spec.validateSchema()));
+                attemptMetadata.add(metadata(responseEntity.response(), retryStartedAt));
+                recordAttemptUsage(operation, responseEntity.response());
                 ensureLocale(responseEntity.entity());
             }
             AiInvocationResult<T> result = new AiInvocationResult<>(
                     responseEntity.entity(),
-                    metadata(responseEntity.response(), startedAt));
-            coordinator.recordTokens(operation, result.metadata().inputTokens(), result.metadata().outputTokens());
+                    AiInvocationMetadata.cumulative(attemptMetadata,
+                            (System.nanoTime() - startedAt) / 1_000_000L));
             return result;
         } catch (BusinessException ex) {
             throw ex;
@@ -201,22 +214,29 @@ public class AiChatService {
         ChatClient chatClient = requireChatClient();
         long startedAt = System.nanoTime();
         try {
+            List<AiInvocationMetadata> attemptMetadata = new ArrayList<>(2);
+            long attemptStartedAt = System.nanoTime();
             ChatResponse response = coordinator.execute("chat", operation,
                     () -> chatClient.prompt().user(localizedPrompt(prompt)).call().chatResponse());
+            attemptMetadata.add(metadata(response, attemptStartedAt));
+            recordAttemptUsage(operation, response);
             String content = response != null && response.getResult() != null
                     ? response.getResult().getOutput().getText() : null;
             if (!localeGuard.complies(content, BusinessRequestContextHolder.currentLocale())) {
                 log.warn("AI 输出语言不符合请求，执行一次安全重试：操作={}，locale={}",
                         operation, BusinessRequestContextHolder.currentLocale());
+                long retryStartedAt = System.nanoTime();
                 response = coordinator.execute("chat", operation,
                         () -> chatClient.prompt().user(languageRetryPrompt(prompt)).call().chatResponse());
+                attemptMetadata.add(metadata(response, retryStartedAt));
+                recordAttemptUsage(operation, response);
                 content = response != null && response.getResult() != null
                         ? response.getResult().getOutput().getText() : null;
                 ensureLocale(content);
             }
-            AiInvocationResult<String> result = new AiInvocationResult<>(content, metadata(response, startedAt));
-            coordinator.recordTokens(operation, result.metadata().inputTokens(), result.metadata().outputTokens());
-            return result;
+            return new AiInvocationResult<>(content,
+                    AiInvocationMetadata.cumulative(attemptMetadata,
+                            (System.nanoTime() - startedAt) / 1_000_000L));
         } catch (BusinessException ex) {
             throw ex;
         } catch (RuntimeException ex) {
@@ -224,6 +244,12 @@ public class AiChatService {
             throw new BusinessException(ErrorCode.AI_MODEL_ERROR,
                     "AI 对话模型调用失败", ex);
         }
+    }
+
+    /** 每次真实模型尝试单独记入用量指标；缺失用量保持未知，不记为零。 */
+    private void recordAttemptUsage(String operation, ChatResponse response) {
+        AiInvocationMetadata attempt = metadata(response, System.nanoTime());
+        coordinator.recordTokens(operation, attempt.inputTokens(), attempt.outputTokens());
     }
 
     private AiInvocationMetadata metadata(ChatResponse response, long startedAt) {

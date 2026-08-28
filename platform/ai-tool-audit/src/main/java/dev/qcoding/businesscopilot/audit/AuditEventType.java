@@ -15,5 +15,9 @@ public enum AuditEventType {
     /** Query failed at any stage. */
     QUERY_FAILURE,
     /** User did not confirm execution (or cancelled). */
-    QUERY_NOT_CONFIRMED
+    QUERY_NOT_CONFIRMED,
+    /** An authorized actor cancelled a running execution. */
+    QUERY_CANCELLED,
+    /** A cancel attempt was rejected by object-level access policy. */
+    QUERY_CANCEL_DENIED
 }

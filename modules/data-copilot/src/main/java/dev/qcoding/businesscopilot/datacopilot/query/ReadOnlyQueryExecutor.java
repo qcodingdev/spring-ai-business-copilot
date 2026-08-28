@@ -26,8 +26,18 @@ public interface ReadOnlyQueryExecutor {
         return execute(sql);
     }
 
+    /** 使用稳定执行编号和对象归属运行查询；归属供取消时的对象级权限校验使用。 */
+    default QueryResultTable execute(String executionId, String ownerActorId, String sql) {
+        return execute(executionId, sql);
+    }
+
     /** 取消当前执行中的查询；查询不存在或已经结束时返回 false。 */
     default boolean cancel(String executionId) {
         return false;
+    }
+
+    /** 返回执行中查询的对象归属；查询不存在或已经结束时返回 null。 */
+    default String executionOwner(String executionId) {
+        return null;
     }
 }
