@@ -27,6 +27,8 @@
         <module>platform/ai-core</module>
         <module>platform/ai-guardrails</module>
         <module>platform/ai-tool-audit</module>
+        <module>platform/task-runtime</module>
+        <module>platform/evaluation-harness</module>
         <module>modules/data-copilot</module>
         <module>modules/knowledge-copilot</module>
         <module>modules/support-copilot</module>

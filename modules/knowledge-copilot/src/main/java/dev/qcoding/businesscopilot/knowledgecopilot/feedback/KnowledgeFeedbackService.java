@@ -1,5 +1,6 @@
 package dev.qcoding.businesscopilot.knowledgecopilot.feedback;
 
+import dev.qcoding.businesscopilot.commonsecurity.BusinessRole;
 import dev.qcoding.businesscopilot.commonsecurity.CurrentActorProvider;
 import dev.qcoding.businesscopilot.commonweb.api.BusinessException;
 import dev.qcoding.businesscopilot.commonweb.api.ErrorCode;
@@ -50,6 +51,14 @@ public class KnowledgeFeedbackService {
         return repository.countQualityQueue();
     }
 
+    public List<KnowledgeFeedbackHistoryItem> findFeedbackHistory(int page, int size) {
+        return repository.findFeedbackHistory(page, size);
+    }
+
+    public long countFeedbackHistory() {
+        return repository.countFeedbackHistory();
+    }
+
     public KnowledgeQualityReview review(
             Long answerId,
             KnowledgeQualityReviewRequest request) {
@@ -59,7 +68,13 @@ public class KnowledgeFeedbackService {
                     ErrorCode.VALIDATION_ERROR,
                     "人工处置必须填写复核说明");
         }
-        String actorId = actorProvider.currentActor().actorId();
+        var actor = actorProvider.currentActor();
+        String actorId = actor.actorId();
+        if (!actor.hasRole(BusinessRole.ADMIN) && repository.answerOwnedBy(answerId, actorId)) {
+            throw new BusinessException(
+                    ErrorCode.STATE_CONFLICT,
+                    "问答创建者不能复核自己的质量问题，请交由复核员处理");
+        }
         return repository.review(
                         answerId,
                         request.decision(),

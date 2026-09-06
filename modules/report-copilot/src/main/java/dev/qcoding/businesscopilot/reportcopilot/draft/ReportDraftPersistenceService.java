@@ -2,6 +2,7 @@ package dev.qcoding.businesscopilot.reportcopilot.draft;
 
 import dev.qcoding.businesscopilot.aicore.AiInvocationMetadata;
 import dev.qcoding.businesscopilot.aicore.PromptTemplateMetadata;
+import dev.qcoding.businesscopilot.commonsecurity.IndependentReviewService;
 import dev.qcoding.businesscopilot.reportcopilot.ReportCopilotProperties;
 import dev.qcoding.businesscopilot.reportcopilot.audit.ReportAuditLog;
 import dev.qcoding.businesscopilot.reportcopilot.audit.ReportAuditService;
@@ -18,12 +19,20 @@ public class ReportDraftPersistenceService {
     private final ReportDraftRepository draftRepository;
     private final ReportAuditService auditService;
     private final ReportCopilotProperties properties;
+    private final IndependentReviewService reviewService;
 
     public ReportDraftPersistenceService(ReportDraftRepository draftRepository, ReportAuditService auditService,
                                          ReportCopilotProperties properties) {
+        this(draftRepository, auditService, properties, null);
+    }
+
+    public ReportDraftPersistenceService(ReportDraftRepository draftRepository, ReportAuditService auditService,
+                                         ReportCopilotProperties properties,
+                                         IndependentReviewService reviewService) {
         this.draftRepository = draftRepository;
         this.auditService = auditService;
         this.properties = properties;
+        this.reviewService = reviewService;
     }
 
     @Transactional
@@ -39,6 +48,7 @@ public class ReportDraftPersistenceService {
                                    AiInvocationMetadata aiMetadata,
                                    String policyVersion, Long latencyMs) {
         ReportDraft draft = draftRepository.save(preview, content, modelName, properties.draftTtl());
+        registerReview(draft);
         String citedSourceIds = content.citations().stream().map(citation -> citation.sourceId()).distinct()
                 .collect(Collectors.joining(","));
         auditService.record(new ReportAuditLog(
@@ -71,6 +81,7 @@ public class ReportDraftPersistenceService {
                                               AiInvocationMetadata aiMetadata,
                                               String policyVersion, Long latencyMs) {
         ReportDraft draft = draftRepository.saveNeedsReview(preview, reviewReasons, modelName, properties.draftTtl());
+        registerReview(draft);
         auditService.record(new ReportAuditLog(
                 draft.requestId(), draft.id(), "NEEDS_REVIEW", preview.sources().size(),
                 "", modelName, ReportDraftStatus.NEEDS_REVIEW.name(), null,
@@ -107,5 +118,18 @@ public class ReportDraftPersistenceService {
                 aiMetadata != null ? aiMetadata.inputTokens() : null,
                 aiMetadata != null ? aiMetadata.outputTokens() : null,
                 aiMetadata != null ? aiMetadata.finishReason() : null));
+    }
+
+    private void registerReview(ReportDraft draft) {
+        if (reviewService != null) {
+            reviewService.register(IndependentReviewService.SubjectType.REPORT_DRAFT,
+                    String.valueOf(draft.id()), draft.ownerActorId());
+        }
+    }
+
+    public String reviewStatus(ReportDraft draft) {
+        if (reviewService == null) return IndependentReviewService.Status.APPROVED.name();
+        return reviewService.status(IndependentReviewService.SubjectType.REPORT_DRAFT,
+                String.valueOf(draft.id())).status().name();
     }
 }

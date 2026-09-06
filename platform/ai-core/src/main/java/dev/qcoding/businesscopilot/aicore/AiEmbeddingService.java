@@ -25,18 +25,30 @@ public class AiEmbeddingService {
 
     private final ObjectProvider<EmbeddingModel> embeddingModelProvider;
     private final AiModelProperties properties;
+    private final AiEmbeddingProperties embeddingProperties;
     private final AiCallCoordinator coordinator;
 
     public AiEmbeddingService(ObjectProvider<EmbeddingModel> embeddingModelProvider,
                                AiModelProperties properties) {
-        this(embeddingModelProvider, properties, standaloneCoordinator(properties));
+        this(embeddingModelProvider, properties,
+                new AiEmbeddingProperties(properties.modelName(), properties.providerName()),
+                standaloneCoordinator(properties));
     }
 
     public AiEmbeddingService(ObjectProvider<EmbeddingModel> embeddingModelProvider,
                               AiModelProperties properties,
                               AiCallCoordinator coordinator) {
+        this(embeddingModelProvider, properties,
+                new AiEmbeddingProperties(properties.modelName(), properties.providerName()), coordinator);
+    }
+
+    public AiEmbeddingService(ObjectProvider<EmbeddingModel> embeddingModelProvider,
+                              AiModelProperties properties,
+                              AiEmbeddingProperties embeddingProperties,
+                              AiCallCoordinator coordinator) {
         this.embeddingModelProvider = embeddingModelProvider;
         this.properties = properties;
+        this.embeddingProperties = embeddingProperties;
         this.coordinator = coordinator;
     }
 
@@ -59,7 +71,7 @@ public class AiEmbeddingService {
      * 不能把这里的 chat 标识误当成 embedding 模型名。</p>
      */
     public String modelName() {
-        return properties.modelName();
+        return embeddingProperties.modelName();
     }
 
     /**
@@ -77,7 +89,8 @@ public class AiEmbeddingService {
     public float[] embed(String operation, String text) {
         EmbeddingModel model = requireEmbeddingModel();
         try {
-            return coordinator.execute("embedding", operation, () -> model.embed(text));
+            return coordinator.execute("embedding", operation, embeddingProperties.providerName(),
+                    embeddingProperties.modelName(), () -> model.embed(text));
         } catch (BusinessException ex) {
             throw ex;
         } catch (RuntimeException ex) {

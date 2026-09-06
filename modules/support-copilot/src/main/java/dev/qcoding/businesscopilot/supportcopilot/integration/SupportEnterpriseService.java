@@ -388,6 +388,65 @@ public class SupportEnterpriseService {
         return rows.getFirst();
     }
 
+    /**
+     * SUP-03：主动向外部系统核对回写结果（UNKNOWN/PROCESSING 状态时可用）。
+     *
+     * <p>供应商回执明确成功则置 COMPLETED；明确失败置 FAILED；
+     * 适配器无法核对（empty）或核对异常时保持未知状态，绝不猜测。</p>
+     */
+    public WritebackStatus refreshWritebackReceipt(long writebackId) {
+        WritebackStatus current = writebackStatus(writebackId);
+        if (!"UNKNOWN".equals(current.status()) && !"PROCESSING".equals(current.status())) {
+            return current;
+        }
+        List<RefreshableWriteback> rows = jdbcTemplate.query("""
+                SELECT w.id, w.connection_id, w.external_ticket_id
+                FROM support_draft_writebacks w
+                WHERE w.id = ? AND w.status IN ('UNKNOWN', 'PROCESSING')
+                """, (rs, rowNum) -> new RefreshableWriteback(
+                rs.getLong("id"), rs.getLong("connection_id"),
+                rs.getString("external_ticket_id")), writebackId);
+        if (rows.isEmpty()) {
+            // 状态已在核对间隙变化，返回最新状态即可。
+            return writebackStatus(writebackId);
+        }
+        RefreshableWriteback row = rows.getFirst();
+        SupportExternalConnection connection = requireConnection(row.connectionId());
+        if (!connection.enabled()) {
+            throw new BusinessException(ErrorCode.STATE_CONFLICT, "外部客服连接未启用");
+        }
+        SupportExternalAdapter externalAdapter = adapter(connection.provider());
+        java.util.Optional<SupportExternalAdapter.ExternalWritebackReceipt> receipt;
+        try {
+            receipt = externalAdapter.fetchWritebackReceipt(
+                    connection, row.externalTicketId(), "support-writeback-" + writebackId);
+        } catch (RuntimeException ex) {
+            // 核对本身失败不改变业务状态，保持未知。
+            return writebackStatus(writebackId);
+        }
+        if (receipt.isEmpty()) {
+            return writebackStatus(writebackId);
+        }
+        if (receipt.get().delivered()) {
+            jdbcTemplate.update("""
+                    UPDATE support_draft_writebacks
+                    SET status = 'COMPLETED', completed_at = now(), external_receipt = ?,
+                        error_category = NULL, updated_at = now()
+                    WHERE id = ? AND status IN ('UNKNOWN', 'PROCESSING')
+                    """, receipt.get().receipt(), writebackId);
+        } else {
+            jdbcTemplate.update("""
+                    UPDATE support_draft_writebacks
+                    SET status = 'FAILED', error_category = 'PROVIDER_REJECTED', updated_at = now()
+                    WHERE id = ? AND status IN ('UNKNOWN', 'PROCESSING')
+                    """, writebackId);
+        }
+        return writebackStatus(writebackId);
+    }
+
+    private record RefreshableWriteback(long id, long connectionId, String externalTicketId) {
+    }
+
     /** Admin records externally verified resolution; retry requires explicit no-write evidence. */
     public WritebackIntent resolveUnknown(long writebackId, ResolutionCommand command) {
         CurrentActor actor = actorProvider.currentActor();

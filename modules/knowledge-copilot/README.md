@@ -35,7 +35,7 @@ completion are committed atomically behind a locked live lease.
 Admin readiness blocks on stale syncs or unsafe current documents and warns only on
 failed syncs that have no later successful recovery.
 
-API: `POST/GET /api/knowledge-copilot/documents`, `POST /api/knowledge-copilot/documents/{id}/reindex`, `PATCH /api/knowledge-copilot/documents/{id}/enabled`, `POST /api/knowledge-copilot/questions`, `POST /api/knowledge-copilot/answers/{answerId}/feedback`, `GET /api/knowledge-copilot/quality-queue`, `POST /api/knowledge-copilot/quality-queue/{answerId}/review`, and `GET /api/knowledge-copilot/quality-metrics`.
+API: `POST/GET /api/knowledge-copilot/documents`, `POST /api/knowledge-copilot/documents/{id}/reindex`, `PATCH /api/knowledge-copilot/documents/{id}/enabled`, `POST /api/knowledge-copilot/questions`, `POST /api/knowledge-copilot/answers/{answerId}/feedback`, `GET /api/knowledge-copilot/quality-queue`, `GET /api/knowledge-copilot/feedback-history`, `POST /api/knowledge-copilot/quality-queue/{answerId}/review`, and `GET /api/knowledge-copilot/quality-metrics`.
 
 Test: `./mvnw -pl modules/knowledge-copilot -am test`
 

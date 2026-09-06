@@ -13,8 +13,11 @@ public class DefaultObjectAccessPolicy implements ObjectAccessPolicy {
             return true;
         }
         if (actor.hasRole(BusinessRole.OPERATOR)) {
-            // 操作者本人就是业务流程中的人工确认者；高风险队列仍要求显式 token，
-            // 不能因为标记为 REVIEW 就让创建者在当前工作台里失去完成闭环的能力。
+            // 普通业务确认可以由对象创建者完成；进入独立复核队列后必须由
+            // REVIEWER 或 ADMIN 处理，不能由创建者自己完成四眼复核。
+            if (reviewQueue && action == ObjectAction.REVIEW) {
+                return false;
+            }
             return actor.actorId().equals(ownerActorId);
         }
         if (!actor.hasRole(BusinessRole.REVIEWER) || !reviewQueue || action != ObjectAction.REVIEW) {

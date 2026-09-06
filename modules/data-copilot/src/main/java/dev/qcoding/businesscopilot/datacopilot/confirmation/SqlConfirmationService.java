@@ -5,6 +5,7 @@ import dev.qcoding.businesscopilot.aicore.AiInvocationMetadata;
 import dev.qcoding.businesscopilot.aicore.PromptTemplateMetadata;
 import dev.qcoding.businesscopilot.commonsecurity.CurrentActor;
 import dev.qcoding.businesscopilot.commonsecurity.CurrentActorProvider;
+import dev.qcoding.businesscopilot.commonsecurity.IndependentReviewService;
 import dev.qcoding.businesscopilot.commonsecurity.ObjectAccessPolicy;
 import dev.qcoding.businesscopilot.commonsecurity.ObjectAction;
 import dev.qcoding.businesscopilot.commonweb.api.BusinessException;
@@ -13,7 +14,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
+import org.springframework.transaction.annotation.Transactional;
 
 /** Creates and atomically consumes database-backed SQL candidates. */
 public class SqlConfirmationService {
@@ -25,17 +28,40 @@ public class SqlConfirmationService {
     private final CurrentActorProvider actorProvider;
     private final ObjectAccessPolicy accessPolicy;
     private final ConfirmationTokenService tokenService;
+    private final SqlCandidateMetricReferenceService metricReferenceService;
+    private final IndependentReviewService reviewService;
 
     public SqlConfirmationService(SqlCandidateStore store,
                                   DataCopilotConfirmationProperties properties,
                                   CurrentActorProvider actorProvider,
                                   ObjectAccessPolicy accessPolicy,
                                   ConfirmationTokenService tokenService) {
+        this(store, properties, actorProvider, accessPolicy, tokenService, null, null);
+    }
+
+    public SqlConfirmationService(SqlCandidateStore store,
+                                  DataCopilotConfirmationProperties properties,
+                                  CurrentActorProvider actorProvider,
+                                  ObjectAccessPolicy accessPolicy,
+                                  ConfirmationTokenService tokenService,
+                                  SqlCandidateMetricReferenceService metricReferenceService) {
+        this(store, properties, actorProvider, accessPolicy, tokenService, metricReferenceService, null);
+    }
+
+    public SqlConfirmationService(SqlCandidateStore store,
+                                  DataCopilotConfirmationProperties properties,
+                                  CurrentActorProvider actorProvider,
+                                  ObjectAccessPolicy accessPolicy,
+                                  ConfirmationTokenService tokenService,
+                                  SqlCandidateMetricReferenceService metricReferenceService,
+                                  IndependentReviewService reviewService) {
         this.store = store;
         this.properties = properties;
         this.actorProvider = actorProvider;
         this.accessPolicy = accessPolicy;
         this.tokenService = tokenService;
+        this.metricReferenceService = metricReferenceService;
+        this.reviewService = reviewService;
     }
 
     public SqlCandidate createExecutableCandidate(String sql) {
@@ -51,6 +77,16 @@ public class SqlConfirmationService {
                                                    PromptTemplateMetadata promptMetadata,
                                                    AiInvocationMetadata aiMetadata,
                                                    String policyVersion) {
+        return createExecutableCandidate(sql, requestId, modelName, promptMetadata, aiMetadata,
+                policyVersion, List.of());
+    }
+
+    @Transactional
+    public SqlCandidate createExecutableCandidate(String sql, String requestId, String modelName,
+                                                   PromptTemplateMetadata promptMetadata,
+                                                   AiInvocationMetadata aiMetadata,
+                                                   String policyVersion,
+                                                   List<SqlCandidateMetricReferenceService.MetricReference> metricReferences) {
         CurrentActor actor = actorProvider.currentActor();
         if (!actor.authenticated()) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
@@ -76,6 +112,13 @@ public class SqlConfirmationService {
                 null,
                 null);
         store.save(candidate);
+        if (metricReferenceService != null) {
+            metricReferenceService.record(candidate.candidateId(), metricReferences);
+        }
+        if (reviewService != null) {
+            reviewService.register(IndependentReviewService.SubjectType.DATA_SQL_CANDIDATE,
+                    candidate.candidateId(), candidate.ownerActorId());
+        }
         log.info("已创建待确认 SQL：id={}，owner={}，expiresAt={}",
                 candidate.candidateId(), actor.actorId(), candidate.expiresAt());
         return candidate;
@@ -91,6 +134,7 @@ public class SqlConfirmationService {
                 now, null, null, null);
     }
 
+    @Transactional(noRollbackFor = BusinessException.class)
     public SqlCandidate confirmAndConsume(String candidateId, String confirmationToken) {
         Instant now = Instant.now();
         CurrentActor actor = actorProvider.currentActor();
@@ -102,12 +146,24 @@ public class SqlConfirmationService {
         if (candidate.status() != SqlCandidateStatus.PENDING) {
             throw new BusinessException(ErrorCode.STATE_CONFLICT);
         }
+        if (reviewService != null) {
+            reviewService.requireApproved(IndependentReviewService.SubjectType.DATA_SQL_CANDIDATE,
+                    candidateId, candidate.ownerActorId());
+        }
         if (!tokenService.matches(confirmationToken, candidate.tokenDigest())) {
             throw new SqlCandidateNotExecutableException();
         }
         if (candidate.isExpired(now)) {
             store.expire(candidateId, now);
             throw new SqlCandidateExpiredException();
+        }
+        if (metricReferenceService != null) {
+            try {
+                metricReferenceService.requireCurrent(candidateId);
+            } catch (BusinessException ex) {
+                store.expire(candidateId, now);
+                throw ex;
+            }
         }
         if (!store.consume(candidateId, actor.actorId(), now)) {
             throw new BusinessException(ErrorCode.STATE_CONFLICT);
@@ -123,5 +179,11 @@ public class SqlConfirmationService {
 
     public int evictExpired() {
         return store.evictExpired(Instant.now());
+    }
+
+    public String reviewStatus(String candidateId) {
+        if (reviewService == null) return IndependentReviewService.Status.APPROVED.name();
+        return reviewService.status(IndependentReviewService.SubjectType.DATA_SQL_CANDIDATE,
+                candidateId).status().name();
     }
 }

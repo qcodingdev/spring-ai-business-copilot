@@ -8,6 +8,7 @@ import ConfirmDialog from './ConfirmDialog.vue'
 import StatusBadge from './StatusBadge.vue'
 import { safeJson } from '@/utils/safeDisplay'
 import ToastMessage from './ToastMessage.vue'
+import { formatDate } from '@/locales/format'
 
 type ModuleKey = 'data' | 'knowledge' | 'support' | 'report' | 'hr'
 interface KnowledgeSourceIssue {
@@ -312,7 +313,7 @@ function cancelControlledAction(): void {
 }
 
 function displayDate(value: string | null): string {
-  return value ? new Date(value).toLocaleString(locale.value) : '—'
+  return value ? (formatDate(value, locale.value) || '—') : '—'
 }
 
 onUnmounted(() => { if (toastTimer) clearTimeout(toastTimer) })

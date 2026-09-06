@@ -71,7 +71,8 @@ class DataCopilotControllerTest {
                 "Total sales last month",
                 List.of(), List.of(),
                 new SqlCandidateValidationSummary(true, List.of()),
-                true, "cand-1", "token-1", Instant.now().plusSeconds(600));
+                true, "cand-1", "token-1", Instant.now().plusSeconds(600),
+                List.of(), List.of(), "APPROVED");
         when(sqlGenerationService.generate(any(SqlGenerationRequest.class))).thenReturn(genResponse);
 
         var response = controller.createSqlCandidate(request);

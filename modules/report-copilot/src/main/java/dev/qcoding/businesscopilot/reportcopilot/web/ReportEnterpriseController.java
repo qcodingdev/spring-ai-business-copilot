@@ -71,6 +71,12 @@ public class ReportEnterpriseController {
         return ResponseEntity.ok(ApiResponse.ok(service.records()));
     }
 
+    /** DATA-05：草稿的数据追溯链（交接 → 结果快照 → SQL 候选）。 */
+    @GetMapping("/drafts/{draftId}/data-trace")
+    public ResponseEntity<ApiResponse<?>> dataTrace(@PathVariable long draftId) {
+        return ResponseEntity.ok(ApiResponse.ok(service.dataTraceability(draftId)));
+    }
+
     @PostMapping("/schedules")
     public ResponseEntity<ApiResponse<?>> saveSchedule(
             @Valid @RequestBody ScheduleRequest request) {

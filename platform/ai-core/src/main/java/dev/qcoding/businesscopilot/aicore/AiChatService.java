@@ -14,6 +14,8 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * Thin wrapper around Spring AI {@link ChatClient} that provides text and structured generation,
@@ -127,23 +129,58 @@ public class AiChatService {
     }
 
     public <T> AiInvocationResult<T> generateJsonWithMetadata(String operation, String prompt, Class<T> type) {
+        return generateJsonWithMetadata(operation, prompt, type, AiAttemptObserver.noOp());
+    }
+
+    public <T> AiInvocationResult<T> generateJsonWithMetadata(
+            String operation, String prompt, Class<T> type, AiAttemptObserver observer) {
+        return generateJsonWithMetadata(operation, prompt, type, observer, true, true);
+    }
+
+    /**
+     * Generate structured output whose fact-bearing fields must preserve source wording.
+     *
+     * <p>Neither a request-locale instruction nor the generic post-generation locale check is
+     * applied. Evidence-grounded reports must preserve the language and wording of their source
+     * facts; asking an English UI request to translate Chinese evidence conflicts with extractive
+     * grounding, and retrying the translated result can exhaust the end-to-end task budget.</p>
+     */
+    public <T> AiInvocationResult<T> generateEvidenceJsonWithMetadata(
+            String operation, String prompt, Class<T> type) {
+        return generateEvidenceJsonWithMetadata(operation, prompt, type, AiAttemptObserver.noOp());
+    }
+
+    public <T> AiInvocationResult<T> generateEvidenceJsonWithMetadata(
+            String operation, String prompt, Class<T> type, AiAttemptObserver observer) {
+        return generateJsonWithMetadata(operation, prompt, type, observer, false, false);
+    }
+
+    private <T> AiInvocationResult<T> generateJsonWithMetadata(
+            String operation, String prompt, Class<T> type, AiAttemptObserver observer,
+            boolean localizePrompt, boolean enforceOutputLocale) {
         ChatClient chatClient = requireChatClient();
         long startedAt = System.nanoTime();
         try {
             List<AiInvocationMetadata> attemptMetadata = new ArrayList<>(2);
             long attemptStartedAt = System.nanoTime();
-            var responseEntity = coordinator.execute("chat", operation, () -> chatClient.prompt()
-                    .user(localizedPrompt(prompt)).call().responseEntity(type, spec -> spec.validateSchema()));
+            String effectivePrompt = localizePrompt ? localizedPrompt(prompt) : prompt;
+            var responseEntity = observedAttempt(operation, effectivePrompt, observer,
+                    () -> coordinator.execute("chat", operation, () -> chatClient.prompt()
+                            .user(effectivePrompt).call()
+                            .responseEntity(type, spec -> spec.validateSchema())),
+                    response -> response.response());
             attemptMetadata.add(metadata(responseEntity.response(), attemptStartedAt));
             recordAttemptUsage(operation, responseEntity.response());
-            if (!localeGuard.complies(responseEntity.entity(),
+            if (enforceOutputLocale && !localeGuard.complies(responseEntity.entity(),
                     BusinessRequestContextHolder.currentLocale())) {
                 log.warn("AI 输出语言不符合请求，执行一次安全重试：操作={}，locale={}",
                         operation, BusinessRequestContextHolder.currentLocale());
                 long retryStartedAt = System.nanoTime();
-                responseEntity = coordinator.execute("chat", operation, () -> chatClient.prompt()
-                        .user(languageRetryPrompt(prompt)).call()
-                        .responseEntity(type, spec -> spec.validateSchema()));
+                responseEntity = observedAttempt(operation, prompt, observer,
+                        () -> coordinator.execute("chat", operation, () -> chatClient.prompt()
+                                .user(languageRetryPrompt(prompt)).call()
+                                .responseEntity(type, spec -> spec.validateSchema())),
+                        response -> response.response());
                 attemptMetadata.add(metadata(responseEntity.response(), retryStartedAt));
                 recordAttemptUsage(operation, responseEntity.response());
                 ensureLocale(responseEntity.entity());
@@ -169,7 +206,12 @@ public class AiChatService {
      */
     public <T> AiInvocationResult<T> generatePromptJsonWithMetadata(
             String operation, String prompt, Class<T> type) {
-        AiInvocationResult<String> raw = generateTextWithMetadata(operation, prompt);
+        return generatePromptJsonWithMetadata(operation, prompt, type, AiAttemptObserver.noOp());
+    }
+
+    public <T> AiInvocationResult<T> generatePromptJsonWithMetadata(
+            String operation, String prompt, Class<T> type, AiAttemptObserver observer) {
+        AiInvocationResult<String> raw = generateTextWithMetadata(operation, prompt, observer);
         try {
             T content = objectMapper.readValue(extractJsonObject(raw.content()), type);
             ensureLocale(content);
@@ -211,13 +253,20 @@ public class AiChatService {
     }
 
     public AiInvocationResult<String> generateTextWithMetadata(String operation, String prompt) {
+        return generateTextWithMetadata(operation, prompt, AiAttemptObserver.noOp());
+    }
+
+    public AiInvocationResult<String> generateTextWithMetadata(
+            String operation, String prompt, AiAttemptObserver observer) {
         ChatClient chatClient = requireChatClient();
         long startedAt = System.nanoTime();
         try {
             List<AiInvocationMetadata> attemptMetadata = new ArrayList<>(2);
             long attemptStartedAt = System.nanoTime();
-            ChatResponse response = coordinator.execute("chat", operation,
-                    () -> chatClient.prompt().user(localizedPrompt(prompt)).call().chatResponse());
+            ChatResponse response = observedAttempt(operation, prompt, observer,
+                    () -> coordinator.execute("chat", operation,
+                            () -> chatClient.prompt().user(localizedPrompt(prompt)).call().chatResponse()),
+                    Function.identity());
             attemptMetadata.add(metadata(response, attemptStartedAt));
             recordAttemptUsage(operation, response);
             String content = response != null && response.getResult() != null
@@ -226,8 +275,10 @@ public class AiChatService {
                 log.warn("AI 输出语言不符合请求，执行一次安全重试：操作={}，locale={}",
                         operation, BusinessRequestContextHolder.currentLocale());
                 long retryStartedAt = System.nanoTime();
-                response = coordinator.execute("chat", operation,
-                        () -> chatClient.prompt().user(languageRetryPrompt(prompt)).call().chatResponse());
+                response = observedAttempt(operation, prompt, observer,
+                        () -> coordinator.execute("chat", operation,
+                                () -> chatClient.prompt().user(languageRetryPrompt(prompt)).call().chatResponse()),
+                        Function.identity());
                 attemptMetadata.add(metadata(response, retryStartedAt));
                 recordAttemptUsage(operation, response);
                 content = response != null && response.getResult() != null
@@ -243,6 +294,28 @@ public class AiChatService {
             log.error("对话模型文本生成失败", ex);
             throw new BusinessException(ErrorCode.AI_MODEL_ERROR,
                     "AI 对话模型调用失败", ex);
+        }
+    }
+
+    private <T> T observedAttempt(String operation, String prompt, AiAttemptObserver observer,
+                                  Supplier<T> call, Function<T, ChatResponse> responseExtractor) {
+        AiAttemptObserver effectiveObserver = observer != null ? observer : AiAttemptObserver.noOp();
+        int estimatedTokens = Math.max(1, prompt != null ? prompt.length() / 4 : 1) + 4_096;
+        String attemptId = effectiveObserver.beforeAttempt(
+                operation, properties.providerName(), properties.modelName(), estimatedTokens);
+        long startedAt = System.nanoTime();
+        boolean reported = false;
+        try {
+            T value = call.get();
+            AiInvocationMetadata attemptMetadata = metadata(responseExtractor.apply(value), startedAt);
+            reported = true;
+            effectiveObserver.afterAttempt(attemptId, attemptMetadata, null);
+            return value;
+        } catch (RuntimeException ex) {
+            if (!reported) {
+                effectiveObserver.afterAttempt(attemptId, metadata(null, startedAt), ex);
+            }
+            throw ex;
         }
     }
 

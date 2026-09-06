@@ -2,9 +2,11 @@
 import { computed, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api, ApiError, jsonBody } from '@/api/client'
+import EvidenceList from './EvidenceList.vue'
 import RequestId from './RequestId.vue'
 import StatusBadge from './StatusBadge.vue'
 import ToastMessage from './ToastMessage.vue'
+import { formatDate } from '@/locales/format'
 
 type RecordItem = Record<string, any>
 const { t, te, locale } = useI18n()
@@ -21,6 +23,16 @@ let toastTimer: ReturnType<typeof setTimeout> | undefined
 const assessment = computed(() => session.value?.assessment ?? null)
 const localizedError = computed(() => t(`errors.${te(`errors.${errorCode.value}`) ? errorCode.value : 'generic'}`))
 
+function statusLabel(value: string | null): string {
+  return value && te(`statuses.${value}`) ? t(`statuses.${value}`) : (value || t('common.unknown'))
+}
+
+function assessmentLabel(value: string | null): string {
+  return value && te(`hr.criterionTypes.assessment.${value}`)
+    ? t(`hr.criterionTypes.assessment.${value}`)
+    : statusLabel(value)
+}
+
 function showToast(message: string, tone: 'success' | 'danger' = 'success'): void {
   if (toastTimer) clearTimeout(toastTimer)
   toast.value = message
@@ -30,7 +42,7 @@ function showToast(message: string, tone: 'success' | 'danger' = 'success'): voi
 
 function date(value: string | null): string {
   if (!value) return '—'
-  return new Intl.DateTimeFormat(locale.value, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
+  return formatDate(value, locale.value) || '—'
 }
 
 async function load(): Promise<void> {
@@ -47,6 +59,7 @@ async function load(): Promise<void> {
 }
 
 async function open(item: RecordItem): Promise<void> {
+  if (loading.value) return
   loading.value = true
   try {
     const response = await api<RecordItem>(`/api/resume-copilot/assessments/${item.assessmentId}/review-session`, { method: 'POST' })
@@ -61,7 +74,7 @@ async function open(item: RecordItem): Promise<void> {
 }
 
 async function decide(action: 'review' | 'cancel'): Promise<void> {
-  if (!assessment.value?.assessmentId || !session.value?.reviewToken) return
+  if (loading.value || !assessment.value?.assessmentId || !session.value?.reviewToken) return
   loading.value = true
   try {
     const response = await api<RecordItem>(`/api/resume-copilot/assessments/${assessment.value.assessmentId}/${action}`, {
@@ -86,14 +99,14 @@ onUnmounted(() => { if (toastTimer) clearTimeout(toastTimer) })
 </script>
 
 <template>
-  <section class="panel enterprise-panel">
+  <section class="enterprise-panel reviewer-panel">
     <div class="section-heading">
       <div><h3>{{ t('hr.reviewQueue') }}</h3><p>{{ t('hr.reviewQueueDescription') }}</p></div>
       <button class="button button--secondary" type="button" :disabled="loading" @click="load">{{ loading ? t('common.loading') : t('common.refresh') }}</button>
     </div>
     <div v-if="queue.length" class="record-grid">
       <article v-for="item in queue" :key="item.assessmentId">
-        <div class="section-heading"><h4>{{ item.jobTitle }}</h4><StatusBadge :label="item.status" tone="warning" /></div>
+        <div class="section-heading"><h4>{{ item.jobTitle }}</h4><StatusBadge :label="statusLabel(item.status)" tone="warning" /></div>
         <p>{{ item.candidateReference }} · {{ t('hr.assessmentId') }} #{{ item.assessmentId }}</p>
         <p v-if="item.reviewReasons?.length" class="field-hint">{{ item.reviewReasons.join('；') }}</p>
         <small>{{ date(item.updatedAt) }} · {{ item.reviewerActorId || t('hr.unassignedReviewer') }}</small>
@@ -103,10 +116,10 @@ onUnmounted(() => { if (toastTimer) clearTimeout(toastTimer) })
     <p v-else class="empty-state">{{ t('common.noData') }}</p>
 
     <section v-if="assessment" class="workflow-card assessment-review">
-      <div class="section-heading"><h3>{{ t('hr.assessmentResult') }}</h3><StatusBadge :label="assessment.status" tone="warning" /></div>
+      <div class="section-heading"><h3>{{ t('hr.assessmentResult') }}</h3><StatusBadge :label="statusLabel(assessment.status)" tone="warning" /></div>
       <p v-if="assessment.content?.anonymousSummary">{{ assessment.content.anonymousSummary }}</p>
-      <ul v-if="assessment.content?.criterionAssessments?.length"><li v-for="item in assessment.content.criterionAssessments" :key="item.criterionId"><strong>{{ item.criterionId }} · {{ item.status }}</strong><span>{{ item.explanation }}</span></li></ul>
-      <div v-if="assessment.evidence?.length" class="assessment-evidence"><h4>{{ t('common.evidence') }}</h4><ul><li v-for="item in assessment.evidence" :key="item.evidenceId"><strong>{{ item.evidenceId }} · {{ item.section }}</strong><span>{{ item.sanitizedText }}</span></li></ul></div>
+      <ul v-if="assessment.content?.criterionAssessments?.length"><li v-for="item in assessment.content.criterionAssessments" :key="item.criterionId"><strong>{{ item.criterionId }} · {{ assessmentLabel(item.status) }}</strong><span>{{ item.explanation }}</span></li></ul>
+      <EvidenceList v-if="assessment.evidence?.length" :items="assessment.evidence" embedded />
       <label>{{ t('hr.reviewerFeedback') }}<textarea v-model="feedback" rows="4" maxlength="2000"></textarea></label>
       <div class="button-row"><button class="button button--primary" type="button" :disabled="loading" @click="decide('review')">{{ t('hr.confirmAssessmentReview') }}</button><button class="button button--danger" type="button" :disabled="loading" @click="decide('cancel')">{{ t('common.cancel') }}</button></div>
       <small>{{ t('common.tokenExpiry') }}：{{ date(session?.expiresAt) }}</small>

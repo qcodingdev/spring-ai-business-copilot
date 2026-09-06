@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import { AI_GENERATION_REQUEST_TIMEOUT_MS, api, ApiError, jsonBody } from '@/api/client'
+import { AI_GENERATION_REQUEST_TIMEOUT_MS, api as requestApi, ApiError, jsonBody } from '@/api/client'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import DataExecutionResult from '@/components/DataExecutionResult.vue'
 import DataEnterprisePanel from '@/components/DataEnterprisePanel.vue'
@@ -11,6 +11,7 @@ import KnowledgeQualityPanel from '@/components/KnowledgeQualityPanel.vue'
 import ReportEnterprisePanel from '@/components/ReportEnterprisePanel.vue'
 import ResumeReviewPanel from '@/components/ResumeReviewPanel.vue'
 import SupportReviewPanel from '@/components/SupportReviewPanel.vue'
+import SupportQualityCasesPanel from '@/components/SupportQualityCasesPanel.vue'
 import EvidenceList from '@/components/EvidenceList.vue'
 import ModuleIcon from '@/components/ModuleIcon.vue'
 import PageHeader from '@/components/PageHeader.vue'
@@ -18,14 +19,16 @@ import RequestId from '@/components/RequestId.vue'
 import SqlPreview from '@/components/SqlPreview.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import ToastMessage from '@/components/ToastMessage.vue'
+import WorkflowReviewPanel from '@/components/WorkflowReviewPanel.vue'
 import { safeJson } from '@/utils/safeDisplay'
 import { useSession } from '@/composables/useSession'
+import { formatDate } from '@/locales/format'
 
 type ModuleKey = 'data' | 'knowledge' | 'support' | 'report' | 'hr'
 type ConfirmAction = 'data-execute' | 'support-confirm' | 'support-cancel' | 'support-writeback' | 'report-confirm' | 'report-cancel' | 'criteria-confirm' | 'assessment-review' | 'assessment-cancel' | null
 const props = defineProps<{ module: ModuleKey }>()
-const { t, te } = useI18n()
-const { isAdmin, isReviewer, canOperate, session } = useSession()
+const { t, te, locale } = useI18n()
+const { session, isAdmin, isReviewer, canOperate, canReview } = useSession()
 const route = useRoute()
 const router = useRouter()
 
@@ -39,6 +42,22 @@ const confirmAction = ref<ConfirmAction>(null)
 const toast = ref('')
 const toastTone = ref<'success' | 'danger' | 'info'>('info')
 let toastTimer: ReturnType<typeof setTimeout> | undefined
+let viewGeneration = 0
+class StaleViewRequest extends Error {}
+
+// A completed server action remains in its business record. Its late response
+// must not populate a different module/tab or change that page's loading state.
+async function api<T>(...args: Parameters<typeof requestApi<T>>): ReturnType<typeof requestApi<T>> {
+  const generation = viewGeneration
+  try {
+    const response = await requestApi<T>(...args)
+    if (generation !== viewGeneration) throw new StaleViewRequest()
+    return response
+  } catch (error) {
+    if (generation !== viewGeneration) throw new StaleViewRequest()
+    throw error
+  }
+}
 
 const supportDraftText = ref('')
 const supportEditReason = ref('')
@@ -48,7 +67,11 @@ const supportRecoveryEvidence = ref('')
 const knowledgeFeedbackRating = ref('')
 const knowledgeFeedbackReason = ref('MISSING_EVIDENCE')
 const knowledgeFeedbackComment = ref('')
+const knowledgeFeedbackSubmitted = ref(false)
+const knowledgeFeedbackReasons = ['MISSING_EVIDENCE', 'INCORRECT', 'OUTDATED', 'UNCLEAR', 'OTHER']
 const reportContent = ref<Record<string, any> | null>(null)
+const reportReviewStatus = ref('')
+const reportDataTraceLinks = ref<Record<string, any>[]>([])
 const jobDraft = ref<Record<string, any> | null>(null)
 const criteriaDraft = ref<Record<string, any> | null>(null)
 const confirmedJobs = ref<Record<string, any>[]>([])
@@ -90,6 +113,7 @@ const reportDataTitle = ref('')
 const readyReportHandoffs = computed(() => reportHandoffs.value.filter((item) => item.status === 'READY'))
 const reportEnterpriseTab = computed<'records' | 'schedules'>(() => activeTab.value === 'schedules' ? 'schedules' : 'records')
 const criteriaEditable = computed(() => ['DRAFTED', 'CRITERIA_DRAFTED'].includes(String(criteriaDraft.value?.status ?? '')))
+const adminAssessmentReviewOpen = ref(false)
 
 const config = computed(() => ({
   data: { tabs: ['query', 'governance', 'records', 'handoff'], field: 'question', placeholder: 'questionPlaceholder', action: 'generate' },
@@ -101,7 +125,10 @@ const config = computed(() => ({
 
 const hrSection = computed(() => route.query.section === 'employee' ? 'employee' : 'recruiting')
 const visibleTabs = computed(() => {
-  if (!isReviewer.value) {
+  // ADMIN is allowed to operate and review. When an identity carries both
+  // roles, keep the full operator workspace instead of trapping it in the
+  // reviewer-only queue (which cannot render the report editor).
+  if (!isReviewer.value || isAdmin.value) {
     if (props.module === 'hr') {
       return hrSection.value === 'employee'
         ? ['employeeQa', 'onboarding']
@@ -116,22 +143,56 @@ const visibleTabs = computed(() => {
     data: ['records'],
     knowledge: ['quality'],
     support: ['review', 'quality'],
-    report: [],
+    report: ['records'],
     hr: hrSection.value === 'employee' ? [] : ['assessment', 'interview'],
   }
   return reviewerTabs[props.module]
 })
 const primaryTab = computed(() => props.module === 'hr' ? (hrSection.value === 'employee' ? 'employeeQa' : 'criteria') : config.value.tabs[0])
-const isPrimaryTab = computed(() => !isReviewer.value && activeTab.value === primaryTab.value)
+const isPrimaryTab = computed(() => (!isReviewer.value || isAdmin.value) && activeTab.value === primaryTab.value)
 
 const evidence = computed(() => {
   if (!isPrimaryTab.value || !result.value) return []
   const value = result.value
-  const candidates = [value.evidence, value.citations, value.content?.citations, value.assumptions, value.warnings, value.draft?.citations, value.reasons]
-  return candidates.flatMap((item) => Array.isArray(item) ? item : []).filter(Boolean)
+  if (props.module === 'knowledge' || (props.module === 'hr' && hrSection.value === 'employee')) {
+    return Array.isArray(value.citations) ? value.citations : []
+  }
+  if (props.module === 'support') {
+    if (Array.isArray(value.evidence) && value.evidence.length) return value.evidence
+    return Array.isArray(value.draft?.citations) ? value.draft.citations : []
+  }
+  if (props.module === 'data') {
+    const adoptedMetrics = Array.isArray(value.adoptedMetrics)
+      ? value.adoptedMetrics.map((item: Record<string, any>, index: number) => ({
+          ...item,
+          title: item.displayName || item.metricKey || `${t('common.evidenceReference')} ${index + 1}`,
+          section: t('data.metricDictionary'),
+          version: item.version,
+          // Keep the citation connected to the approved, versioned metric definition.
+          // The governance page exposes matching anchors so this behaves like a
+          // first-party citation rather than a raw metric key in the result.
+          sourceUrl: `/data?tab=governance#data-metric-${encodeURIComponent(String(item.metricKey || item.displayName || index))}`,
+        }))
+      : []
+    if (adoptedMetrics.length) return adoptedMetrics
+    // A free-form query may not match an approved metric. Keep the generated
+    // SQL itself as a numbered, linked execution basis instead of leaving the
+    // result with no traceable source at all.
+    return value.sql ? [{
+      title: t('data.sqlPreview'),
+      section: t('data.guardrail'),
+      detail: String(value.sql),
+      sourceUrl: '#data-sql-preview',
+    }] : []
+  }
+  return Array.isArray(value.citations) ? value.citations : []
 })
 const sql = computed(() => props.module === 'data' && isPrimaryTab.value ? String(result.value?.sql ?? '') : '')
 const executable = computed(() => props.module === 'data' && result.value?.executable === true)
+const dataReviewApproved = computed(() => props.module !== 'data'
+  || String(result.value?.reviewStatus ?? 'APPROVED') === 'APPROVED')
+const reportReviewApproved = computed(() => props.module !== 'report'
+  || String(reportReviewStatus.value || result.value?.approvalStatus || 'PENDING') === 'APPROVED')
 const dataExecution = computed<Record<string, any> | null>(() => props.module === 'data' ? result.value?.execution ?? null : null)
 const hasDataExecution = computed(() => dataExecution.value !== null)
 const hasBusinessResult = computed(() => props.module === 'data'
@@ -154,6 +215,7 @@ const processingVisible = computed(() => (isPrimaryTab.value && Boolean(result.v
   || (props.module === 'hr' && activeTab.value === 'assessment' && Boolean(assessment.value)))
 
 function showToast(message: string, tone: 'success' | 'danger' | 'info' = 'info'): void {
+  if (!message) return
   if (toastTimer) clearTimeout(toastTimer)
   toast.value = message
   toastTone.value = tone
@@ -161,14 +223,50 @@ function showToast(message: string, tone: 'success' | 'danger' | 'info' = 'info'
 }
 
 function errorText(error: unknown): string {
+  if (error instanceof StaleViewRequest) return ''
   const code = error instanceof ApiError ? error.errorCode : 'generic'
   requestId.value = error instanceof ApiError ? error.requestId : requestId.value
   return t(`errors.${te(`errors.${code}`) ? code : 'generic'}`)
 }
 
+function parseReportContent(value: string): Record<string, any> | null {
+  try {
+    const parsed: unknown = JSON.parse(value)
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? structuredClone(parsed as Record<string, any>)
+      : null
+  } catch {
+    return null
+  }
+}
+
 function dateTime(value: unknown): string {
-  const date = new Date(String(value ?? ''))
-  return Number.isNaN(date.getTime()) ? t('common.unknown') : date.toLocaleString()
+  const formatted = formatDate(String(value ?? ''), locale.value)
+  return formatted || t('common.unknown')
+}
+
+function criterionLabel(group: 'requirement' | 'category' | 'assessment', value: unknown): string {
+  const key = String(value ?? '')
+  return te(`hr.criterionTypes.${group}.${key}`) ? t(`hr.criterionTypes.${group}.${key}`) : key
+}
+
+function citationIndex(citation: Record<string, any>, fallback: string | number): number {
+  const items = evidence.value as Record<string, any>[]
+  const chunkId = String(citation?.chunkId ?? '')
+  const found = chunkId ? items.findIndex((item) => String(item?.chunkId ?? '') === chunkId) : -1
+  const fallbackIndex = Number(fallback)
+  return found >= 0 ? found + 1 : (Number.isFinite(fallbackIndex) ? fallbackIndex + 1 : 1)
+}
+
+/** Keep evidence navigation inside the current workflow and preserve its result. */
+function focusEvidence(position: number): void {
+  if (!Number.isInteger(position) || position <= 0) return
+  const hash = `#evidence-source-${position}`
+  const currentUrl = `${window.location.pathname}${window.location.search}${hash}`
+  window.history.replaceState(window.history.state, '', currentUrl)
+  // EvidenceList expands entries beyond the first three in response to this event.
+  window.dispatchEvent(new Event('hashchange'))
+  void nextTick(() => document.getElementById(`evidence-source-${position}`)?.scrollIntoView({ block: 'nearest' }))
 }
 
 function resetTransient(): void {
@@ -178,20 +276,19 @@ function resetTransient(): void {
   supportWriteback.value = null
   supportWritebackEligible.value = null
   knowledgeFeedbackRating.value = ''
+  knowledgeFeedbackReason.value = 'MISSING_EVIDENCE'
   knowledgeFeedbackComment.value = ''
+  knowledgeFeedbackSubmitted.value = false
   reportContent.value = null
+  reportReviewStatus.value = ''
+  reportDataTraceLinks.value = []
   assessment.value = null
   hrData.value = null
 }
 
 async function selectTab(tab: string): Promise<void> {
-  activeTab.value = tab
-  resetTransient()
+  if (tab === activeTab.value) return
   await router.replace({ query: { ...route.query, tab } })
-  if (props.module === 'hr' && shouldLoadConfirmedJobs(tab)) await loadConfirmedJobs()
-  if (props.module === 'hr' && tab === 'interview') await loadInterviewSessions()
-  if (props.module === 'hr' && tab === 'onboarding') await loadOnboarding()
-  if (props.module === 'report' && tab === 'generate') await loadReportHandoffs()
 }
 
 async function loadReportHandoffs(): Promise<void> {
@@ -200,6 +297,18 @@ async function loadReportHandoffs(): Promise<void> {
     reportHandoffs.value = response.data ?? []
   } catch (error) {
     showToast(errorText(error), 'danger')
+  }
+}
+
+async function loadReportDataTrace(draftId: number): Promise<void> {
+  try {
+    const response = await api<Record<string, any>[]>(`/api/report-copilot/enterprise/drafts/${draftId}/data-trace`)
+    reportDataTraceLinks.value = response.data ?? []
+  } catch (error) {
+    if (error instanceof StaleViewRequest) return
+    // A report generated from non-Data sources has no trace links. Keep the
+    // review editor usable and let the report citations remain the source of truth.
+    reportDataTraceLinks.value = []
   }
 }
 
@@ -275,6 +384,8 @@ function genericPayload(): { path: string; body: unknown } {
 }
 
 async function submit(): Promise<void> {
+  if (loading.value || !session.value?.aiEnabled) return
+  const generation = viewGeneration
   loading.value = true
   resetTransient()
   try {
@@ -295,6 +406,7 @@ async function submit(): Promise<void> {
       })
       requestId.value = response.requestId ?? response.data.requestId ?? null
       result.value = response.data
+      reportReviewStatus.value = String(response.data.approvalStatus ?? (isAdmin.value ? 'APPROVED' : 'PENDING'))
       reportContent.value = response.data.content && typeof response.data.content === 'object'
         ? structuredClone(response.data.content) : null
       return
@@ -318,6 +430,7 @@ async function submit(): Promise<void> {
       reportContent.value = response.data.content && typeof response.data.content === 'object'
         ? structuredClone(response.data.content)
         : null
+      reportReviewStatus.value = String(response.data.approvalStatus ?? (isAdmin.value ? 'APPROVED' : 'PENDING'))
     }
     if (props.module === 'report' && selectedReportHandoffRefs.value.length) {
       selectedReportHandoffRefs.value = []
@@ -326,16 +439,33 @@ async function submit(): Promise<void> {
   } catch (error) {
     showToast(errorText(error), 'danger')
   } finally {
-    loading.value = false
+    if (generation === viewGeneration) loading.value = false
   }
 }
 
 async function executeData(): Promise<void> {
-  if (!result.value?.candidateId || !result.value?.confirmationToken) return
+  if (!result.value?.candidateId || !result.value?.confirmationToken || !dataReviewApproved.value) return
   await businessAction(`/api/data-copilot/sql-candidates/${encodeURIComponent(result.value.candidateId)}/execute`, { confirmationToken: result.value.confirmationToken }, (data) => {
     result.value = { ...result.value, execution: data, status: 'COMPLETED' }
     showToast(t('data.executionCompleted'), 'success')
   })
+}
+
+async function refreshIndependentReview(subjectType: 'DATA_SQL_CANDIDATE' | 'REPORT_DRAFT', subjectId: string | number): Promise<void> {
+  if (loading.value) return
+  const generation = viewGeneration
+  loading.value = true
+  try {
+    const response = await api<Record<string, any>>(`/api/reviews/subject/${subjectType}/${encodeURIComponent(String(subjectId))}`)
+    requestId.value = response.requestId ?? requestId.value
+    if (subjectType === 'DATA_SQL_CANDIDATE' && result.value) {
+      result.value = { ...result.value, reviewStatus: response.data.status }
+    } else {
+      reportReviewStatus.value = String(response.data.status ?? '')
+      if (result.value) result.value = { ...result.value, approvalStatus: response.data.status }
+    }
+    showToast(t('common.reviewStatusRefreshed'), 'success')
+  } catch (error) { showToast(errorText(error), 'danger') } finally { if (generation === viewGeneration) loading.value = false }
 }
 
 async function saveSupportEdit(): Promise<void> {
@@ -348,13 +478,14 @@ async function saveSupportEdit(): Promise<void> {
 }
 
 async function supportDecision(action: 'confirm' | 'cancel'): Promise<void> {
+  const generation = viewGeneration
   const draft = result.value?.draft
   if (!draft?.draftId || !draft.confirmationToken) return
   await businessAction(`/api/support-copilot/reply-drafts/${draft.draftId}/${action}`, { confirmationToken: draft.confirmationToken }, (data) => {
     result.value = { ...result.value, status: data.status, draft: { ...draft, status: data.status } }
     showToast(action === 'confirm' ? t('support.confirmed') : t('support.cancelled'), 'success')
   })
-  if (action === 'confirm' && result.value?.status === 'CONFIRMED') {
+  if (generation === viewGeneration && action === 'confirm' && result.value?.status === 'CONFIRMED') {
     await loadSupportWritebackCapability(draft.draftId)
   }
 }
@@ -365,6 +496,7 @@ async function loadSupportWritebackCapability(draftId: number): Promise<void> {
     supportWritebackEligible.value = response.data.eligible === true
     requestId.value = response.requestId ?? requestId.value
   } catch (error) {
+    if (error instanceof StaleViewRequest) return
     supportWritebackEligible.value = false
     showToast(errorText(error), 'danger')
   }
@@ -380,8 +512,9 @@ async function prepareSupportWriteback(): Promise<void> {
 }
 
 async function confirmSupportWriteback(): Promise<void> {
-  if (!supportWriteback.value?.id || !supportWriteback.value?.confirmationToken) return
+  if (loading.value || !supportWriteback.value?.id || !supportWriteback.value?.confirmationToken) return
   const writebackId = Number(supportWriteback.value.id)
+  const generation = viewGeneration
   loading.value = true
   try {
     const response = await api<Record<string, any>>(`/api/support-copilot/enterprise/writebacks/${writebackId}/confirm`, {
@@ -391,11 +524,12 @@ async function confirmSupportWriteback(): Promise<void> {
     requestId.value = response.requestId
     showToast(t('support.writebackCompleted'), 'success')
   } catch (error) {
+    if (error instanceof StaleViewRequest) return
     await refreshSupportWriteback(writebackId)
     showToast(errorText(error), 'danger')
   } finally {
-    confirmAction.value = null
-    loading.value = false
+    if (generation === viewGeneration) confirmAction.value = null
+    if (generation === viewGeneration) loading.value = false
   }
 }
 
@@ -406,6 +540,58 @@ async function refreshSupportWriteback(writebackId = Number(supportWriteback.val
     supportWriteback.value = { ...supportWriteback.value, ...response.data, confirmationToken: null }
     requestId.value = response.requestId ?? requestId.value
   } catch (error) { showToast(errorText(error), 'danger') }
+}
+
+/** DATA-04：在预算内修正 SQL 候选；每次修正重新过 guardrails 并生成新凭证。 */
+const reviseOpen = ref(false)
+const reviseInstruction = ref('')
+const revising = ref(false)
+
+async function reviseCandidate(): Promise<void> {
+  if (loading.value || revising.value || !result.value?.candidateId || !reviseInstruction.value.trim()) return
+  const generation = viewGeneration
+  revising.value = true
+  try {
+    const response = await api<{ generation: Record<string, any>; revision: Record<string, any> | null }>(
+      `/api/data-copilot/sql-candidates/${encodeURIComponent(String(result.value.candidateId))}/revisions`,
+      {
+        method: 'POST',
+        ...jsonBody({ question: String(result.value?.question ?? ''), instruction: reviseInstruction.value.trim() }),
+        timeoutMs: AI_GENERATION_REQUEST_TIMEOUT_MS,
+      })
+    requestId.value = response.requestId ?? requestId.value
+    const generation = response.data?.generation
+    if (generation?.clarificationQuestions?.length) {
+      showToast(generation.clarificationQuestions.join(' '), 'info')
+    } else if (generation?.executable) {
+      result.value = generation
+      reviseOpen.value = false
+      reviseInstruction.value = ''
+      showToast(t('data.revisionCreated'), 'success')
+    } else {
+      showToast(t('data.revisionNotExecutable'), 'danger')
+    }
+  } catch (error) {
+    showToast(errorText(error), 'danger')
+  } finally { if (generation === viewGeneration) revising.value = false }
+}
+
+/** SUP-03：主动向外部系统核对回写结果；无法核对时保持未知状态。 */
+async function refreshSupportWritebackReceipt(): Promise<void> {
+  if (loading.value) return
+  const writebackId = Number(supportWriteback.value?.id)
+  if (!Number.isInteger(writebackId) || writebackId <= 0) return
+  const generation = viewGeneration
+  loading.value = true
+  try {
+    const response = await api<Record<string, any>>(
+      `/api/support-copilot/enterprise/writebacks/${writebackId}/receipt-refresh`, { method: 'POST' })
+    supportWriteback.value = { ...supportWriteback.value, ...response.data, confirmationToken: null }
+    requestId.value = response.requestId ?? requestId.value
+    showToast(t('support.receiptRefreshed'), 'info')
+  } catch (error) {
+    showToast(errorText(error), 'danger')
+  } finally { if (generation === viewGeneration) loading.value = false }
 }
 
 async function resolveSupportWriteback(resolution: 'COMPLETED' | 'SAFE_TO_RETRY'): Promise<void> {
@@ -425,43 +611,80 @@ async function submitKnowledgeFeedback(): Promise<void> {
     rating: knowledgeFeedbackRating.value,
     reason: knowledgeFeedbackRating.value === 'HELPFUL' ? null : knowledgeFeedbackReason.value,
     comment: knowledgeFeedbackComment.value || null,
-  }, () => { showToast(t('knowledge.feedbackSaved'), 'success') })
+  }, () => {
+    knowledgeFeedbackRating.value = ''
+    knowledgeFeedbackReason.value = 'MISSING_EVIDENCE'
+    knowledgeFeedbackComment.value = ''
+    knowledgeFeedbackSubmitted.value = true
+    showToast(t('knowledge.feedbackSaved'), 'success')
+  })
 }
 
 async function saveReportEdit(): Promise<void> {
   if (!result.value?.draftId || !result.value?.confirmationToken || !reportContent.value) return
   await businessAction(`/api/report-copilot/reports/${result.value.draftId}/edit`, { confirmationToken: result.value.confirmationToken, content: reportContent.value }, (data) => {
     reportContent.value = data.content
-    result.value = { ...result.value, content: data.content, status: data.status }
-    showToast(t('report.editSaved'), 'success')
+    reportReviewStatus.value = String(data.approvalStatus ?? (isAdmin.value ? 'APPROVED' : 'PENDING'))
+    result.value = { ...result.value, content: data.content, status: data.status, approvalStatus: reportReviewStatus.value }
+    if (reportReviewApproved.value) confirmAction.value = 'report-confirm'
+    showToast(reportReviewApproved.value ? t('report.editSavedContinue') : t('common.independentReviewWaitingDescription'), 'success')
   })
 }
 
 async function reportDecision(action: 'confirm' | 'cancel'): Promise<void> {
   if (!result.value?.draftId || !result.value?.confirmationToken) return
+  if (action === 'confirm' && !reportReviewApproved.value) {
+    showToast(t('common.independentReviewWaitingDescription'), 'info')
+    return
+  }
+  let completed = false
   await businessAction(`/api/report-copilot/reports/${result.value.draftId}/${action}`, { confirmationToken: result.value.confirmationToken }, (data) => {
     result.value = { ...result.value, status: data.status }
+    completed = true
     showToast(action === 'confirm' ? t('report.confirmed') : t('report.cancelled'), 'success')
   })
+  if (completed && action === 'confirm') await selectTab('records')
 }
 
-async function openReportReview(event: Event): Promise<void> {
-  const draftId = Number((event as CustomEvent<{ draftId?: number }>).detail?.draftId)
+async function openReportReview(draftId: number): Promise<void> {
+  if (loading.value) return
   if (!Number.isInteger(draftId) || draftId <= 0) return
   activeTab.value = 'generate'
+  // Keep the URL and the rendered tab in sync when a record is reopened from
+  // history.  Without this, a browser refresh could return to the records
+  // list while the review state was still being loaded, which looked like a
+  // blank/interrupted report workflow.
+  await router.replace({ query: { ...route.query, tab: 'generate' } })
+  resetTransient()
+  const generation = viewGeneration
   loading.value = true
   try {
     const response = await api<Record<string, any>>(`/api/report-copilot/reports/${draftId}/review-session`, { method: 'POST' })
-    result.value = response.data
-    reportContent.value = response.data.content && typeof response.data.content === 'object'
-      ? structuredClone(response.data.content) : null
+    const reviewReasons = Array.isArray(response.data.reviewReasons)
+      ? response.data.reviewReasons
+      : response.data.reviewReasons == null || response.data.reviewReasons === ''
+        ? []
+        : [String(response.data.reviewReasons)]
+    result.value = { ...response.data, reviewReasons }
+    reportReviewStatus.value = String(response.data.approvalStatus ?? '')
+    const content = response.data.content
+    reportContent.value = content && typeof content === 'object'
+      ? structuredClone(content)
+      : typeof content === 'string'
+        ? parseReportContent(content)
+        : null
     requestId.value = response.requestId
+    // Restore the Data → Report context while the review editor is being shown.
+    // The handoff picker remains useful even when the record was opened from history;
+    // consumed handoffs are represented by the immutable trace links instead.
+    await Promise.all([loadReportHandoffs(), loadReportDataTrace(draftId)])
     showToast(t('report.reviewOpened'), 'success')
-  } catch (error) { showToast(errorText(error), 'danger') } finally { loading.value = false }
+  } catch (error) { showToast(errorText(error), 'danger') } finally { if (generation === viewGeneration) loading.value = false }
 }
 
 async function extractCriteria(): Promise<void> {
-  if (!jobDraft.value) return
+  if (loading.value || !jobDraft.value) return
+  const generation = viewGeneration
   loading.value = true
   try {
     const response = await api<Record<string, any>>('/api/resume-copilot/jobs/criteria', {
@@ -472,7 +695,7 @@ async function extractCriteria(): Promise<void> {
     criteriaDraft.value = response.data
     requestId.value = response.requestId
     showToast(t('hr.criteriaReady'), 'success')
-  } catch (error) { showToast(errorText(error), 'danger') } finally { loading.value = false }
+  } catch (error) { showToast(errorText(error), 'danger') } finally { if (generation === viewGeneration) loading.value = false }
 }
 
 async function saveCriteriaEdits(): Promise<void> {
@@ -485,10 +708,13 @@ async function saveCriteriaEdits(): Promise<void> {
 
 async function confirmCriteria(): Promise<void> {
   if (!criteriaDraft.value?.jobId || !criteriaDraft.value?.confirmationToken) return
+  let confirmed = false
   await businessAction(`/api/resume-copilot/jobs/${criteriaDraft.value.jobId}/criteria/confirm`, { token: criteriaDraft.value.confirmationToken }, (data) => {
     criteriaDraft.value = { ...criteriaDraft.value, status: data.status }
+    confirmed = true
     showToast(t('hr.criteriaConfirmed'), 'success')
   })
+  if (confirmed) await selectTab('assessment')
 }
 
 function shouldLoadConfirmedJobs(tab: string): boolean {
@@ -497,19 +723,21 @@ function shouldLoadConfirmedJobs(tab: string): boolean {
 
 async function loadConfirmedJobs(): Promise<void> {
   if (!shouldLoadConfirmedJobs(activeTab.value)) return
+  const generation = viewGeneration
   loading.value = true
   try {
     const response = await api<Record<string, any>[]>('/api/resume-copilot/jobs/confirmed')
     confirmedJobs.value = response.data
     requestId.value = response.requestId
     if (!selectedJobId.value && response.data[0]) selectedJobId.value = String(response.data[0].jobId)
-  } catch (error) { showToast(errorText(error), 'danger') } finally { loading.value = false }
+  } catch (error) { showToast(errorText(error), 'danger') } finally { if (generation === viewGeneration) loading.value = false }
 }
 
 function chooseResume(event: Event): void { resumeFile.value = (event.target as HTMLInputElement).files?.[0] ?? null }
 
 async function assessCandidate(): Promise<void> {
-  if (!selectedJobId.value) return
+  if (loading.value || !selectedJobId.value) return
+  const generation = viewGeneration
   loading.value = true
   try {
     let response
@@ -532,7 +760,7 @@ async function assessCandidate(): Promise<void> {
     assessment.value = response.data
     requestId.value = response.requestId
     showToast(t('hr.assessmentReady'), 'success')
-  } catch (error) { showToast(errorText(error), 'danger') } finally { loading.value = false }
+  } catch (error) { showToast(errorText(error), 'danger') } finally { if (generation === viewGeneration) loading.value = false }
 }
 
 async function assessmentDecision(action: 'review' | 'cancel'): Promise<void> {
@@ -555,6 +783,8 @@ async function openInterview(): Promise<void> {
 }
 
 async function loadInterviewSessions(): Promise<void> {
+  if (loading.value) return
+  const generation = viewGeneration
   loading.value = true
   try {
     const [sessionResponse, questionResponse] = await Promise.all([
@@ -564,7 +794,7 @@ async function loadInterviewSessions(): Promise<void> {
     hrData.value = sessionResponse.data ?? []
     interviewQuestions.value = questionResponse.data ?? []
     requestId.value = sessionResponse.requestId ?? questionResponse.requestId
-  } catch (error) { showToast(errorText(error), 'danger') } finally { loading.value = false }
+  } catch (error) { showToast(errorText(error), 'danger') } finally { if (generation === viewGeneration) loading.value = false }
 }
 
 async function saveInterviewQuestion(): Promise<void> {
@@ -604,13 +834,15 @@ async function saveInterviewOpinion(): Promise<void> {
 }
 
 async function loadInterviewSummary(sessionId: number): Promise<void> {
+  if (loading.value) return
+  const generation = viewGeneration
   loading.value = true
   try {
     const response = await api<Record<string, any>>(`/api/resume-copilot/enterprise/interview-sessions/${sessionId}/summary`)
     interviewSummaryData.value = response.data
     interviewSessionId.value = String(sessionId)
     requestId.value = response.requestId
-  } catch (error) { showToast(errorText(error), 'danger') } finally { loading.value = false }
+  } catch (error) { showToast(errorText(error), 'danger') } finally { if (generation === viewGeneration) loading.value = false }
 }
 
 async function saveConsent(): Promise<void> {
@@ -671,6 +903,8 @@ async function saveOnboardingChecklist(): Promise<void> {
 }
 
 async function loadOnboarding(): Promise<void> {
+  if (loading.value) return
+  const generation = viewGeneration
   loading.value = true
   try {
     const [checklistResponse, instanceResponse] = await Promise.all([
@@ -684,7 +918,7 @@ async function loadOnboarding(): Promise<void> {
       const active = onboardingChecklists.value.find((item) => item.active)
       if (active) selectedChecklistId.value = String(active.id)
     }
-  } catch (error) { showToast(errorText(error), 'danger') } finally { loading.value = false }
+  } catch (error) { showToast(errorText(error), 'danger') } finally { if (generation === viewGeneration) loading.value = false }
 }
 
 async function startOnboarding(): Promise<void> {
@@ -714,12 +948,15 @@ async function cancelOnboarding(instanceId: number): Promise<void> {
 function lines(value: string): string[] { return value.split(/\n+/).map((item) => item.trim()).filter(Boolean) }
 
 async function businessAction(path: string, body: unknown, success: (data: any) => void, method: 'POST' | 'PUT' = 'POST'): Promise<void> {
+  if (loading.value) return
+  const generation = viewGeneration
   loading.value = true
-  try { const response = await api<any>(path, { method, ...jsonBody(body) }); requestId.value = response.requestId; success(response.data); confirmAction.value = null }
-  catch (error) { showToast(errorText(error), 'danger'); confirmAction.value = null } finally { loading.value = false }
+  try { const response = await api<any>(path, { method, ...jsonBody(body) }); requestId.value = response.requestId; confirmAction.value = null; success(response.data) }
+  catch (error) { if (generation === viewGeneration) { showToast(errorText(error), 'danger'); confirmAction.value = null } } finally { if (generation === viewGeneration) loading.value = false }
 }
 
 function runConfirmedAction(): void {
+  if (loading.value) return
   const action = confirmAction.value
   if (action === 'data-execute') void executeData()
   if (action === 'support-confirm') void supportDecision('confirm')
@@ -740,20 +977,31 @@ const confirmMeta = computed(() => ({
   expiresAt: result.value?.expiresAt ?? result.value?.draft?.expiresAt ?? criteriaDraft.value?.expiresAt ?? assessment.value?.expiresAt,
 }))
 
-watch(() => [props.module, route.query.section, route.query.tab], async () => {
+watch([() => props.module, () => route.query.section, () => route.query.tab, () => route.query.example], async () => {
+  viewGeneration++
+  loading.value = false
+  revising.value = false
+  reviseOpen.value = false
+  reviseInstruction.value = ''
+  confirmAction.value = null
+  toast.value = ''
   const allowed = visibleTabs.value
   const requested = String(route.query.tab ?? '')
   activeTab.value = allowed.includes(requested) ? requested : (allowed[0] ?? primaryTab.value)
   input.value = ''; secondary.value = ''; jobDraft.value = null; criteriaDraft.value = null; resetTransient()
+  const exampleIndex = Number(route.query.example)
+  const examplePrompt = quickPrompts.value[exampleIndex]
+  if (examplePrompt && Number.isInteger(exampleIndex) && exampleIndex >= 0 && exampleIndex < quickPrompts.value.length && isPrimaryTab.value) {
+    usePrompt(examplePrompt, exampleIndex)
+  }
   if (props.module === 'report' && activeTab.value === 'generate') await loadReportHandoffs()
   if (props.module === 'hr' && shouldLoadConfirmedJobs(activeTab.value)) await loadConfirmedJobs()
   if (props.module === 'hr' && activeTab.value === 'interview') await loadInterviewSessions()
   if (props.module === 'hr' && activeTab.value === 'onboarding') await loadOnboarding()
 }, { immediate: true })
-onMounted(() => { window.addEventListener('report-review-open', openReportReview) })
 onUnmounted(() => {
+  viewGeneration++
   if (toastTimer) clearTimeout(toastTimer)
-  window.removeEventListener('report-review-open', openReportReview)
 })
 </script>
 
@@ -769,6 +1017,7 @@ onUnmounted(() => {
       <div class="task-panel__heading"><div><p class="panel-kicker">{{ t('common.currentTask') }}</p><h2>{{ t(`${module}.tabs.${activeTab}`) }}</h2></div><div v-if="isPrimaryTab" class="workflow-stages" :aria-label="t('common.taskFlow')" tabindex="0"><span class="active"><b>1</b>{{ t('common.stageInput') }}</span><span :class="{ active: processingVisible }"><b>2</b>{{ t('common.stageReview') }}</span><span :class="{ active: executable || criteriaDraft || assessment || result?.draft || result?.draftId }"><b>3</b>{{ t('common.stageConfirm') }}</span></div></div>
 
       <form v-if="isPrimaryTab" class="primary-workflow-form" @submit.prevent="submit">
+        <p v-if="!session?.aiEnabled" class="alert alert--warning" role="status">{{ t('common.aiNotConfiguredHint') }}</p>
         <template v-if="module === 'report'">
           <section class="workflow-card report-source-picker">
             <div class="section-heading"><div><h3>{{ t('report.dataHandoffTitle') }}</h3><p>{{ t('report.dataHandoffDescription') }}</p></div><button class="button button--secondary" type="button" :disabled="loading" @click="loadReportHandoffs">{{ t('common.refresh') }}</button></div>
@@ -787,11 +1036,11 @@ onUnmounted(() => {
           <label>{{ formFieldLabel }}<textarea v-model="input" :placeholder="formPlaceholder" required maxlength="4000" rows="7" /></label>
           <div class="quick-start"><div><strong>{{ t('common.quickStart') }}</strong><span>{{ t('common.chooseExample') }}</span></div><div class="prompt-chips"><button v-for="(prompt, index) in quickPrompts" :key="prompt" type="button" @click="usePrompt(prompt, index)">{{ prompt }}</button></div></div>
         </template>
-        <div class="form-actions"><button class="button button--primary button--large" type="submit" :disabled="loading">{{ loading ? t('common.loading') : submitLabel }} <span aria-hidden="true">→</span></button><small>{{ module === 'knowledge' || (module === 'hr' && hrSection === 'employee') ? t('knowledge.answerBoundary') : t('common.reviewBeforeConfirm') }}</small></div>
+        <div class="form-actions"><button class="button button--primary button--large" type="submit" :disabled="loading || !session?.aiEnabled">{{ loading ? t('common.loading') : submitLabel }} <span aria-hidden="true">→</span></button><small>{{ module === 'knowledge' || (module === 'hr' && hrSection === 'employee') ? t('knowledge.answerBoundary') : t('common.reviewBeforeConfirm') }}</small></div>
       </form>
 
       <template v-else-if="module === 'hr' && activeTab === 'assessment' && canOperate">
-        <section class="workflow-card"><div class="section-heading"><div><h3>{{ t('hr.selectCriteria') }}</h3><p>{{ t('hr.assessmentDescription') }}</p></div><button class="button button--secondary" type="button" @click="loadConfirmedJobs">{{ t('common.refresh') }}</button></div><form class="primary-workflow-form" @submit.prevent="assessCandidate"><label>{{ t('hr.confirmedCriteria') }}<select v-model="selectedJobId" required><option value="" disabled>{{ t('hr.selectCriteriaPlaceholder') }}</option><option v-for="job in confirmedJobs" :key="job.jobId" :value="String(job.jobId)">{{ job.title }} · v{{ job.criteriaVersion }}</option></select></label><label>{{ t('hr.candidateReference') }}<input v-model="candidateReference" required maxlength="200"></label><label>{{ t('hr.consentReference') }}<input v-model="consentReference" required maxlength="200"></label><label>{{ t('hr.resumeText') }}<textarea v-model="resumeText" rows="8" :required="!resumeFile" :placeholder="t('hr.resumePlaceholder')"></textarea></label><label>{{ t('hr.resumeFile') }}<input type="file" accept=".txt,.md,.pdf,.docx" @change="chooseResume"></label><p class="field-hint">{{ t('hr.resumePrivacy') }}</p><button class="button button--primary" type="submit" :disabled="loading || !selectedJobId || !candidateReference || !consentReference || (!resumeText && !resumeFile)">{{ t('hr.assessCandidate') }}</button></form></section>
+        <section class="workflow-card"><div class="section-heading"><div><h3>{{ t('hr.selectCriteria') }}</h3><p>{{ t('hr.assessmentDescription') }}</p></div><button class="button button--secondary" type="button" :disabled="loading" @click="loadConfirmedJobs">{{ t('common.refresh') }}</button></div><form class="primary-workflow-form" @submit.prevent="assessCandidate"><label>{{ t('hr.confirmedCriteria') }}<select v-model="selectedJobId" required><option value="" disabled>{{ t('hr.selectCriteriaPlaceholder') }}</option><option v-for="job in confirmedJobs" :key="job.jobId" :value="String(job.jobId)">{{ job.title }} · v{{ job.criteriaVersion }}</option></select></label><label>{{ t('hr.candidateReference') }}<input v-model="candidateReference" required maxlength="200"></label><label>{{ t('hr.consentReference') }}<input v-model="consentReference" required maxlength="200"></label><label>{{ t('hr.resumeText') }}<textarea v-model="resumeText" rows="8" :required="!resumeFile" :placeholder="t('hr.resumePlaceholder')"></textarea></label><label>{{ t('hr.resumeFile') }}<input type="file" accept=".txt,.md,.pdf,.docx" @change="chooseResume"></label><p class="field-hint">{{ t('hr.resumePrivacy') }}</p><button class="button button--primary" type="submit" :disabled="loading || !selectedJobId || !candidateReference || !consentReference || (!resumeText && !resumeFile)">{{ t('hr.assessCandidate') }}</button></form></section>
       </template>
       <template v-else-if="module === 'hr' && activeTab === 'interview'">
         <section class="workflow-card">
@@ -802,20 +1051,20 @@ onUnmounted(() => {
             <label>{{ t('hr.questionText') }}<textarea v-model="interviewQuestionForm.questionText" required rows="3" maxlength="1000"></textarea></label>
             <label>{{ t('hr.evidenceGuidance') }}<textarea v-model="interviewQuestionForm.evidenceGuidance" required rows="3" maxlength="1500"></textarea></label>
             <label>{{ t('hr.prohibitedTopics') }}<textarea v-model="interviewQuestionForm.prohibitedTopics" rows="2" :placeholder="t('hr.onePerLine')"></textarea></label>
-            <button class="button button--secondary" type="submit">{{ t('hr.saveQuestionVersion') }}</button>
+            <button class="button button--secondary" type="submit" :disabled="loading">{{ t('hr.saveQuestionVersion') }}</button>
           </form>
           <div v-if="interviewQuestions.length" class="record-grid">
             <article v-for="item in interviewQuestions" :key="item.id">
               <div class="section-heading"><h4>{{ item.questionKey }} · v{{ item.version }}</h4><StatusBadge :label="item.active ? t('statuses.ACTIVE') : t('statuses.PENDING_REVIEW')" :tone="item.active ? 'success' : 'warning'" /></div>
               <p>{{ item.questionText }}</p><small>{{ item.category }} · {{ item.evidenceGuidance }}</small>
-              <button v-if="isAdmin && !item.active && item.ownerActorId !== session?.username" class="button button--secondary" type="button" @click="approveQuestion(item)">{{ t('hr.approveQuestion') }}</button>
+              <button v-if="isAdmin && !item.active" class="button button--secondary" type="button" :disabled="loading" @click="approveQuestion(item)">{{ t('hr.approveQuestion') }}</button>
             </article>
           </div>
         </section>
-        <section class="workflow-card"><div class="section-heading"><div><h3>{{ t('hr.interviewPurpose') }}</h3><p>{{ t('hr.interviewDescription') }}</p></div><button class="button button--secondary" type="button" @click="loadInterviewSessions">{{ t('common.refresh') }}</button></div><form v-if="canOperate" class="primary-workflow-form" @submit.prevent="openInterview"><label>{{ t('hr.assessmentId') }}<input v-model="interviewAssessmentId" required inputmode="numeric" pattern="[0-9]+"></label><label>{{ t('hr.interviewerMembers') }}<textarea v-model="interviewMembers" rows="3" :placeholder="t('hr.onePerLine')"></textarea></label><button class="button button--primary" type="submit">{{ t('hr.openInterview') }}</button></form><div v-if="Array.isArray(hrData) && hrData.length" class="record-grid"><article v-for="item in hrData" :key="item.id"><div class="section-heading"><h4>{{ item.sessionReference }}</h4><StatusBadge :label="item.status" :tone="item.status === 'OPEN' ? 'success' : 'info'" /></div><p>#{{ item.id }} · {{ t('hr.assessmentId') }} {{ item.assessmentId }}</p><div class="button-row"><button v-if="item.status === 'OPEN'" class="button button--secondary" type="button" @click="interviewSessionId = String(item.id)">{{ t('hr.continueInterview') }}</button><button class="button button--secondary" type="button" @click="loadInterviewSummary(item.id)">{{ t('hr.viewSummary') }}</button></div></article></div><form v-if="interviewSessionId" class="primary-workflow-form" @submit.prevent="saveInterviewOpinion"><p><strong>{{ t('hr.sessionId') }}:</strong> {{ interviewSessionId }}</p><label v-if="canOperate">{{ t('hr.addInterviewer') }}<input v-model="interviewMember" maxlength="100"></label><div v-if="canOperate" class="button-row"><button class="button button--secondary" type="button" @click="addInterviewMember">{{ t('hr.addMember') }}</button><button class="button button--danger" type="button" @click="closeInterview">{{ t('hr.closeInterview') }}</button></div><label>{{ t('hr.interviewEvidence') }}<textarea v-model="interviewEvidence" required rows="4" :placeholder="t('hr.onePerLine')"></textarea></label><label>{{ t('hr.interviewGaps') }}<textarea v-model="interviewGaps" rows="3" :placeholder="t('hr.onePerLine')"></textarea></label><label>{{ t('hr.interviewOpinion') }}<textarea v-model="interviewOpinion" required rows="4"></textarea></label><button class="button button--primary" type="submit">{{ t('hr.saveOpinion') }}</button></form><pre v-if="interviewSummaryData" class="result-preview result-preview--bounded">{{ safeJson(interviewSummaryData) }}</pre></section>
+        <section class="workflow-card"><div class="section-heading"><div><h3>{{ t('hr.interviewPurpose') }}</h3><p>{{ t('hr.interviewDescription') }}</p></div><button class="button button--secondary" type="button" :disabled="loading" @click="loadInterviewSessions">{{ t('common.refresh') }}</button></div><form v-if="canOperate" class="primary-workflow-form" @submit.prevent="openInterview"><label>{{ t('hr.assessmentId') }}<input v-model="interviewAssessmentId" required inputmode="numeric" pattern="[0-9]+"></label><label>{{ t('hr.interviewerMembers') }}<textarea v-model="interviewMembers" rows="3" :placeholder="t('hr.onePerLine')"></textarea></label><button class="button button--primary" type="submit" :disabled="loading">{{ t('hr.openInterview') }}</button></form><div v-if="Array.isArray(hrData) && hrData.length" class="record-grid"><article v-for="item in hrData" :key="item.id"><div class="section-heading"><h4>{{ item.sessionReference }}</h4><StatusBadge :label="item.status" :tone="item.status === 'OPEN' ? 'success' : 'info'" /></div><p>#{{ item.id }} · {{ t('hr.assessmentId') }} {{ item.assessmentId }}</p><div class="button-row"><button v-if="item.status === 'OPEN'" class="button button--secondary" type="button" :disabled="loading" @click="interviewSessionId = String(item.id)">{{ t('hr.continueInterview') }}</button><button class="button button--secondary" type="button" :disabled="loading" @click="loadInterviewSummary(item.id)">{{ t('hr.viewSummary') }}</button></div></article></div><form v-if="interviewSessionId" class="primary-workflow-form" @submit.prevent="saveInterviewOpinion"><p><strong>{{ t('hr.sessionId') }}:</strong> {{ interviewSessionId }}</p><label v-if="canOperate">{{ t('hr.addInterviewer') }}<input v-model="interviewMember" maxlength="100"></label><div v-if="canOperate" class="button-row"><button class="button button--secondary" type="button" :disabled="loading || !interviewMember.trim()" @click="addInterviewMember">{{ t('hr.addMember') }}</button><button class="button button--danger" type="button" :disabled="loading" @click="closeInterview">{{ t('hr.closeInterview') }}</button></div><label>{{ t('hr.interviewEvidence') }}<textarea v-model="interviewEvidence" required rows="4" :placeholder="t('hr.onePerLine')"></textarea></label><label>{{ t('hr.interviewGaps') }}<textarea v-model="interviewGaps" rows="3" :placeholder="t('hr.onePerLine')"></textarea></label><label>{{ t('hr.interviewOpinion') }}<textarea v-model="interviewOpinion" required rows="4"></textarea></label><button class="button button--primary" type="submit" :disabled="loading || !interviewEvidence.trim() || !interviewOpinion.trim()">{{ t('hr.saveOpinion') }}</button></form><pre v-if="interviewSummaryData" class="result-preview result-preview--bounded">{{ safeJson(interviewSummaryData) }}</pre></section>
       </template>
       <template v-else-if="module === 'hr' && activeTab === 'authorization'">
-        <section class="workflow-card"><h3>{{ t('hr.authorizationPurpose') }}</h3><p>{{ t('hr.authorizationDescription') }}</p><form class="primary-workflow-form" @submit.prevent="saveConsent"><label>{{ t('hr.consentReference') }}<input v-model="consentReference" required maxlength="200"></label><label>{{ t('hr.candidateReference') }}<input v-model="candidateReference" required maxlength="200"></label><label>{{ t('hr.consentPurpose') }}<select v-model="consentPurpose" required><option value="ASSESSMENT">{{ t('hr.consentAssessment') }}</option><option value="ATS_IMPORT">{{ t('hr.consentAtsImport') }}</option></select></label><label>{{ t('hr.consentDays') }}<input v-model.number="consentDays" type="number" min="1" max="365" required></label><button class="button button--primary" type="submit">{{ t('hr.recordConsent') }}</button><button class="button button--danger" type="button" @click="revokeConsent">{{ t('hr.revokeConsent') }}</button></form><form v-if="consentPurpose === 'ASSESSMENT'" class="primary-workflow-form" @submit.prevent="assessAuthorizedCandidate"><h4>{{ t('hr.authorizedAssessment') }}</h4><label>{{ t('hr.confirmedCriteria') }}<select v-model="selectedJobId" required><option value="" disabled>{{ t('hr.selectCriteriaPlaceholder') }}</option><option v-for="job in confirmedJobs" :key="job.jobId" :value="String(job.jobId)">{{ job.title }} · v{{ job.criteriaVersion }}</option></select></label><label>{{ t('hr.resumeText') }}<textarea v-model="resumeText" required rows="6"></textarea></label><button class="button button--secondary" type="submit">{{ t('hr.runAuthorizedAssessment') }}</button></form><pre v-if="hrData" class="result-preview result-preview--bounded">{{ safeJson(hrData) }}</pre></section>
+        <section class="workflow-card"><h3>{{ t('hr.authorizationPurpose') }}</h3><p>{{ t('hr.authorizationDescription') }}</p><form class="primary-workflow-form" @submit.prevent="saveConsent"><label>{{ t('hr.consentReference') }}<input v-model="consentReference" required maxlength="200"></label><label>{{ t('hr.candidateReference') }}<input v-model="candidateReference" required maxlength="200"></label><label>{{ t('hr.consentPurpose') }}<select v-model="consentPurpose" required><option value="ASSESSMENT">{{ t('hr.consentAssessment') }}</option><option value="ATS_IMPORT">{{ t('hr.consentAtsImport') }}</option></select></label><label>{{ t('hr.consentDays') }}<input v-model.number="consentDays" type="number" min="1" max="365" required></label><button class="button button--primary" type="submit" :disabled="loading">{{ t('hr.recordConsent') }}</button><button class="button button--danger" type="button" :disabled="loading || !consentReference.trim()" @click="revokeConsent">{{ t('hr.revokeConsent') }}</button></form><form v-if="consentPurpose === 'ASSESSMENT'" class="primary-workflow-form" @submit.prevent="assessAuthorizedCandidate"><h4>{{ t('hr.authorizedAssessment') }}</h4><label>{{ t('hr.confirmedCriteria') }}<select v-model="selectedJobId" required><option value="" disabled>{{ t('hr.selectCriteriaPlaceholder') }}</option><option v-for="job in confirmedJobs" :key="job.jobId" :value="String(job.jobId)">{{ job.title }} · v{{ job.criteriaVersion }}</option></select></label><label>{{ t('hr.resumeText') }}<textarea v-model="resumeText" required rows="6"></textarea></label><button class="button button--secondary" type="submit" :disabled="loading || !selectedJobId || !resumeText.trim()">{{ t('hr.runAuthorizedAssessment') }}</button></form><pre v-if="hrData" class="result-preview result-preview--bounded">{{ safeJson(hrData) }}</pre></section>
       </template>
       <template v-else-if="module === 'hr' && activeTab === 'onboarding'">
         <section v-if="canOperate" class="workflow-card">
@@ -826,17 +1075,23 @@ onUnmounted(() => {
             <label>{{ t('hr.roleScope') }}<input v-model="onboardingChecklistForm.roleScope" maxlength="100"></label>
             <label>{{ t('hr.checklistItems') }}<textarea v-model="onboardingChecklistForm.items" required rows="4" :placeholder="t('hr.checklistItemsHint')"></textarea></label>
             <label>{{ t('hr.knowledgeReferences') }}<textarea v-model="onboardingChecklistForm.knowledgeReferences" rows="3" :placeholder="t('hr.onePerLine')"></textarea></label>
-            <button class="button button--secondary" type="submit">{{ t('hr.saveChecklistVersion') }}</button>
+            <button class="button button--secondary" type="submit" :disabled="loading">{{ t('hr.saveChecklistVersion') }}</button>
           </form>
         </section>
-        <section class="workflow-card"><div class="section-heading"><div><h3>{{ t('hr.onboardingPurpose') }}</h3><p>{{ t('hr.onboardingDescription') }}</p></div><button class="button button--secondary" type="button" @click="loadOnboarding">{{ t('common.refresh') }}</button></div><form v-if="canOperate" class="primary-workflow-form" @submit.prevent="startOnboarding"><label>{{ t('hr.onboardingChecklist') }}<select v-model="selectedChecklistId" required><option value="" disabled>{{ t('hr.selectChecklist') }}</option><option v-for="item in activeOnboardingChecklists" :key="item.id" :value="String(item.id)">{{ item.title }} · v{{ item.version }}</option></select></label><label>{{ t('hr.employeeReference') }}<input v-model="employeeReference" required maxlength="200"></label><button class="button button--primary" type="submit">{{ t('hr.startOnboarding') }}</button></form><label>{{ t('hr.onboardingEvidence') }}<input v-model="onboardingEvidence" maxlength="1000" :placeholder="t('hr.onboardingEvidenceHint')"></label><div v-if="onboardingInstances.length" class="record-grid"><article v-for="instance in onboardingInstances" :key="instance.id"><div class="section-heading"><h4>{{ instance.employeeReference }}</h4><StatusBadge :label="instance.status" :tone="instance.status === 'COMPLETED' ? 'success' : instance.status === 'IN_PROGRESS' ? 'warning' : 'info'" /></div><p v-if="instance.knowledgeReferences?.length" class="field-hint">{{ t('hr.knowledgeReferences') }}：{{ instance.knowledgeReferences.join(', ') }}</p><ul><li v-for="task in instance.tasks" :key="task.id"><span><strong>{{ task.required ? t('hr.requiredTask') : t('hr.optionalTask') }}</strong> · {{ task.title }} · {{ task.status }}<small>{{ t('hr.taskDueAt', { value: dateTime(task.dueAt) }) }}</small><small v-if="task.ownerRole || task.guidance">{{ task.ownerRole || t('common.unknown') }} · {{ task.guidance }}</small></span><button v-if="task.status === 'PENDING' && (instance.status === 'IN_PROGRESS' || !task.required)" class="button button--secondary" type="button" :disabled="!onboardingEvidence.trim()" @click="completeOnboardingTask(instance.id, task.id)">{{ t('hr.completeTask') }}</button></li></ul><button v-if="instance.status === 'IN_PROGRESS'" class="button button--danger" type="button" @click="cancelOnboarding(instance.id)">{{ t('hr.cancelOnboarding') }}</button></article></div><div v-if="onboardingChecklists.length" class="record-grid"><article v-for="item in onboardingChecklists" :key="item.id"><h4>{{ item.title }}</h4><p>{{ item.roleScope || t('hr.allRoles') }} · v{{ item.version }}</p><StatusBadge :label="item.active ? t('statuses.ACTIVE') : t('statuses.PENDING_REVIEW')" :tone="item.active ? 'success' : 'warning'" /><button v-if="isAdmin && !item.active && item.ownerActorId !== session?.username" class="button button--secondary" type="button" @click="approveChecklist(item)">{{ t('hr.approveChecklist') }}</button></article></div></section>
+        <section class="workflow-card"><div class="section-heading"><div><h3>{{ t('hr.onboardingPurpose') }}</h3><p>{{ t('hr.onboardingDescription') }}</p></div><button class="button button--secondary" type="button" :disabled="loading" @click="loadOnboarding">{{ t('common.refresh') }}</button></div><form v-if="canOperate" class="primary-workflow-form" @submit.prevent="startOnboarding"><label>{{ t('hr.onboardingChecklist') }}<select v-model="selectedChecklistId" required><option value="" disabled>{{ t('hr.selectChecklist') }}</option><option v-for="item in activeOnboardingChecklists" :key="item.id" :value="String(item.id)">{{ item.title }} · v{{ item.version }}</option></select></label><label>{{ t('hr.employeeReference') }}<input v-model="employeeReference" required maxlength="200"></label><button class="button button--primary" type="submit" :disabled="loading || !selectedChecklistId || !employeeReference.trim()">{{ t('hr.startOnboarding') }}</button></form><label>{{ t('hr.onboardingEvidence') }}<input v-model="onboardingEvidence" maxlength="1000" :placeholder="t('hr.onboardingEvidenceHint')"></label><div v-if="onboardingInstances.length" class="record-grid"><article v-for="instance in onboardingInstances" :key="instance.id"><div class="section-heading"><h4>{{ instance.employeeReference }}</h4><StatusBadge :label="instance.status" :tone="instance.status === 'COMPLETED' ? 'success' : instance.status === 'IN_PROGRESS' ? 'warning' : 'info'" /></div><p v-if="instance.knowledgeReferences?.length" class="field-hint">{{ t('hr.knowledgeReferences') }}：{{ instance.knowledgeReferences.join(', ') }}</p><ul><li v-for="task in instance.tasks" :key="task.id"><span><strong>{{ task.required ? t('hr.requiredTask') : t('hr.optionalTask') }}</strong> · {{ task.title }} · {{ task.status }}<small>{{ t('hr.taskDueAt', { value: dateTime(task.dueAt) }) }}</small><small v-if="task.ownerRole || task.guidance">{{ task.ownerRole || t('common.unknown') }} · {{ task.guidance }}</small></span><button v-if="task.status === 'PENDING' && (instance.status === 'IN_PROGRESS' || !task.required)" class="button button--secondary" type="button" :disabled="loading || !onboardingEvidence.trim()" @click="completeOnboardingTask(instance.id, task.id)">{{ t('hr.completeTask') }}</button></li></ul><button v-if="instance.status === 'IN_PROGRESS'" class="button button--danger" type="button" :disabled="loading" @click="cancelOnboarding(instance.id)">{{ t('hr.cancelOnboarding') }}</button></article></div><div v-if="onboardingChecklists.length" class="record-grid"><article v-for="item in onboardingChecklists" :key="item.id"><h4>{{ item.title }}</h4><p>{{ item.roleScope || t('hr.allRoles') }} · v{{ item.version }}</p><StatusBadge :label="item.active ? t('statuses.ACTIVE') : t('statuses.PENDING_REVIEW')" :tone="item.active ? 'success' : 'warning'" /><button v-if="isAdmin && !item.active" class="button button--secondary" type="button" :disabled="loading" @click="approveChecklist(item)">{{ t('hr.approveChecklist') }}</button></article></div></section>
       </template>
-      <ResumeReviewPanel v-if="module === 'hr' && activeTab === 'assessment' && (isReviewer || isAdmin)" />
+      <button v-if="module === 'hr' && activeTab === 'assessment' && isAdmin" class="button button--secondary admin-review-toggle" type="button" :disabled="loading" @click="adminAssessmentReviewOpen = !adminAssessmentReviewOpen">{{ t(adminAssessmentReviewOpen ? 'hr.closeAdminReviewQueue' : 'hr.openAdminReviewQueue') }}</button>
+      <ResumeReviewPanel v-if="module === 'hr' && activeTab === 'assessment' && (isReviewer || (isAdmin && adminAssessmentReviewOpen))" />
       <KnowledgeQualityPanel v-else-if="module === 'knowledge' && activeTab === 'quality'" />
       <SupportReviewPanel v-else-if="module === 'support' && activeTab === 'review'" />
-      <ReportEnterprisePanel v-else-if="module === 'report' && (activeTab === 'records' || activeTab === 'schedules')" :tab="reportEnterpriseTab" />
-      <DataEnterprisePanel v-else-if="module === 'data' && !isPrimaryTab" :tab="activeTab" />
-      <EnterprisePanel v-else-if="!isPrimaryTab && (module !== 'hr' || (activeTab === 'authorization' && isAdmin))" :module="module" :tab="activeTab" />
+      <SupportQualityCasesPanel v-else-if="module === 'support' && activeTab === 'quality'" />
+      <WorkflowReviewPanel v-else-if="module === 'data' && activeTab === 'records' && (isReviewer || isAdmin)" subject-type="DATA_SQL_CANDIDATE" />
+      <WorkflowReviewPanel v-else-if="module === 'report' && activeTab === 'records' && (isReviewer || isAdmin)" subject-type="REPORT_DRAFT" />
+      <ReportEnterprisePanel v-else-if="module === 'report' && (!isReviewer || isAdmin) && (activeTab === 'records' || activeTab === 'schedules')" :tab="reportEnterpriseTab" @open-review="openReportReview" />
+      <DataEnterprisePanel v-else-if="module === 'data' && (!isReviewer || isAdmin) && !isPrimaryTab" :tab="activeTab" />
+      <EnterprisePanel v-else-if="(!isReviewer || isAdmin) && !isPrimaryTab && (module !== 'hr' || (activeTab === 'authorization' && isAdmin))" :module="module" :tab="activeTab" />
+      <template v-if="isAdmin && module === 'data' && activeTab === 'records'"><DataEnterprisePanel :tab="activeTab" /></template>
+      <template v-if="isAdmin && module === 'report' && activeTab === 'records'"><ReportEnterprisePanel :tab="reportEnterpriseTab" @open-review="openReportReview" /></template>
 
       <section v-if="module === 'data' && isPrimaryTab && result" class="data-query-flow" aria-live="polite">
         <div class="data-query-flow__heading">
@@ -844,11 +1099,27 @@ onUnmounted(() => {
           <StatusBadge :label="result.executable ? t('data.guardrailPassed') : t('data.guardrailBlocked')" :tone="result.executable ? 'success' : 'warning'" />
         </div>
         <p v-if="result.summary" class="data-query-flow__summary">{{ result.summary }}</p>
+        <nav v-if="evidence.length" class="citation-links" :aria-label="t('common.evidence')">
+          <a v-for="(citation, index) in evidence" :key="String(citation.metricKey ?? citation.title ?? index)" :href="`#evidence-source-${Number(index) + 1}`" @click.prevent="focusEvidence(Number(index) + 1)">[{{ Number(index) + 1 }}] {{ citation.title }}</a>
+        </nav>
         <SqlPreview :sql="sql" />
         <div v-if="result.validation" class="validation-summary"><strong>{{ t('data.guardrail') }}</strong><span>{{ result.executable ? t('data.guardrailPassed') : t('data.guardrailBlocked') }}</span></div>
+        <div v-if="result.clarificationQuestions?.length" class="alert alert--warning" data-testid="data-clarification">
+          <strong>{{ t('data.clarificationNeeded') }}</strong>
+          <ul><li v-for="question in result.clarificationQuestions" :key="question">{{ question }}</li></ul>
+        </div>
+        <div v-if="executable" class="data-revision">
+          <button class="button button--secondary" type="button" data-testid="revise-candidate" :disabled="loading || revising" @click="reviseOpen = !reviseOpen; if (!reviseOpen) reviseInstruction = ''">{{ t('data.reviseCandidate') }}</button>
+          <div v-if="reviseOpen" class="primary-workflow-form">
+            <label>{{ t('data.reviseInstruction') }}<input v-model="reviseInstruction" data-testid="revision-instruction" maxlength="1000"></label>
+            <div class="button-row"><button class="button button--primary" type="button" :disabled="revising || !reviseInstruction.trim()" @click="reviseCandidate">{{ t('data.reviseSubmit') }}</button></div>
+            <p class="field-hint">{{ t('data.reviseHint') }}</p>
+          </div>
+        </div>
         <div v-if="executable" class="data-query-flow__actions">
-          <div><strong>{{ t('data.candidateReady') }}</strong><p>{{ t('common.reviewBeforeConfirm') }}</p></div>
-          <button class="button button--primary button--large" type="button" @click="confirmAction = 'data-execute'">{{ t('data.confirmQuery') }} <span aria-hidden="true">→</span></button>
+          <div><strong>{{ dataReviewApproved ? t('data.candidateReady') : t('common.awaitingIndependentReview') }}</strong><p>{{ dataReviewApproved ? t('common.reviewBeforeConfirm') : t('common.independentReviewWaitingDescription') }}</p></div>
+          <button v-if="dataReviewApproved" class="button button--primary button--large" type="button" :disabled="loading || revising" @click="confirmAction = 'data-execute'">{{ t('data.confirmQuery') }} <span aria-hidden="true">→</span></button>
+          <button v-else class="button button--secondary" type="button" :disabled="loading" @click="refreshIndependentReview('DATA_SQL_CANDIDATE', result.candidateId)">{{ t('common.refreshReviewStatus') }}</button>
         </div>
       </section>
 
@@ -856,13 +1127,30 @@ onUnmounted(() => {
         <div class="business-result__heading"><div><span class="result-check">✓</span><h3>{{ t('common.processingResult') }}</h3></div><StatusBadge :label="resultStatus" tone="success" /></div>
 
         <template v-if="module === 'data' && dataExecution"><DataExecutionResult :execution="dataExecution" /></template>
-        <template v-else-if="(module === 'knowledge' || (module === 'hr' && hrSection === 'employee')) && result"><div class="answer-content"><h4>{{ t('knowledge.answer') }}</h4><p>{{ result.answer || t('knowledge.noGroundedAnswer') }}</p><p v-if="result.status && result.status !== 'ANSWERED'" class="field-hint">{{ t('knowledge.statusExplanation') }}</p><form v-if="result.answerId" class="feedback-form" @submit.prevent="submitKnowledgeFeedback"><h5>{{ t('knowledge.feedbackTitle') }}</h5><div class="button-row"><button class="button button--secondary" type="button" :class="{ active: knowledgeFeedbackRating === 'HELPFUL' }" @click="knowledgeFeedbackRating = 'HELPFUL'">{{ t('knowledge.helpful') }}</button><button class="button button--secondary" type="button" :class="{ active: knowledgeFeedbackRating === 'NOT_HELPFUL' }" @click="knowledgeFeedbackRating = 'NOT_HELPFUL'">{{ t('knowledge.notHelpful') }}</button></div><label v-if="knowledgeFeedbackRating === 'NOT_HELPFUL'">{{ t('knowledge.feedbackReason') }}<select v-model="knowledgeFeedbackReason"><option value="MISSING_EVIDENCE">MISSING_EVIDENCE</option><option value="INCORRECT">INCORRECT</option><option value="OUTDATED">OUTDATED</option><option value="UNCLEAR">UNCLEAR</option><option value="OTHER">OTHER</option></select></label><label v-if="knowledgeFeedbackRating">{{ t('knowledge.feedbackComment') }}<textarea v-model="knowledgeFeedbackComment" rows="3" maxlength="1000"></textarea></label><button v-if="knowledgeFeedbackRating" class="button button--primary" type="submit">{{ t('knowledge.submitFeedback') }}</button></form></div></template>
-        <template v-else-if="module === 'support' && result"><div class="review-editor"><h4>{{ t('support.replyDraft') }}</h4><textarea v-model="supportDraftText" rows="9" :disabled="!result.draft || ['CONFIRMED','CANCELED'].includes(result.status)"></textarea><label>{{ t('support.editReason') }}<input v-model="supportEditReason" maxlength="500" :disabled="!result.draft || ['CONFIRMED','CANCELED'].includes(result.status)"></label><div class="button-row"><button class="button button--secondary" type="button" :disabled="!result.draft || ['CONFIRMED','CANCELED'].includes(result.status)" @click="saveSupportEdit">{{ t('support.saveEdit') }}</button><button class="button button--primary" type="button" :disabled="!result.draft || ['CONFIRMED','CANCELED'].includes(result.status)" @click="confirmAction = 'support-confirm'">{{ t('support.confirmDraft') }}</button><button class="button button--danger" type="button" :disabled="!result.draft || ['CONFIRMED','CANCELED'].includes(result.status)" @click="confirmAction = 'support-cancel'">{{ t('common.cancel') }}</button></div><div v-if="result.status === 'CONFIRMED' && result.draft?.draftId" class="workflow-card"><p>{{ t('support.writebackBoundary') }}</p><div v-if="supportWritebackEligible" class="button-row"><button v-if="!supportWriteback" class="button button--secondary" type="button" @click="prepareSupportWriteback">{{ t('support.prepareWriteback') }}</button><button v-else-if="supportWriteback.status === 'PENDING_CONFIRMATION'" class="button button--danger" type="button" @click="confirmAction = 'support-writeback'">{{ t('support.confirmWriteback') }}</button><button v-else-if="supportWriteback.status !== 'COMPLETED'" class="button button--secondary" type="button" @click="refreshSupportWriteback()">{{ t('support.refreshWriteback') }}</button><StatusBadge :label="supportWriteback?.status ?? t('statuses.PENDING_REVIEW')" :tone="supportWriteback?.status === 'COMPLETED' ? 'success' : supportWriteback?.status === 'UNKNOWN' ? 'danger' : 'warning'" /></div><div v-if="isAdmin && supportWriteback?.status === 'UNKNOWN'" class="primary-workflow-form"><p class="alert alert--warning">{{ t('support.writebackUnknown') }}</p><label>{{ t('support.recoveryEvidence') }}<input v-model="supportRecoveryEvidence" required maxlength="500"></label><div class="button-row"><button class="button button--primary" type="button" :disabled="!supportRecoveryEvidence.trim()" @click="resolveSupportWriteback('COMPLETED')">{{ t('support.markExternallyCompleted') }}</button><button class="button button--secondary" type="button" :disabled="!supportRecoveryEvidence.trim()" @click="resolveSupportWriteback('SAFE_TO_RETRY')">{{ t('support.allowVerifiedRetry') }}</button></div></div><p v-else-if="supportWritebackEligible === false" class="field-hint">{{ t('support.writebackUnavailable') }}</p><small v-if="supportWriteback?.expiresAt" class="field-hint">{{ t('common.tokenExpiry') }}：{{ supportWriteback.expiresAt }}</small></div><p v-if="result.needsHuman" class="alert alert--warning">{{ t('support.needsHumanExplanation') }}</p></div></template>
-        <template v-else-if="module === 'report' && result"><div v-if="result.status === 'NEEDS_REVIEW'" class="review-editor"><div class="alert alert--warning">{{ (result.reviewReasons ?? []).join('；') || t('report.needsReview') }}</div><p class="field-hint">{{ t('report.needsReview') }}</p><button class="button button--danger" type="button" @click="confirmAction = 'report-cancel'">{{ t('common.cancel') }}</button></div><div v-else-if="reportContent" class="review-editor"><h4>{{ t('report.reportContent') }}</h4><label>{{ t('report.executiveSummary') }}<textarea v-model="reportContent.executiveSummary" rows="5" :disabled="result.status !== 'DRAFTED'"></textarea><small v-if="reportContent.executiveSummarySourceIds?.length">{{ t('common.evidence') }}: {{ reportContent.executiveSummarySourceIds.join(', ') }}</small></label><div v-if="reportContent.metricHighlights?.length" class="report-edit-section"><h5>{{ t('report.metricHighlights') }}</h5><label v-for="(item, index) in reportContent.metricHighlights" :key="index"><span>{{ item.metricName }}: {{ item.metricValue }} {{ item.unit }}</span><textarea v-model="item.summary" rows="2" :disabled="result.status !== 'DRAFTED'"></textarea><small v-if="item.sourceIds?.length">{{ t('common.evidence') }}: {{ item.sourceIds.join(', ') }}</small></label></div><div v-for="section in ['completedItems','risks','actionItems','suggestions']" :key="section" class="report-edit-section"><h5>{{ t(`report.sections.${section}`) }}</h5><label v-for="(item, index) in reportContent[section] ?? []" :key="index"><textarea v-model="item.text" rows="3" :disabled="result.status !== 'DRAFTED'"></textarea><small v-if="item.sourceIds?.length">{{ t('common.evidence') }}: {{ item.sourceIds.join(', ') }}</small></label></div><div class="button-row"><button class="button button--secondary" type="button" :disabled="result.status !== 'DRAFTED'" @click="saveReportEdit">{{ t('report.saveEdit') }}</button><button class="button button--primary" type="button" :disabled="result.status !== 'DRAFTED'" @click="confirmAction = 'report-confirm'">{{ t('report.confirmReport') }}</button><button class="button button--danger" type="button" :disabled="result.status !== 'DRAFTED'" @click="confirmAction = 'report-cancel'">{{ t('common.cancel') }}</button></div><p class="field-hint">{{ t('report.confirmBoundary') }}</p></div><div v-else class="alert alert--warning">{{ t('report.needsReview') }}</div></template>
-        <template v-else-if="module === 'hr' && hrSection === 'recruiting'"><div v-if="jobDraft" class="review-editor"><h4>{{ t('hr.jdDraft') }}</h4><textarea v-model="jobDraft.jdDraft" rows="16"></textarea><div class="button-row"><button class="button button--primary" type="button" @click="extractCriteria">{{ t('hr.extractCriteria') }}</button></div></div><div v-if="criteriaDraft" class="criteria-editor"><h4>{{ t('hr.criteriaReview') }}</h4><label v-for="criterion in criteriaDraft.criteria" :key="criterion.criterionId"><span>{{ criterion.requirementType }} · {{ criterion.category }}</span><textarea v-model="criterion.description" rows="2" :disabled="!criteriaEditable"></textarea></label><div class="button-row"><button class="button button--secondary" type="button" :disabled="!criteriaEditable" @click="saveCriteriaEdits">{{ t('hr.saveCriteriaEdits') }}</button><button class="button button--primary" type="button" :disabled="!criteriaEditable" @click="confirmAction = 'criteria-confirm'">{{ t('hr.confirmCriteria') }}</button></div></div></template>
+        <template v-else-if="(module === 'knowledge' || (module === 'hr' && hrSection === 'employee')) && result">
+          <div class="answer-content">
+            <h4>{{ t('knowledge.answer') }}</h4>
+            <p>{{ result.answer || t('knowledge.noGroundedAnswer') }}</p>
+            <nav v-if="result.citations?.length" class="citation-links" :aria-label="t('common.evidence')">
+              <a v-for="(citation, index) in result.citations" :key="citation.chunkId ?? index" :href="`#evidence-source-${citationIndex(citation, index)}`" @click.prevent="focusEvidence(citationIndex(citation, index))">[{{ citationIndex(citation, index) }}]</a>
+            </nav>
+            <p v-if="result.status && result.status !== 'ANSWERED'" class="field-hint">{{ t('knowledge.statusExplanation') }}</p>
+            <form v-if="result.answerId && !knowledgeFeedbackSubmitted" class="feedback-form" @submit.prevent="submitKnowledgeFeedback">
+              <h5>{{ t('knowledge.feedbackTitle') }}</h5>
+              <div class="button-row"><button class="button button--secondary" type="button" :disabled="loading" :class="{ active: knowledgeFeedbackRating === 'HELPFUL' }" @click="knowledgeFeedbackRating = 'HELPFUL'">{{ t('knowledge.helpful') }}</button><button class="button button--secondary" type="button" :disabled="loading" :class="{ active: knowledgeFeedbackRating === 'NOT_HELPFUL' }" @click="knowledgeFeedbackRating = 'NOT_HELPFUL'">{{ t('knowledge.notHelpful') }}</button></div>
+              <label v-if="knowledgeFeedbackRating === 'NOT_HELPFUL'">{{ t('knowledge.feedbackReason') }}<select v-model="knowledgeFeedbackReason"><option v-for="reason in knowledgeFeedbackReasons" :key="reason" :value="reason">{{ t(`knowledge.reviewOptions.feedback.${reason}`) }}</option></select></label>
+              <label v-if="knowledgeFeedbackRating">{{ t('knowledge.feedbackComment') }}<textarea v-model="knowledgeFeedbackComment" rows="3" maxlength="1000"></textarea></label>
+              <button v-if="knowledgeFeedbackRating" class="button button--primary" type="submit" :disabled="loading">{{ t('knowledge.submitFeedback') }}</button>
+            </form>
+            <p v-else-if="result.answerId" class="field-hint feedback-complete">{{ t('knowledge.feedbackSaved') }}</p>
+          </div>
+        </template>
+        <template v-else-if="module === 'support' && result"><div class="review-editor"><h4>{{ t('support.replyDraft') }}</h4><textarea v-model="supportDraftText" rows="9" :disabled="!result.draft || ['CONFIRMED','CANCELED'].includes(result.status)"></textarea><nav v-if="result.draft?.citations?.length" class="citation-links" :aria-label="t('common.evidence')"><a v-for="(citation, index) in result.draft.citations" :key="citation.chunkId ?? index" :href="`#evidence-source-${citationIndex(citation, index)}`" @click.prevent="focusEvidence(citationIndex(citation, index))">[{{ citationIndex(citation, index) }}] {{ citation.sourceTitle }}</a></nav><label>{{ t('support.editReason') }}<input v-model="supportEditReason" maxlength="500" :disabled="!result.draft || ['CONFIRMED','CANCELED'].includes(result.status)"></label><div class="button-row"><button class="button button--secondary" type="button" :disabled="loading || !result.draft || ['CONFIRMED','CANCELED'].includes(result.status)" @click="saveSupportEdit">{{ t('support.saveEdit') }}</button><button class="button button--primary" type="button" :disabled="loading || !result.draft || ['CONFIRMED','CANCELED'].includes(result.status)" @click="confirmAction = 'support-confirm'">{{ t('support.confirmDraft') }}</button><button class="button button--danger" type="button" :disabled="loading || !result.draft || ['CONFIRMED','CANCELED'].includes(result.status)" @click="confirmAction = 'support-cancel'">{{ t('common.cancel') }}</button></div><div v-if="result.status === 'CONFIRMED' && result.draft?.draftId" class="workflow-card"><p>{{ t('support.writebackBoundary') }}</p><div v-if="supportWritebackEligible" class="button-row"><button v-if="!supportWriteback" class="button button--secondary" type="button" :disabled="loading" @click="prepareSupportWriteback">{{ t('support.prepareWriteback') }}</button><button v-else-if="supportWriteback.status === 'PENDING_CONFIRMATION'" class="button button--danger" type="button" :disabled="loading" @click="confirmAction = 'support-writeback'">{{ t('support.confirmWriteback') }}</button><button v-else-if="supportWriteback.status !== 'COMPLETED'" class="button button--secondary" type="button" :disabled="loading" @click="refreshSupportWriteback()">{{ t('support.refreshWriteback') }}</button><button v-if="supportWriteback && ['UNKNOWN', 'PROCESSING'].includes(supportWriteback.status)" class="button button--secondary" type="button" data-testid="writeback-receipt-refresh" :disabled="loading" @click="refreshSupportWritebackReceipt">{{ t('support.refreshReceipt') }}</button><StatusBadge :label="supportWriteback?.status ?? t('statuses.PENDING_REVIEW')" :tone="supportWriteback?.status === 'COMPLETED' ? 'success' : supportWriteback?.status === 'UNKNOWN' ? 'danger' : 'warning'" /></div><div v-if="isAdmin && supportWriteback?.status === 'UNKNOWN'" class="primary-workflow-form"><p class="alert alert--warning">{{ t('support.writebackUnknown') }}</p><label>{{ t('support.recoveryEvidence') }}<input v-model="supportRecoveryEvidence" required maxlength="500"></label><div class="button-row"><button class="button button--primary" type="button" :disabled="loading || !supportRecoveryEvidence.trim()" @click="resolveSupportWriteback('COMPLETED')">{{ t('support.markExternallyCompleted') }}</button><button class="button button--secondary" type="button" :disabled="loading || !supportRecoveryEvidence.trim()" @click="resolveSupportWriteback('SAFE_TO_RETRY')">{{ t('support.allowVerifiedRetry') }}</button></div></div><p v-else-if="supportWritebackEligible === false" class="field-hint">{{ t('support.writebackUnavailable') }}</p><small v-if="supportWriteback?.expiresAt" class="field-hint">{{ t('common.tokenExpiry') }}：{{ supportWriteback.expiresAt }}</small></div><p v-if="result.needsHuman" class="alert alert--warning">{{ t('support.needsHumanExplanation') }}</p></div></template>
+        <template v-else-if="module === 'report' && result"><div v-if="result.status === 'NEEDS_REVIEW'" class="review-editor"><div class="alert alert--warning">{{ (result.reviewReasons ?? []).join('；') || t('report.needsReview') }}</div><p class="field-hint">{{ t('report.needsReview') }}</p><div v-if="reportDataTraceLinks.length" class="report-review-trace"><strong>{{ t('report.dataHandoffTitle') }}</strong><ul><li v-for="link in reportDataTraceLinks" :key="`${link.draftId}-${link.sourceReference}`"><code>{{ link.sourceReference }}</code> · {{ t('report.traceResult') }} #{{ link.queryResultId ?? '—' }} · {{ t('report.traceCandidate') }} <code>{{ link.candidateId ?? '—' }}</code></li></ul></div><button class="button button--danger" type="button" :disabled="loading" @click="confirmAction = 'report-cancel'">{{ t('common.cancel') }}</button></div><div v-else-if="reportContent" class="review-editor"><h4>{{ t('report.reportContent') }}</h4><label>{{ t('report.executiveSummary') }}<textarea v-model="reportContent.executiveSummary" rows="5" :disabled="loading || result.status !== 'DRAFTED'"></textarea><small v-if="reportContent.executiveSummarySourceIds?.length">{{ t('common.evidence') }}: {{ reportContent.executiveSummarySourceIds.join(', ') }}</small></label><div v-if="reportContent.metricHighlights?.length" class="report-edit-section"><h5>{{ t('report.metricHighlights') }}</h5><label v-for="(item, index) in reportContent.metricHighlights" :key="index"><span>{{ item.metricName }}: {{ item.metricValue }} {{ item.unit }}</span><textarea v-model="item.summary" rows="2" :disabled="loading || result.status !== 'DRAFTED'"></textarea><small v-if="item.sourceIds?.length">{{ t('common.evidence') }}: {{ item.sourceIds.join(', ') }}</small></label></div><div v-for="section in ['completedItems','risks','actionItems','suggestions']" :key="section" class="report-edit-section"><h5>{{ t(`report.sections.${section}`) }}</h5><label v-for="(item, index) in reportContent[section] ?? []" :key="index"><textarea v-model="item.text" rows="3" :disabled="loading || result.status !== 'DRAFTED'"></textarea><small v-if="item.sourceIds?.length">{{ t('common.evidence') }}: {{ item.sourceIds.join(', ') }}</small></label></div><div v-if="reportDataTraceLinks.length" class="report-review-trace"><strong>{{ t('report.dataHandoffTitle') }}</strong><ul><li v-for="link in reportDataTraceLinks" :key="`${link.draftId}-${link.sourceReference}`"><code>{{ link.sourceReference }}</code> · {{ t('report.traceResult') }} #{{ link.queryResultId ?? '—' }} · {{ t('report.traceCandidate') }} <code>{{ link.candidateId ?? '—' }}</code></li></ul></div><p v-if="!reportReviewApproved" class="alert alert--info">{{ t('common.independentReviewWaitingDescription') }}</p><div class="button-row"><button class="button button--secondary" type="button" :disabled="loading || result.status !== 'DRAFTED'" @click="saveReportEdit">{{ t('report.saveEdit') }}</button><button v-if="reportReviewApproved" class="button button--primary" type="button" :disabled="loading || result.status !== 'DRAFTED'" @click="confirmAction = 'report-confirm'">{{ t('report.confirmReport') }}</button><button v-else class="button button--secondary" type="button" :disabled="loading" @click="refreshIndependentReview('REPORT_DRAFT', result.draftId)">{{ t('common.refreshReviewStatus') }}</button><button class="button button--danger" type="button" :disabled="loading || result.status !== 'DRAFTED'" @click="confirmAction = 'report-cancel'">{{ t('common.cancel') }}</button></div><p class="field-hint">{{ t('report.confirmBoundary') }}</p></div><div v-else class="alert alert--warning">{{ t('report.needsReview') }}</div></template>
+        <template v-else-if="module === 'hr' && hrSection === 'recruiting'"><div v-if="jobDraft" class="review-editor"><h4>{{ t('hr.jdDraft') }}</h4><textarea v-model="jobDraft.jdDraft" rows="16"></textarea><div class="button-row"><button class="button button--primary" type="button" :disabled="loading" @click="extractCriteria">{{ t('hr.extractCriteria') }}</button></div></div><div v-if="criteriaDraft" class="criteria-editor"><h4>{{ t('hr.criteriaReview') }}</h4><label v-for="criterion in criteriaDraft.criteria" :key="criterion.criterionId"><span>{{ criterionLabel('requirement', criterion.requirementType) }} · {{ criterionLabel('category', criterion.category) }}</span><textarea v-model="criterion.description" rows="2" :disabled="!criteriaEditable"></textarea></label><div class="button-row"><button class="button button--secondary" type="button" :disabled="loading || !criteriaEditable" @click="saveCriteriaEdits">{{ t('hr.saveCriteriaEdits') }}</button><button class="button button--primary" type="button" :disabled="loading || !criteriaEditable" @click="confirmAction = 'criteria-confirm'">{{ t('hr.confirmCriteria') }}</button></div></div></template>
         <template v-else-if="result"><p class="business-result__summary">{{ result.answer || result.summary || result.message }}</p></template>
 
-        <template v-if="assessment"><div class="assessment-review"><h4>{{ t('hr.assessmentResult') }}</h4><p v-if="assessment.content?.anonymousSummary">{{ assessment.content.anonymousSummary }}</p><ul v-if="assessment.content?.criterionAssessments"><li v-for="item in assessment.content.criterionAssessments" :key="item.criterionId"><strong>{{ item.criterionId }} · {{ item.status }}</strong><span>{{ item.explanation }}</span></li></ul><div v-if="assessment.evidence?.length" class="assessment-evidence"><h5>{{ t('common.evidence') }}</h5><ul><li v-for="item in assessment.evidence.slice(0, 8)" :key="item.evidenceId"><strong>{{ item.evidenceId }} · {{ item.section }}</strong><span>{{ item.sanitizedText }}</span></li></ul></div><div v-if="assessment.reviewReasons?.length" class="alert alert--warning">{{ assessment.reviewReasons.join('；') }}</div><div class="button-row"><button v-if="assessment.status === 'DRAFTED'" class="button button--primary" type="button" @click="confirmAction = 'assessment-review'">{{ t('hr.confirmAssessmentReview') }}</button><button v-if="['DRAFTED','NEEDS_REVIEW'].includes(assessment.status)" class="button button--danger" type="button" @click="confirmAction = 'assessment-cancel'">{{ t('common.cancel') }}</button></div></div></template>
+        <template v-if="assessment"><div class="assessment-review"><h4>{{ t('hr.assessmentResult') }}</h4><p v-if="assessment.content?.anonymousSummary">{{ assessment.content.anonymousSummary }}</p><ul v-if="assessment.content?.criterionAssessments"><li v-for="item in assessment.content.criterionAssessments" :key="item.criterionId"><strong>{{ item.criterionId }} · {{ criterionLabel('assessment', item.status) }}</strong><span>{{ item.explanation }}</span></li></ul><EvidenceList v-if="assessment.evidence?.length" :items="assessment.evidence" embedded /><div v-if="assessment.reviewReasons?.length" class="alert alert--warning">{{ assessment.reviewReasons.join('；') }}</div><p v-if="!canReview" class="alert alert--info">{{ t('hr.awaitingIndependentReviewer') }}</p><div class="button-row"><button v-if="assessment.status === 'DRAFTED' && canReview" class="button button--primary" type="button" :disabled="loading" @click="confirmAction = 'assessment-review'">{{ t('hr.confirmAssessmentReview') }}</button><button v-if="['DRAFTED','NEEDS_REVIEW'].includes(assessment.status)" class="button button--danger" type="button" :disabled="loading" @click="confirmAction = 'assessment-cancel'">{{ t('common.cancel') }}</button></div></div></template>
 
         <details><summary>{{ t('common.technicalDetails') }}</summary><pre class="result-preview result-preview--bounded">{{ safeJson(assessment ?? criteriaDraft ?? result ?? jobDraft) }}</pre></details>
       </section>

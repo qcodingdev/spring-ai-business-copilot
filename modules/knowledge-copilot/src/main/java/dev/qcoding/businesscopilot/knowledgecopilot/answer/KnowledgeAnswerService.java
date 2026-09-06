@@ -1,6 +1,7 @@
 package dev.qcoding.businesscopilot.knowledgecopilot.answer;
 
 import dev.qcoding.businesscopilot.aicore.AiChatService;
+import dev.qcoding.businesscopilot.aicore.AiAttemptObserver;
 import dev.qcoding.businesscopilot.aicore.AiInvocationMetadata;
 import dev.qcoding.businesscopilot.aicore.AiInvocationResult;
 import dev.qcoding.businesscopilot.aicore.PromptTemplateService;
@@ -47,15 +48,18 @@ public class KnowledgeAnswerService {
     private final AiChatService aiChatService;
     private final PromptTemplateService promptTemplateService;
     private final CitationGuardrailService citationGuardrailService;
+    private final AnswerSupportGuardrailService supportGuardrailService;
     private final SensitiveTextMasker sensitiveTextMasker;
 
     public KnowledgeAnswerService(AiChatService aiChatService,
                                    PromptTemplateService promptTemplateService,
                                    CitationGuardrailService citationGuardrailService,
+                                   AnswerSupportGuardrailService supportGuardrailService,
                                    SensitiveTextMasker sensitiveTextMasker) {
         this.aiChatService = aiChatService;
         this.promptTemplateService = promptTemplateService;
         this.citationGuardrailService = citationGuardrailService;
+        this.supportGuardrailService = supportGuardrailService;
         this.sensitiveTextMasker = sensitiveTextMasker;
     }
 
@@ -74,6 +78,12 @@ public class KnowledgeAnswerService {
 
     public AnswerInvocation answerWithMetadata(
             String question, List<RetrievedKnowledgeChunk> retrievedChunks) {
+        return answerWithMetadata(question, retrievedChunks, AiAttemptObserver.noOp());
+    }
+
+    public AnswerInvocation answerWithMetadata(
+            String question, List<RetrievedKnowledgeChunk> retrievedChunks,
+            AiAttemptObserver attemptObserver) {
         // 1. 召回为空 → 直接拒答
         if (retrievedChunks == null || retrievedChunks.isEmpty()) {
             log.info("未召回知识分片，返回无依据状态");
@@ -97,9 +107,12 @@ public class KnowledgeAnswerService {
         AiInvocationMetadata aiMetadata;
         LlmAnswerOutput llmOutput;
         try {
-            AiInvocationResult<LlmAnswerOutput> invocation =
-                    aiChatService.generatePromptJsonWithMetadata(
-                            "knowledge.answer-generation", prompt.content(), LlmAnswerOutput.class);
+            AiInvocationResult<LlmAnswerOutput> invocation = attemptObserver == AiAttemptObserver.noOp()
+                    ? aiChatService.generatePromptJsonWithMetadata(
+                            "knowledge.answer-generation", prompt.content(), LlmAnswerOutput.class)
+                    : aiChatService.generatePromptJsonWithMetadata(
+                            "knowledge.answer-generation", prompt.content(), LlmAnswerOutput.class,
+                            attemptObserver);
             llmOutput = invocation.content();
             aiMetadata = invocation.metadata();
             if (aiMetadata != null && aiMetadata.modelName() != null) {
@@ -155,17 +168,32 @@ public class KnowledgeAnswerService {
         // 8. 引用摘录必须由服务端从召回分片生成，不能信任模型改写的摘录。
         citations = authoritativeCitations(citations, retrievedChunks);
 
-        // 9. 敏感内容脱敏检查
+        // 9. KNOW-02：先对原始答案做支持性校验，再脱敏；脱敏不改变事实，不应参与支撑判断。
         String answer = llmOutput.answer() != null ? llmOutput.answer() : "";
         List<String> warnings = llmOutput.warnings() != null ? new ArrayList<>(llmOutput.warnings()) : new ArrayList<>();
 
+        AnswerSupportGuardrailService.SupportAssessment support =
+                supportGuardrailService.assess(answer, citations, retrievedChunks);
+        if (!support.supported()) {
+            log.warn("答案支持性校验失败，拒绝返回答案：{}", support.violations());
+            List<String> supportWarnings = new ArrayList<>();
+            supportWarnings.add("答案细节未通过引用证据支撑校验，答案已拒绝");
+            supportWarnings.addAll(support.violations());
+            return result(new KnowledgeAnswerResponse(
+                    KnowledgeAnswerStatus.REJECTED, null, List.of(), supportWarnings, modelName,
+                    new KnowledgeAnswerMetrics(support.citationValidity(), support.excerptGroundedness(),
+                            citations.size(), retrievedChunks.size())),
+                    prompt.metadata(), aiMetadata, "UNSUPPORTED_ANSWER_DETAILS");
+        }
+
+        // 10. 敏感内容脱敏检查（支持性校验通过后再脱敏返回）
         if (sensitiveTextMasker.containsSensitive(answer)) {
             log.warn("答案中检测到敏感内容，已执行脱敏");
             answer = sensitiveTextMasker.mask(answer);
             warnings.add("答案中的敏感内容已脱敏");
         }
 
-        // 10. ANSWERED 状态必须至少有一个 citation（双重检查）
+        // 11. ANSWERED 状态必须至少有一个 citation（双重检查）
         if (citations.isEmpty()) {
             log.warn("ANSWERED 状态在校验后没有有效引用，拒绝返回答案");
             return result(new KnowledgeAnswerResponse(
@@ -174,10 +202,12 @@ public class KnowledgeAnswerService {
                     modelName), prompt.metadata(), aiMetadata, "CITATION_REQUIRED");
         }
 
-        log.info("知识答案生成成功，可信引用数={}", citations.size());
+        log.info("知识答案生成成功，可信引用数={}，摘录可回溯比例={}",
+                citations.size(), support.excerptGroundedness());
         return result(new KnowledgeAnswerResponse(
                 KnowledgeAnswerStatus.ANSWERED, answer, citations, warnings, modelName,
-                new KnowledgeAnswerMetrics(1.0d, 1.0d, citations.size(), retrievedChunks.size())),
+                new KnowledgeAnswerMetrics(support.citationValidity(), support.excerptGroundedness(),
+                        citations.size(), retrievedChunks.size())),
                 prompt.metadata(), aiMetadata, null);
     }
 

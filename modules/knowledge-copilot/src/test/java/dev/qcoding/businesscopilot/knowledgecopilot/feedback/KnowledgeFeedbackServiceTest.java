@@ -2,6 +2,7 @@ package dev.qcoding.businesscopilot.knowledgecopilot.feedback;
 
 import dev.qcoding.businesscopilot.commonsecurity.CurrentActor;
 import dev.qcoding.businesscopilot.commonsecurity.CurrentActorProvider;
+import dev.qcoding.businesscopilot.commonsecurity.BusinessRole;
 import dev.qcoding.businesscopilot.commonweb.api.BusinessException;
 import dev.qcoding.businesscopilot.commonweb.api.ErrorCode;
 import dev.qcoding.businesscopilot.guardrails.SensitiveTextMasker;
@@ -16,6 +17,7 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -121,6 +123,40 @@ class KnowledgeFeedbackServiceTest {
         assertThatThrownBy(() -> service.review(7L, request))
                 .isInstanceOfSatisfying(BusinessException.class,
                         ex -> assertThat(ex.errorCode()).isEqualTo(ErrorCode.VALIDATION_ERROR));
+    }
+
+    @Test
+    void answerCreatorCannotReviewOwnQualityIssueUnlessAdmin() {
+        Instant issueUpdatedAt = Instant.now();
+        when(repository.answerOwnedBy(7L, "operator-1")).thenReturn(true);
+        var request = new KnowledgeQualityReviewRequest(
+                KnowledgeQualityReviewDecision.RESOLVED,
+                KnowledgeEvidenceAssessment.SUFFICIENT,
+                KnowledgeAnswerAssessment.ACCURATE,
+                KnowledgeRemediationAction.NONE,
+                "依据已核对",
+                1L,
+                issueUpdatedAt);
+
+        assertThatThrownBy(() -> service.review(7L, request))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        ex -> assertThat(ex.errorCode()).isEqualTo(ErrorCode.STATE_CONFLICT));
+
+        var adminReview = new KnowledgeQualityReview(
+                6L, 7L, KnowledgeQualityReviewDecision.RESOLVED,
+                KnowledgeEvidenceAssessment.SUFFICIENT,
+                KnowledgeAnswerAssessment.ACCURATE,
+                KnowledgeRemediationAction.NONE,
+                "依据已核对", "operator-1", 1L,
+                issueUpdatedAt, Instant.now(), Instant.now());
+        when(repository.review(any(), any(), any(), any(), any(), any(), any(), anyLong(), any()))
+                .thenReturn(Optional.of(adminReview));
+        KnowledgeFeedbackService adminService = new KnowledgeFeedbackService(
+                repository,
+                () -> new CurrentActor("operator-1", Set.of(BusinessRole.ADMIN)),
+                new SensitiveTextMasker());
+
+        assertThat(adminService.review(7L, request)).isEqualTo(adminReview);
     }
 
     @Test

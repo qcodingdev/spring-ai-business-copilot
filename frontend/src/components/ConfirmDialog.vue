@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { formatDate } from '@/locales/format'
 
 const props = defineProps<{
   open: boolean
@@ -15,7 +16,7 @@ const props = defineProps<{
   busy?: boolean
 }>()
 const emit = defineEmits<{ confirm: []; cancel: [] }>()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const dialog = ref<HTMLDialogElement>()
 let previousFocus: HTMLElement | null = null
 
@@ -39,6 +40,10 @@ function cancel(): void {
   if (!props.busy) emit('cancel')
 }
 
+function expiry(value: string): string {
+  return formatDate(value, locale.value) || value
+}
+
 onBeforeUnmount(() => dialog.value?.close())
 </script>
 
@@ -53,7 +58,7 @@ onBeforeUnmount(() => dialog.value?.close())
         <dt>{{ t('common.targetState') }}</dt><dd>{{ targetState }}</dd>
         <dt>{{ t('common.impact') }}</dt><dd>{{ impact }}</dd>
         <dt>{{ t('common.recoverable') }}</dt><dd>{{ recoverable ? t('common.yes') : t('common.no') }}</dd>
-        <dt v-if="expiresAt">{{ t('common.tokenExpiry') }}</dt><dd v-if="expiresAt">{{ expiresAt }}</dd>
+        <dt v-if="expiresAt">{{ t('common.tokenExpiry') }}</dt><dd v-if="expiresAt">{{ expiry(expiresAt) }}</dd>
       </dl>
       <div class="alert alert--danger"><strong>{{ t('common.risks') }}:</strong> {{ risk }}</div>
       <div class="dialog-actions">

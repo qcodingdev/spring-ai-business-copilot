@@ -19,6 +19,8 @@ export default {
   answerUnderReview: '待复核回答', noAnswerPreview: '该历史记录没有可展示的回答预览，请依据拒答原因和证据轨迹复核。',
   userFeedback: '用户反馈', noUserFeedback: '没有用户补充反馈。', evidenceTrace: '证据轨迹',
   qualityQueueHeading: '待复核质量问题',
+  feedbackTotal: '反馈总数', feedbackHelpful: '点赞（有帮助）', feedbackNotHelpful: '点踩（没有帮助）', feedbackPending: '待复核问题', feedbackResolved: '已解决问题', feedbackUpdateRequired: '需更新知识',
+  feedbackHistoryHeading: '点赞/点踩记录', feedbackHistoryDescription: '按反馈结果、问题原因、补充说明和时间查看完整记录，支持质量追踪。', feedbackTotalRows: '共 {count} 条记录', feedbackRating: '反馈结果', feedbackQuestion: '关联问题', feedbackAnswer: '回答摘要', feedbackTime: '反馈时间', feedbackNoRecords: '暂无点赞或点踩记录。', previousPage: '上一页', nextPage: '下一页', noFeedbackReason: '未填写原因', redactedQuestion: '问题内容已按保留策略清理。', redactedAnswer: '回答内容已按保留策略清理。',
   evidenceAssessment: '证据评估', evidenceAssessmentHint: '核对证据是否覆盖问题、是否冲突或过期。',
   answerAssessment: '答案评估', answerAssessmentHint: '核对结论是否与可用证据一致。',
   remediationAction: '后续动作', remediationActionHint: '指定复核完成后的明确处理方向。',

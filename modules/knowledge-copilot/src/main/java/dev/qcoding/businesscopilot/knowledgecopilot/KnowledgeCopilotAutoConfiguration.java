@@ -6,6 +6,7 @@ import dev.qcoding.businesscopilot.commonsecurity.ExternalSecretResolver;
 import dev.qcoding.businesscopilot.commonsecurity.ExternalEndpointPolicy;
 import dev.qcoding.businesscopilot.commonsecurity.ExternalHttpClientFactory;
 import dev.qcoding.businesscopilot.documentprocessing.DocumentTextExtractor;
+import dev.qcoding.businesscopilot.knowledgecopilot.answer.AnswerSupportGuardrailService;
 import dev.qcoding.businesscopilot.knowledgecopilot.answer.KnowledgeAnswerService;
 import dev.qcoding.businesscopilot.knowledgecopilot.answer.KnowledgeQuestionService;
 import dev.qcoding.businesscopilot.knowledgecopilot.audit.JdbcKnowledgeQaAuditRepository;
@@ -169,21 +170,29 @@ public class KnowledgeCopilotAutoConfiguration {
     }
 
     @Bean
+    public AnswerSupportGuardrailService answerSupportGuardrailService() {
+        return new AnswerSupportGuardrailService();
+    }
+
+    @Bean
     public KnowledgeAnswerService knowledgeAnswerService(
             dev.qcoding.businesscopilot.aicore.AiChatService aiChatService,
             dev.qcoding.businesscopilot.aicore.PromptTemplateService promptTemplateService,
             CitationGuardrailService citationGuardrailService,
+            AnswerSupportGuardrailService answerSupportGuardrailService,
             SensitiveTextMasker sensitiveTextMasker) {
         return new KnowledgeAnswerService(aiChatService, promptTemplateService,
-                citationGuardrailService, sensitiveTextMasker);
+                citationGuardrailService, answerSupportGuardrailService, sensitiveTextMasker);
     }
 
     @Bean
     public KnowledgeQuestionService knowledgeQuestionService(
             KnowledgeRetrievalService retrievalService,
             KnowledgeAnswerService answerService,
-            SensitiveTextMasker sensitiveTextMasker) {
-        return new KnowledgeQuestionService(retrievalService, answerService, sensitiveTextMasker);
+            SensitiveTextMasker sensitiveTextMasker,
+            org.springframework.beans.factory.ObjectProvider<dev.qcoding.businesscopilot.taskruntime.TaskRunService> taskRunService) {
+        return new KnowledgeQuestionService(retrievalService, answerService, sensitiveTextMasker,
+                taskRunService.getIfAvailable());
     }
 
     // ── Audit beans ────────────────────────────────────────────

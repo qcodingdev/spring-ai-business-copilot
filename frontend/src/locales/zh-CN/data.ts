@@ -77,4 +77,12 @@ export default {
     second: '列出本季度订单金额最高的 10 个客户及订单金额。',
     third: '按商品分类统计历史销售金额和销量，按销售金额倒序返回前 5 项。',
   },
+
+  clarificationNeeded: '需要先澄清业务口径，本次未生成候选：',
+  reviseCandidate: '修正候选',
+  reviseInstruction: '修正要求（例如：只统计已支付订单）',
+  reviseSubmit: '生成修正候选',
+  reviseHint: '每次修正都会重新通过 SQL 安全校验并生成全新确认凭证；旧候选与旧凭证立即失效。',
+  revisionCreated: '已生成修正候选，请重新确认后执行。',
+  revisionNotExecutable: '修正候选未通过安全校验，原候选保持可用。',
 }

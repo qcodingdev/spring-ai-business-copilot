@@ -18,6 +18,7 @@ import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeAnswerFeed
 import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeFeedbackRating;
 import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeFeedbackReason;
 import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeFeedbackService;
+import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeFeedbackHistoryItem;
 import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeQualityMetrics;
 import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeQualityQueueItem;
 import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeQualityReview;
@@ -303,6 +304,26 @@ class KnowledgeCopilotControllerTest {
         var response = controller.getQualityMetrics();
 
         assertThat(response.getBody().data()).isEqualTo(metrics);
+    }
+
+    @Test
+    @DisplayName("GET /feedback-history returns paginated helpful and not-helpful records")
+    void getFeedbackHistoryReturnsPagination() {
+        Instant feedbackAt = Instant.now();
+        var item = new KnowledgeFeedbackHistoryItem(
+                3L, 17L, "req-17", "报销上限是多少？", "旧制度中的上限为 2000 元。",
+                KnowledgeFeedbackRating.NOT_HELPFUL,
+                KnowledgeFeedbackReason.MISSING_EVIDENCE,
+                "缺少上限", feedbackAt, feedbackAt);
+        when(feedbackService.findFeedbackHistory(0, 20)).thenReturn(List.of(item));
+        when(feedbackService.countFeedbackHistory()).thenReturn(1L);
+
+        var response = controller.getFeedbackHistory(0, 20);
+
+        assertThat(response.getBody().data().content()).containsExactly(item);
+        assertThat(response.getBody().data().totalElements()).isEqualTo(1L);
+        verify(feedbackService).findFeedbackHistory(0, 20);
+        verify(feedbackService).countFeedbackHistory();
     }
 
     // ═══════════════════════════════════════════════════════════════

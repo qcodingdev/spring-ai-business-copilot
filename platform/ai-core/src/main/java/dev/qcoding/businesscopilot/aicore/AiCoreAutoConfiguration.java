@@ -15,7 +15,7 @@ import io.micrometer.core.instrument.MeterRegistry;
  * 但 {@link AiChatService} 调用会给出清晰错误。</p>
  */
 @AutoConfiguration
-@EnableConfigurationProperties({AiModelProperties.class, AiResilienceProperties.class})
+@EnableConfigurationProperties({AiModelProperties.class, AiEmbeddingProperties.class, AiResilienceProperties.class})
 public class AiCoreAutoConfiguration {
 
     @Bean
@@ -36,8 +36,9 @@ public class AiCoreAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public PromptTemplateService promptTemplateService() {
-        return new PromptTemplateService();
+    public PromptTemplateService promptTemplateService(
+            org.springframework.beans.factory.ObjectProvider<PromptTemplateProvider> templateProvider) {
+        return new PromptTemplateService(templateProvider.getIfAvailable());
     }
 
     @Bean
@@ -53,7 +54,8 @@ public class AiCoreAutoConfiguration {
     public AiEmbeddingService aiEmbeddingService(
             ObjectProvider<org.springframework.ai.embedding.EmbeddingModel> embeddingModelProvider,
             AiModelProperties properties,
+            AiEmbeddingProperties embeddingProperties,
             AiCallCoordinator coordinator) {
-        return new AiEmbeddingService(embeddingModelProvider, properties, coordinator);
+        return new AiEmbeddingService(embeddingModelProvider, properties, embeddingProperties, coordinator);
     }
 }

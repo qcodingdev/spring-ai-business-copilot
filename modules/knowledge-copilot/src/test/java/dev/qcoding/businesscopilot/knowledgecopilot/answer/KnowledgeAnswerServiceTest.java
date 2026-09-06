@@ -43,7 +43,8 @@ class KnowledgeAnswerServiceTest {
         citationGuardrailService = new CitationGuardrailService();
         sensitiveTextMasker = new SensitiveTextMasker();
         service = new KnowledgeAnswerService(
-                aiChatService, promptTemplateService, citationGuardrailService, sensitiveTextMasker);
+                aiChatService, promptTemplateService, citationGuardrailService,
+                new AnswerSupportGuardrailService(), sensitiveTextMasker);
 
         when(aiChatService.modelName()).thenReturn("test-model");
         when(promptTemplateService.renderWithMetadata(anyString(), anyString(), anyMap()))
@@ -213,7 +214,9 @@ class KnowledgeAnswerServiceTest {
 
     @Test
     void sensitiveContentInAnswerIsMasked() {
-        List<RetrievedKnowledgeChunk> retrieved = List.of(retrievedChunk(1L, "content"));
+        // 敏感信息本身来自证据（如客服热线），支持性校验通过后再脱敏返回。
+        List<RetrievedKnowledgeChunk> retrieved =
+                List.of(retrievedChunk(1L, "如需获取更多信息，请联系客服电话 13812345678。工作日 9 点到 18 点。"));
         // 答案中包含手机号
         LlmAnswerOutput sensitiveOutput = new LlmAnswerOutput(
                 "ANSWERED",
@@ -234,7 +237,9 @@ class KnowledgeAnswerServiceTest {
 
     @Test
     void secretAssignmentInAnswerIsMasked() {
-        List<RetrievedKnowledgeChunk> retrieved = List.of(retrievedChunk(1L, "content"));
+        // 密钥本身来自证据内容（例如版本发布记录），支持性校验通过后再脱敏返回。
+        List<RetrievedKnowledgeChunk> retrieved =
+                List.of(retrievedChunk(1L, "发布记录：API key is token=abc123secret for access."));
         LlmAnswerOutput secretOutput = new LlmAnswerOutput(
                 "ANSWERED",
                 "API key is token=abc123secret for access.",

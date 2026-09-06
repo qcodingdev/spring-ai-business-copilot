@@ -24,7 +24,8 @@ class DataEnterpriseControllerTest {
         governanceService = mock(DataGovernanceService.class);
         resultService = mock(DataQueryResultService.class);
         controller = new DataEnterpriseController(
-                governanceService, resultService, mock(QueryExecutionService.class));
+                governanceService, resultService, mock(QueryExecutionService.class),
+                mock(dev.qcoding.businesscopilot.datacopilot.enterprise.SqlCandidateRevisionService.class));
     }
 
     @Test

@@ -17,6 +17,12 @@ public interface KnowledgeFeedbackRepository {
 
     long countQualityQueue();
 
+    List<KnowledgeFeedbackHistoryItem> findFeedbackHistory(int page, int size);
+
+    long countFeedbackHistory();
+
+    boolean answerOwnedBy(Long answerId, String actorId);
+
     Optional<KnowledgeQualityReview> review(
             Long answerId,
             KnowledgeQualityReviewDecision decision,

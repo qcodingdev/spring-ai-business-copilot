@@ -77,6 +77,27 @@ public class JdbcKnowledgeFeedbackRepository implements KnowledgeFeedbackReposit
                OR review.reviewed_issue_version < issue.issue_version
             """;
 
+    private static final String FEEDBACK_HISTORY_SQL = """
+            SELECT feedback.id AS feedback_id,
+                   audit.id AS answer_id,
+                   audit.request_id,
+                   audit.question,
+                   audit.answer_preview,
+                   feedback.rating,
+                   feedback.reason,
+                   feedback.comment,
+                   feedback.created_at AS feedback_created_at,
+                   feedback.updated_at AS feedback_updated_at
+            FROM knowledge_answer_feedback feedback
+            JOIN knowledge_qa_audit_logs audit
+              ON audit.id = feedback.audit_log_id
+            ORDER BY feedback.updated_at DESC, feedback.id DESC
+            LIMIT ? OFFSET ?
+            """;
+
+    private static final String FEEDBACK_HISTORY_COUNT_SQL =
+            "SELECT COUNT(*) FROM knowledge_answer_feedback";
+
     private static final String REVIEW_SQL = QUALITY_ISSUES_CTE + """
             INSERT INTO knowledge_quality_reviews (
                 audit_log_id,
@@ -166,6 +187,20 @@ public class JdbcKnowledgeFeedbackRepository implements KnowledgeFeedbackReposit
                     rs.getLong("issue_version"),
                     rs.getTimestamp("issue_updated_at").toInstant());
 
+    private static final RowMapper<KnowledgeFeedbackHistoryItem> FEEDBACK_HISTORY_ROW_MAPPER =
+            (rs, rowNum) -> new KnowledgeFeedbackHistoryItem(
+                    rs.getLong("feedback_id"),
+                    rs.getLong("answer_id"),
+                    rs.getString("request_id"),
+                    rs.getString("question"),
+                    rs.getString("answer_preview"),
+                    KnowledgeFeedbackRating.valueOf(rs.getString("rating")),
+                    rs.getString("reason") == null
+                            ? null : KnowledgeFeedbackReason.valueOf(rs.getString("reason")),
+                    rs.getString("comment"),
+                    rs.getTimestamp("feedback_created_at").toInstant(),
+                    rs.getTimestamp("feedback_updated_at").toInstant());
+
     private static final RowMapper<KnowledgeQualityReview> REVIEW_ROW_MAPPER =
             (rs, rowNum) -> new KnowledgeQualityReview(
                     rs.getLong("id"),
@@ -216,6 +251,27 @@ public class JdbcKnowledgeFeedbackRepository implements KnowledgeFeedbackReposit
     public long countQualityQueue() {
         Long count = jdbcTemplate.queryForObject(QUALITY_QUEUE_COUNT_SQL, Long.class);
         return count == null ? 0 : count;
+    }
+
+    @Override
+    public List<KnowledgeFeedbackHistoryItem> findFeedbackHistory(int page, int size) {
+        int offset = Math.max(page, 0) * size;
+        return jdbcTemplate.query(FEEDBACK_HISTORY_SQL, FEEDBACK_HISTORY_ROW_MAPPER, size, offset);
+    }
+
+    @Override
+    public long countFeedbackHistory() {
+        Long count = jdbcTemplate.queryForObject(FEEDBACK_HISTORY_COUNT_SQL, Long.class);
+        return count == null ? 0 : count;
+    }
+
+    @Override
+    public boolean answerOwnedBy(Long answerId, String actorId) {
+        Integer count = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM knowledge_qa_audit_logs
+                WHERE id = ? AND COALESCE(creator_actor_id, actor_id) = ?
+                """, Integer.class, answerId, actorId);
+        return count != null && count > 0;
     }
 
     @Override

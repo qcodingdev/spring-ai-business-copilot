@@ -3,6 +3,7 @@ package dev.qcoding.businesscopilot.datacopilot.web;
 import dev.qcoding.businesscopilot.commonweb.api.ApiResponse;
 import dev.qcoding.businesscopilot.datacopilot.enterprise.DataGovernanceService;
 import dev.qcoding.businesscopilot.datacopilot.enterprise.DataQueryResultService;
+import dev.qcoding.businesscopilot.datacopilot.enterprise.SqlCandidateRevisionService;
 import dev.qcoding.businesscopilot.datacopilot.query.QueryExecutionService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -28,13 +29,36 @@ public class DataEnterpriseController {
     private final DataGovernanceService governanceService;
     private final DataQueryResultService resultService;
     private final QueryExecutionService executionService;
+    private final SqlCandidateRevisionService revisionService;
 
     public DataEnterpriseController(DataGovernanceService governanceService,
                                     DataQueryResultService resultService,
-                                    QueryExecutionService executionService) {
+                                    QueryExecutionService executionService,
+                                    SqlCandidateRevisionService revisionService) {
         this.governanceService = governanceService;
         this.resultService = resultService;
         this.executionService = executionService;
+        this.revisionService = revisionService;
+    }
+
+    /** DATA-04：在预算内修正既有候选；每次修正重新过 guardrails，旧凭证失效。 */
+    @PostMapping("/sql-candidates/{candidateId}/revisions")
+    public ResponseEntity<ApiResponse<?>> reviseCandidate(
+            @PathVariable String candidateId,
+            @Valid @RequestBody RevisionRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(revisionService.revise(
+                new SqlCandidateRevisionService.RevisionCommand(
+                        candidateId, request.question(), request.instruction()))));
+    }
+
+    @GetMapping("/sql-candidates/{candidateId}/revisions")
+    public ResponseEntity<ApiResponse<?>> candidateRevisions(@PathVariable String candidateId) {
+        return ResponseEntity.ok(ApiResponse.ok(revisionService.revisions(candidateId)));
+    }
+
+    public record RevisionRequest(
+            @NotBlank(message = "问题不能为空") @Size(max = 1000) String question,
+            @NotBlank(message = "修正要求不能为空") @Size(max = 1000) String instruction) {
     }
 
     @GetMapping("/metrics")

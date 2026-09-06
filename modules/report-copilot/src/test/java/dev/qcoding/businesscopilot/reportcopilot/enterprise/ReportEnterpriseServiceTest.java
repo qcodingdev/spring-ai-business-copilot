@@ -6,17 +6,21 @@ import dev.qcoding.businesscopilot.commonsecurity.CurrentActor;
 import dev.qcoding.businesscopilot.commonsecurity.CurrentActorProvider;
 import dev.qcoding.businesscopilot.commonweb.api.BusinessException;
 import dev.qcoding.businesscopilot.commonweb.api.ErrorCode;
+import dev.qcoding.businesscopilot.commonweb.request.BusinessRequestContext;
+import dev.qcoding.businesscopilot.commonweb.request.BusinessRequestContextHolder;
 import dev.qcoding.businesscopilot.reportcopilot.generation.ReportDraftResponse;
 import dev.qcoding.businesscopilot.reportcopilot.generation.ReportGenerationService;
 import dev.qcoding.businesscopilot.reportcopilot.request.ReportGenerateRequest;
 import dev.qcoding.businesscopilot.reportcopilot.request.ReportPeriod;
 import dev.qcoding.businesscopilot.reportcopilot.request.ReportType;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.LocalDate;
+import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 
@@ -31,6 +35,11 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class ReportEnterpriseServiceTest {
+
+    @AfterEach
+    void clearRequestContext() {
+        BusinessRequestContextHolder.clear();
+    }
 
     private CurrentActorProvider actorProvider() {
         return () -> new CurrentActor("operator-1", Set.of(BusinessRole.OPERATOR));
@@ -93,6 +102,38 @@ class ReportEnterpriseServiceTest {
     }
 
     @Test
+    void persistsTheCurrentLocaleForBackgroundScheduleExecution() {
+        BusinessRequestContextHolder.set(new BusinessRequestContext(
+                "request-en", "operator-1", Set.of("OPERATOR"), "en-US"));
+        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+        when(jdbcTemplate.queryForObject(
+                anyString(),
+                org.mockito.ArgumentMatchers
+                        .<org.springframework.jdbc.core.RowMapper<ReportEnterpriseService.Schedule>>any(),
+                any(Object[].class))).thenAnswer(invocation -> {
+                    assertThat(invocation.getArgument(10, String.class)).isEqualTo("en-US");
+                    return new ReportEnterpriseService.Schedule(
+                            1L, "weekly-ops", ReportType.BUSINESS_WEEKLY, "Weekly report {date}",
+                            "0 0 9 ? * MON", "UTC", "en-US", true,
+                            "operator-1", null, Instant.now());
+                });
+        ReportEnterpriseService service = new ReportEnterpriseService(
+                jdbcTemplate, mock(ReportGenerationService.class), actorProvider(),
+                mock(ExternalSecretResolver.class), new ObjectMapper(),
+                mock(dev.qcoding.businesscopilot.commonsecurity.ExternalEndpointPolicy.class),
+                mock(dev.qcoding.businesscopilot.commonsecurity.ExternalHttpClientFactory.class));
+
+        ReportEnterpriseService.Schedule saved = service.saveSchedule(
+                new ReportEnterpriseService.ScheduleCommand(
+                        "weekly-ops", ReportType.BUSINESS_WEEKLY, "Weekly report {date}",
+                        "0 0 9 ? * MON", "UTC", "weekly-ops", "v1",
+                        new ReportEnterpriseService.SourceSelection(
+                                List.of(), List.of(), true, null), true));
+
+        assertThat(saved.locale()).isEqualTo("en-US");
+    }
+
+    @Test
     void rejectsConnectionProviderWithoutAnExecutableAdapter() {
         JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
         var endpointPolicy = mock(
@@ -127,7 +168,7 @@ class ReportEnterpriseServiceTest {
                 88L, ReportType.BUSINESS_WEEKLY,
                 new ReportPeriod(LocalDate.of(2026, 7, 20), LocalDate.of(2026, 7, 26)),
                 "客服经营周报", "NEEDS_REVIEW", null,
-                List.of("人工确认后才能发布"), "confirm-token", "2026-07-28T12:00:00Z", "test-model");
+                List.of("人工确认后才能发布"), "confirm-token", "2026-07-28T12:00:00Z", "test-model", "PENDING");
         when(generationService.generate(any(ReportGenerateRequest.class))).thenReturn(draft);
         ReportEnterpriseService service = new ReportEnterpriseService(
                 jdbcTemplate, generationService, actorProvider(), mock(ExternalSecretResolver.class),
@@ -155,6 +196,38 @@ class ReportEnterpriseServiceTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void partialSourceCollectionFailureNamesMissingSourceAndDoesNotGenerateReport() {
+        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+        ReportGenerationService generationService = mock(ReportGenerationService.class);
+        when(jdbcTemplate.update(anyString(), any(Object[].class))).thenReturn(1);
+        when(jdbcTemplate.query(
+                org.mockito.ArgumentMatchers.contains("FROM data_report_handoffs"),
+                any(org.springframework.jdbc.core.RowMapper.class), any(), any(), any()))
+                .thenReturn(List.of());
+        ReportEnterpriseService service = new ReportEnterpriseService(
+                jdbcTemplate, generationService, actorProvider(), mock(ExternalSecretResolver.class),
+                new ObjectMapper(),
+                mock(dev.qcoding.businesscopilot.commonsecurity.ExternalEndpointPolicy.class),
+                mock(dev.qcoding.businesscopilot.commonsecurity.ExternalHttpClientFactory.class));
+
+        var command = new ReportEnterpriseService.GenerateCommand(
+                ReportType.BUSINESS_WEEKLY,
+                new ReportPeriod(LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 7)),
+                "多来源经营周报",
+                new ReportEnterpriseService.SourceSelection(
+                        List.of(), List.of("missing-data-result"), false, null),
+                "weekly-ops", "v1");
+
+        assertThatThrownBy(() -> service.generate(command))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("missing-data-result")
+                .hasMessageContaining("报告未生成")
+                .hasMessageContaining("受影响结论全部缺失");
+        verifyNoInteractions(generationService);
+    }
+
+    @Test
     void consumesDataHandoffOnlyAfterDraftGenerationSucceeds() throws Exception {
         JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
         ReportGenerationService generationService = mock(ReportGenerationService.class);
@@ -165,7 +238,7 @@ class ReportEnterpriseServiceTest {
                 new dev.qcoding.businesscopilot.reportcopilot.generation.LlmReportOutput(
                         "已生成", List.of(), List.of(), List.of(), List.of(),
                         List.of(), List.of(), List.of()),
-                List.of(), null, null, "test-model");
+                List.of(), null, null, "test-model", "APPROVED");
         when(generationService.generate(any(ReportGenerateRequest.class))).thenReturn(draft);
         stubClaimedHandoff(jdbcTemplate);
         ReportEnterpriseService service = new ReportEnterpriseService(
@@ -193,7 +266,7 @@ class ReportEnterpriseServiceTest {
                 90L, ReportType.BUSINESS_WEEKLY,
                 new ReportPeriod(LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 28)),
                 "经营简报", "NEEDS_REVIEW", null,
-                List.of("证据不一致"), null, null, "test-model");
+                List.of("证据不一致"), null, null, "test-model", "PENDING");
         when(generationService.generate(any(ReportGenerateRequest.class))).thenReturn(draft);
         stubClaimedHandoff(jdbcTemplate);
         ReportEnterpriseService service = new ReportEnterpriseService(

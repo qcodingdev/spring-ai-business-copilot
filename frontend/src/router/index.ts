@@ -42,8 +42,8 @@ router.beforeEach(async (to) => {
   const current = session.value ?? await load()
   if (!current?.authenticated && !to.meta.public) return { path: '/login', query: { expired: '1' } }
   if (current?.publicDemo && ['/data', '/knowledge', '/support', '/report', '/hr'].includes(to.path)) return '/'
-  if (current?.roles.includes('REVIEWER') && to.path === '/report') return '/'
-  if (current?.roles.includes('REVIEWER') && to.path === '/hr' && to.query.section === 'employee') {
+  if (current?.roles.includes('REVIEWER') && !current.roles.includes('ADMIN')
+      && to.path === '/hr' && to.query.section === 'employee') {
     return { path: '/hr', query: { section: 'recruiting' } }
   }
   const roles = to.meta.roles as string[] | undefined

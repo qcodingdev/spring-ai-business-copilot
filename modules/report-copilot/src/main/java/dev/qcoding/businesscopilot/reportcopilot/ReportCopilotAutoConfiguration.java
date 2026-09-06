@@ -142,8 +142,10 @@ public class ReportCopilotAutoConfiguration {
     @ConditionalOnMissingBean
     public ReportDraftPersistenceService reportDraftPersistenceService(ReportDraftRepository draftRepository,
                                                                        ReportAuditService auditService,
-                                                                       ReportCopilotProperties properties) {
-        return new ReportDraftPersistenceService(draftRepository, auditService, properties);
+                                                                       ReportCopilotProperties properties,
+                                                                       org.springframework.beans.factory.ObjectProvider<dev.qcoding.businesscopilot.commonsecurity.IndependentReviewService> reviewService) {
+        return new ReportDraftPersistenceService(draftRepository, auditService, properties,
+                reviewService.getIfAvailable());
     }
 
     @Bean
@@ -153,9 +155,11 @@ public class ReportCopilotAutoConfiguration {
                                                                          CurrentActorProvider actorProvider,
                                                                          ObjectAccessPolicy accessPolicy,
                                                                          ConfirmationTokenService tokenService,
-                                                                         ReportOutputSanitizer outputSanitizer) {
+                                                                         ReportOutputSanitizer outputSanitizer,
+                                                                         org.springframework.beans.factory.ObjectProvider<dev.qcoding.businesscopilot.commonsecurity.IndependentReviewService> reviewService) {
         return new ReportDraftConfirmationService(
-                draftRepository, auditService, actorProvider, accessPolicy, tokenService, outputSanitizer);
+                draftRepository, auditService, actorProvider, accessPolicy, tokenService, outputSanitizer,
+                reviewService.getIfAvailable());
     }
 
     @Bean
@@ -188,9 +192,11 @@ public class ReportCopilotAutoConfiguration {
                                                            ReportPromptContextFactory promptContextFactory,
                                                            ReportGenerationOutputValidator outputValidator,
                                                            ReportOutputSanitizer outputSanitizer,
-                                                           ReportDraftPersistenceService draftPersistenceService) {
+                                                           ReportDraftPersistenceService draftPersistenceService,
+                                                           org.springframework.beans.factory.ObjectProvider<dev.qcoding.businesscopilot.taskruntime.TaskRunService> taskRunService) {
         return new ReportGenerationService(preparationService, aiChatService, promptTemplateService,
-                promptContextFactory, outputValidator, outputSanitizer, draftPersistenceService);
+                promptContextFactory, outputValidator, outputSanitizer, draftPersistenceService,
+                taskRunService.getIfAvailable());
     }
 
     @Bean

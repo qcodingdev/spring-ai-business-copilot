@@ -77,4 +77,12 @@ export default {
     second: 'List the top 10 customers by order value this quarter and show the amount.',
     third: 'Summarize historical sales value and quantity by product category, returning the top five by sales value.',
   },
+
+  clarificationNeeded: 'Business calibers must be clarified first; no candidate was generated:',
+  reviseCandidate: 'Revise candidate',
+  reviseInstruction: 'Revision instruction (e.g. count paid orders only)',
+  reviseSubmit: 'Generate revised candidate',
+  reviseHint: 'Every revision passes SQL safety validation again and issues a brand-new confirmation token; the old candidate and token become invalid immediately.',
+  revisionCreated: 'Revised candidate is ready; please review and confirm again.',
+  revisionNotExecutable: 'The revised candidate failed safety validation; the original candidate remains available.',
 }

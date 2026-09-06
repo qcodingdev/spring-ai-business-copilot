@@ -62,6 +62,9 @@ logging:
 # ── Data Copilot 配置 ──────────────────────────────────────────
 business-copilot:
   runtime-mode: ${BUSINESS_COPILOT_RUNTIME_MODE:development}
+  task-runtime:
+    stale-attempt-after: ${BUSINESS_COPILOT_RUNTIME_STALE_ATTEMPT_AFTER:PT15M}
+    recovery-scan-delay-ms: ${BUSINESS_COPILOT_RUNTIME_RECOVERY_SCAN_DELAY_MS:60000}
   common-web:
     # The host adds this filter after authentication in Spring Security.
     register-request-context-filter: false
@@ -82,7 +85,7 @@ business-copilot:
       delete-after: ${BUSINESS_COPILOT_AUDIT_DELETE_AFTER:30d}
       cleanup-cron: ${BUSINESS_COPILOT_AUDIT_CLEANUP_CRON:0 15 3 * * *}
   enterprise-readiness:
-    application-version: ${BUSINESS_COPILOT_APPLICATION_VERSION:2.4.0}
+    application-version: ${BUSINESS_COPILOT_APPLICATION_VERSION:2.4.1-SNAPSHOT}
     snapshot-validity: ${BUSINESS_COPILOT_READINESS_SNAPSHOT_VALIDITY:24h}
     snapshot-retention: ${BUSINESS_COPILOT_READINESS_SNAPSHOT_RETENTION:90d}
     stale-operation-after: ${BUSINESS_COPILOT_READINESS_STALE_OPERATION_AFTER:15m}
@@ -195,6 +198,9 @@ business-copilot:
   ai-core:
     model-name: ${SPRING_AI_OPENAI_CHAT_MODEL:${SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL:deepseek-v4-flash}}
     provider-name: ${BUSINESS_COPILOT_AI_PROVIDER:openai-compatible}
+    embedding:
+      model-name: ${SPRING_AI_OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
+      provider-name: ${BUSINESS_COPILOT_EMBEDDING_PROVIDER:${BUSINESS_COPILOT_AI_PROVIDER:openai-compatible}}
     resilience:
       max-concurrent-calls: ${BUSINESS_COPILOT_AI_MAX_CONCURRENT_CALLS:8}
       acquire-timeout: ${BUSINESS_COPILOT_AI_ACQUIRE_TIMEOUT:2s}
@@ -248,7 +254,7 @@ business-copilot:
     max-import-bytes: 1048576
     source-freshness-ttl: 7d
     default-template-id: evidence-weekly
-    default-template-version: "2.0"
+    default-template-version: "2.1"
     review-sla: ${BUSINESS_COPILOT_REPORT_REVIEW_SLA:24h}
   # ── Resume Copilot 配置 ──────────────────────────────────────
   # 仅做单 JD、单简历的证据化辅助评估，不输出分数、排名或招聘决定。

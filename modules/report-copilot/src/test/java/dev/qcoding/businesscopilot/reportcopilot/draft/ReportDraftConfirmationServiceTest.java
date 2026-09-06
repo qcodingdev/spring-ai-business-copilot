@@ -4,6 +4,7 @@ import dev.qcoding.businesscopilot.commonsecurity.BusinessRole;
 import dev.qcoding.businesscopilot.commonsecurity.ConfirmationTokenService;
 import dev.qcoding.businesscopilot.commonsecurity.CurrentActor;
 import dev.qcoding.businesscopilot.commonsecurity.DefaultObjectAccessPolicy;
+import dev.qcoding.businesscopilot.commonsecurity.IndependentReviewService;
 import dev.qcoding.businesscopilot.commonweb.api.BusinessException;
 import dev.qcoding.businesscopilot.reportcopilot.audit.ReportAuditService;
 import dev.qcoding.businesscopilot.reportcopilot.generation.ReportOutputSanitizer;
@@ -83,6 +84,25 @@ class ReportDraftConfirmationServiceTest {
 
         assertThat(service.cancel(10L, token.rawToken()).status())
                 .isEqualTo(ReportDraftStatus.CANCELED);
+    }
+
+    @Test
+    void cancelSupersedesTheIndependentReviewTask() {
+        IndependentReviewService reviewService = mock(IndependentReviewService.class);
+        service = new ReportDraftConfirmationService(repository, auditService,
+                () -> new CurrentActor("operator-1", Set.of(BusinessRole.OPERATOR)),
+                new DefaultObjectAccessPolicy(), tokenService, outputSanitizer, reviewService);
+        ConfirmationTokenService.IssuedToken token = tokenService.issue();
+        when(repository.findById(10L)).thenReturn(Optional.of(
+                draft(10L, ReportDraftStatus.DRAFTED, token.digest(), Instant.now().plusSeconds(60))));
+        when(repository.transitionStatus(
+                10L, ReportDraftStatus.DRAFTED, ReportDraftStatus.CANCELED, "operator-1"))
+                .thenReturn(true);
+
+        assertThat(service.cancel(10L, token.rawToken()).status()).isEqualTo(ReportDraftStatus.CANCELED);
+
+        verify(reviewService).supersede(
+                IndependentReviewService.SubjectType.REPORT_DRAFT, "10", "operator-1");
     }
 
     @Test

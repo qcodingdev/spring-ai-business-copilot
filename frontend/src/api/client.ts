@@ -43,7 +43,38 @@ function requestId(): string {
   return globalThis.crypto?.randomUUID?.().replaceAll('-', '') ?? `${Date.now()}frontend`
 }
 
-export async function api<T>(path: string, init: ApiRequestInit = {}): Promise<ApiEnvelope<T>> {
+const inFlightMutations = new Map<string, Promise<ApiEnvelope<unknown>>>()
+
+function mutationBodyKey(body: BodyInit | null | undefined): string {
+  if (typeof body === 'string') return body
+  if (!(body instanceof FormData)) return ''
+  return [...body.entries()].map(([key, value]) => {
+    if (value instanceof File) return `${key}:file:${value.name}:${value.size}:${value.lastModified}`
+    return `${key}:value:${String(value)}`
+  }).join('|')
+}
+
+/**
+ * Coalesce identical in-flight mutations. Disabled buttons remain the visual
+ * affordance, while this is the final protection against double-clicks,
+ * keyboard repeats, and two components dispatching the same action together.
+ */
+export function api<T>(path: string, init: ApiRequestInit = {}): Promise<ApiEnvelope<T>> {
+  const method = (init.method ?? 'GET').toUpperCase()
+  if (['GET', 'HEAD', 'OPTIONS'].includes(method)) return performApi<T>(path, init)
+  const bodyKey = mutationBodyKey(init.body)
+  const key = `${method}:${path}:${bodyKey}`
+  const existing = inFlightMutations.get(key)
+  if (existing) return existing as Promise<ApiEnvelope<T>>
+  const request = performApi<T>(path, init)
+  inFlightMutations.set(key, request as Promise<ApiEnvelope<unknown>>)
+  void request.finally(() => {
+    if (inFlightMutations.get(key) === request) inFlightMutations.delete(key)
+  }).catch(() => { /* the caller observes the original rejection */ })
+  return request
+}
+
+async function performApi<T>(path: string, init: ApiRequestInit = {}): Promise<ApiEnvelope<T>> {
   if (!path.startsWith('/api/')) throw new Error('API path must remain same-origin under /api/')
   const { timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS, signal: callerSignal, ...requestInit } = init
   const method = (requestInit.method ?? 'GET').toUpperCase()

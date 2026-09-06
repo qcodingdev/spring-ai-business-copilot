@@ -1,5 +1,7 @@
 package dev.qcoding.businesscopilot.supportcopilot.ticket;
 
+import dev.qcoding.businesscopilot.supportcopilot.draft.SupportFollowUpService;
+
 import dev.qcoding.businesscopilot.guardrails.SensitiveTextMasker;
 import dev.qcoding.businesscopilot.commonsecurity.ConfirmationTokenService;
 import dev.qcoding.businesscopilot.commonsecurity.CurrentActor;
@@ -49,7 +51,7 @@ class TicketAnalysisServiceTest {
                 new SensitiveTextMasker(),
                 new SupportCopilotProperties(true, 2000, 10,
                         "REFUND,ACCOUNT_SECURITY,INCIDENT", true, 5),
-                actorProvider());
+                actorProvider(), new SupportFollowUpService());
 
         var result = service.analyze(new TicketClassificationRequest("如何申请退款？", "web"));
 
@@ -76,7 +78,7 @@ class TicketAnalysisServiceTest {
                 new SensitiveTextMasker(),
                 new SupportCopilotProperties(true, 2000, 10,
                         "REFUND,ACCOUNT_SECURITY,INCIDENT", true, 5),
-                actorProvider());
+                actorProvider(), new SupportFollowUpService());
 
         var result = service.analyze(new TicketClassificationRequest("批量导入上限是多少？", "web"));
 
@@ -85,6 +87,29 @@ class TicketAnalysisServiceTest {
         assertFalse(result.draft().needsHuman());
         assertEquals(SupportTicketStatus.DRAFTED, ticketRepository.lastStatus);
         assertEquals("DRAFTED", auditRepository.saved.getLast().eventType());
+    }
+
+    @Test
+    void expiredEvidenceTriggersExplicitExpiredEvidenceHandoffWithoutDrafting() {
+        var draftService = new CountingDraftService();
+        var ticketRepository = new InMemoryTicketRepository();
+        var service = new TicketAnalysisService(
+                new FixedClassificationService(),
+                query -> SupportKnowledgeResult.expired("文档已过期或冲突"),
+                draftService, ticketRepository,
+                new SupportAuditService(new InMemoryAuditRepository()),
+                new SensitiveTextMasker(),
+                new SupportCopilotProperties(true, 2000, 10,
+                        "REFUND,ACCOUNT_SECURITY,INCIDENT", true, 5),
+                actorProvider(), new SupportFollowUpService());
+
+        var result = service.analyze(new TicketClassificationRequest("旧制度现在还有效吗？", "web"));
+
+        assertEquals(SupportKnowledgeResult.EvidenceStatus.EVIDENCE_EXPIRED,
+                result.knowledgeResult().status());
+        assertEquals(SupportHandoffReason.EVIDENCE_EXPIRED, ticketRepository.lastHandoffReason);
+        assertEquals(SupportTicketStatus.NEEDS_HUMAN, ticketRepository.lastStatus);
+        assertEquals(0, draftService.calls);
     }
 
     @Test
@@ -104,7 +129,7 @@ class TicketAnalysisServiceTest {
                 new SupportAuditService(new InMemoryAuditRepository()),
                 new SensitiveTextMasker(),
                 new SupportCopilotProperties(true, 2000, 10,
-                        "REFUND,ACCOUNT_SECURITY,INCIDENT", true, 5), actorProvider());
+                        "REFUND,ACCOUNT_SECURITY,INCIDENT", true, 5), actorProvider(), new SupportFollowUpService());
 
         var result = service.analyzeStored(200L);
 
@@ -171,6 +196,7 @@ class TicketAnalysisServiceTest {
         private SupportTicket claimed;
         private int saveCalls;
         private boolean classificationUpdated;
+        private SupportHandoffReason lastHandoffReason;
 
         @Override
         public SupportTicket save(SupportTicket ticket) {
@@ -216,6 +242,12 @@ class TicketAnalysisServiceTest {
         public boolean transitionStatus(Long id, SupportTicketStatus expectedStatus,
                                         SupportTicketStatus targetStatus) {
             lastStatus = targetStatus;
+            return true;
+        }
+
+        @Override
+        public boolean updateHandoffReason(Long id, SupportHandoffReason reason) {
+            lastHandoffReason = reason;
             return true;
         }
 

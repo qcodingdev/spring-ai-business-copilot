@@ -70,12 +70,30 @@ public class SecurityConfiguration {
                         .requestMatchers("/admin", "/admin/**", "/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/actuator/metrics/**").hasAnyRole("ADMIN", "REVIEWER")
                         .requestMatchers(HttpMethod.GET, "/api/*/audit-logs").hasAnyRole("ADMIN", "REVIEWER")
+                        .requestMatchers(HttpMethod.GET, "/api/reviews/queue")
+                            .hasAnyRole("ADMIN", "REVIEWER")
+                        .requestMatchers(HttpMethod.GET, "/api/reviews/mine", "/api/reviews/subject/**")
+                            .hasAnyRole("ADMIN", "OPERATOR", "REVIEWER")
+                        .requestMatchers(HttpMethod.GET, "/api/governance/prompts/**")
+                            .hasAnyRole("ADMIN", "OPERATOR", "REVIEWER")
+                        .requestMatchers(HttpMethod.GET, "/api/governance/evaluations/**")
+                            .hasAnyRole("ADMIN", "OPERATOR", "REVIEWER")
                         .requestMatchers(HttpMethod.GET,
                                 "/api/knowledge-copilot/quality-queue",
+                                "/api/knowledge-copilot/feedback-history",
                                 "/api/knowledge-copilot/quality-metrics",
                                 "/api/knowledge-copilot/sources/issues",
-                                "/api/support-copilot/enterprise/quality-metrics")
+                                "/api/support-copilot/enterprise/quality-metrics",
+                                "/api/support-copilot/enterprise/quality-cases")
                             .hasAnyRole("ADMIN", "REVIEWER")
+                        .requestMatchers(HttpMethod.GET,
+                                "/api/support-copilot/tickets/*/follow-ups",
+                                "/api/support-copilot/tickets/*/handoff")
+                            .hasAnyRole("ADMIN", "OPERATOR", "REVIEWER")
+                        .requestMatchers(HttpMethod.GET,
+                                "/api/data-copilot/sql-candidates/*/revisions",
+                                "/api/report-copilot/enterprise/drafts/*/data-trace")
+                            .hasAnyRole("ADMIN", "OPERATOR")
                         .requestMatchers(HttpMethod.GET,
                                 "/api/resume-copilot/enterprise/question-bank",
                                 "/api/resume-copilot/enterprise/interview-sessions",
@@ -113,8 +131,40 @@ public class SecurityConfiguration {
                             .hasAnyRole("ADMIN", "OPERATOR", "REVIEWER")
                         .requestMatchers(
                                 HttpMethod.POST,
-                                "/api/knowledge-copilot/quality-queue/*/review")
+                                "/api/governance/prompts/versions/*/review",
+                                "/api/governance/evaluations/versions/*/review",
+                                "/api/reviews/*/decision",
+                                "/api/knowledge-copilot/quality-queue/*/review",
+                                "/api/support-copilot/enterprise/quality-cases")
                             .hasAnyRole("ADMIN", "REVIEWER")
+                        .requestMatchers(HttpMethod.POST,
+                                "/api/governance/prompts/versions/*/publish",
+                                "/api/governance/prompts/*/rollback",
+                                "/api/governance/evaluations/datasets/*/archive",
+                                "/api/governance/evaluations/versions/*/publish",
+                                "/api/governance/evaluations/runs/*/external-results")
+                            .hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST,
+                                "/api/governance/prompts/*/versions",
+                                "/api/governance/prompts/definitions/*/versions",
+                                "/api/governance/prompts/versions/*/submit",
+                                "/api/governance/evaluations/datasets",
+                                "/api/governance/evaluations/versions/*/clone",
+                                "/api/governance/evaluations/versions/*/cases",
+                                "/api/governance/evaluations/versions/*/cases/import",
+                                "/api/governance/evaluations/versions/*/cases/*/enabled",
+                                "/api/governance/evaluations/versions/*/submit",
+                                "/api/governance/evaluations/runs",
+                                "/api/governance/evaluations/runs/*/cancel")
+                            .hasAnyRole("ADMIN", "OPERATOR")
+                        .requestMatchers(HttpMethod.PUT, "/api/governance/prompts/versions/*")
+                            .hasAnyRole("ADMIN", "OPERATOR")
+                        .requestMatchers(HttpMethod.PUT,
+                                "/api/governance/evaluations/versions/*/cases/*")
+                            .hasAnyRole("ADMIN", "OPERATOR")
+                        .requestMatchers(HttpMethod.PUT,
+                                "/api/governance/evaluations/gate-policies/*")
+                            .hasRole("ADMIN")
                         .requestMatchers(HttpMethod.POST,
                                 "/api/support-copilot/reply-drafts/*/confirm",
                                 "/api/support-copilot/reply-drafts/*/edit",

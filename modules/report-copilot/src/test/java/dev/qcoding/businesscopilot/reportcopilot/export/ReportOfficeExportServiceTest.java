@@ -16,12 +16,15 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.io.ByteArrayInputStream;
+import java.sql.ResultSet;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.matches;
 import static org.mockito.Mockito.atLeast;
@@ -47,6 +50,16 @@ class ReportOfficeExportServiceTest {
     @Test
     void exportsConfirmedDraftToDocxPdfAndPptxAndAuditsHashes() throws Exception {
         when(repository.findById(10L)).thenReturn(Optional.of(draft()));
+        when(jdbcTemplate.query(anyString(), any(org.springframework.jdbc.core.RowMapper.class), eq(20L)))
+                .thenAnswer(invocation -> {
+                    ResultSet resultSet = mock(ResultSet.class);
+                    when(resultSet.getString("title")).thenReturn("客户经营周报");
+                    when(resultSet.getString("report_type")).thenReturn("BUSINESS_WEEKLY");
+                    when(resultSet.getString("period_start")).thenReturn("2026-08-24");
+                    when(resultSet.getString("period_end")).thenReturn("2026-08-30");
+                    org.springframework.jdbc.core.RowMapper<?> mapper = invocation.getArgument(1);
+                    return List.of(mapper.mapRow(resultSet, 0));
+                });
 
         byte[] docx = service.exportDocx(10L);
         byte[] pdf = service.exportPdf(10L);
@@ -57,6 +70,9 @@ class ReportOfficeExportServiceTest {
              XMLSlideShow slides = new XMLSlideShow(new ByteArrayInputStream(pptx))) {
             assertThat(document.getParagraphs()).anySatisfy(paragraph ->
                     assertThat(paragraph.getText()).contains("执行摘要"));
+            assertThat(document.getParagraphs()).extracting(paragraph -> paragraph.getText())
+                    .anyMatch(text -> text.contains("客户经营周报"))
+                    .anyMatch(text -> text.contains("经营周报"));
             assertThat(pdfDocument.getNumberOfPages()).isPositive();
             assertThat(slides.getSlides()).hasSizeGreaterThan(1);
         }

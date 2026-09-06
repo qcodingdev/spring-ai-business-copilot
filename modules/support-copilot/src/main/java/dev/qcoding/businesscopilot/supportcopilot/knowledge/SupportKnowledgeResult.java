@@ -14,10 +14,15 @@ import java.util.List;
 public record SupportKnowledgeResult(
         List<SupportKnowledgeEvidence> evidence,
         String reason,
-        boolean hasResults) {
+        boolean hasResults,
+        EvidenceStatus status) {
 
     public static SupportKnowledgeResult noResults(String reason) {
-        return new SupportKnowledgeResult(List.of(), reason, false);
+        return new SupportKnowledgeResult(List.of(), reason, false, EvidenceStatus.NO_EVIDENCE);
+    }
+
+    public static SupportKnowledgeResult expired(String reason) {
+        return new SupportKnowledgeResult(List.of(), reason, false, EvidenceStatus.EVIDENCE_EXPIRED);
     }
 
     public static SupportKnowledgeResult of(List<SupportKnowledgeEvidence> evidence) {
@@ -26,6 +31,12 @@ public record SupportKnowledgeResult(
                 evidence != null && !evidence.isEmpty()
                         ? "检索到 " + evidence.size() + " 条知识依据"
                         : "未检索到相关依据",
-                evidence != null && !evidence.isEmpty());
+                evidence != null && !evidence.isEmpty(), EvidenceStatus.AVAILABLE);
+    }
+
+    public enum EvidenceStatus {
+        AVAILABLE,
+        NO_EVIDENCE,
+        EVIDENCE_EXPIRED
     }
 }

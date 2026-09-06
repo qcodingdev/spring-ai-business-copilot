@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
 import ModuleIcon from '@/components/ModuleIcon.vue'
+import ToastMessage from '@/components/ToastMessage.vue'
 import { fetchSession } from '@/api/session'
 
 const { t } = useI18n()
@@ -10,7 +11,10 @@ const username = ref('')
 const password = ref('')
 const csrf = ref('')
 const query = new URLSearchParams(location.search)
-const message = computed(() => query.has('error') ? t('auth.invalid') : query.has('expired') ? t('auth.sessionExpired') : '')
+const message = computed(() => query.has('error') ? t('auth.invalid') : '')
+const toast = ref('')
+const submitting = ref(false)
+let toastTimer: ReturnType<typeof setTimeout> | undefined
 const capabilities = computed(() => [
   { key: 'data' as const, title: t('navigation.data'), description: t('data.cardDescription'), tag: t('data.cardTag') },
   { key: 'knowledge' as const, title: t('navigation.knowledge'), description: t('knowledge.cardDescription'), tag: t('knowledge.cardTag') },
@@ -20,6 +24,11 @@ const capabilities = computed(() => [
 ])
 
 onMounted(async () => {
+  if (query.has('expired')) {
+    toast.value = t('auth.sessionExpired')
+    toastTimer = setTimeout(() => { toast.value = '' }, 4500)
+    history.replaceState(null, '', '/login')
+  }
   try {
     await fetchSession()
   } catch {
@@ -28,6 +37,7 @@ onMounted(async () => {
   const match = document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]+)/)
   csrf.value = match ? decodeURIComponent(match[1] ?? '') : ''
 })
+onUnmounted(() => { if (toastTimer) clearTimeout(toastTimer) })
 </script>
 
 <template>
@@ -73,11 +83,11 @@ onMounted(async () => {
           </div>
           <p class="login-subtitle">{{ t('auth.subtitle') }}</p>
           <div v-if="message" class="alert alert--warning" role="status">{{ message }}</div>
-          <form action="/login" method="post">
+          <form action="/login" method="post" @submit="submitting = true">
             <input type="hidden" name="_csrf" :value="csrf" />
             <label>{{ t('auth.username') }}<input v-model="username" name="username" autocomplete="username" required /></label>
             <label>{{ t('auth.password') }}<input v-model="password" name="password" type="password" autocomplete="current-password" required /></label>
-            <button class="button button--primary button--full button--large" type="submit">{{ t('auth.signIn') }} <span aria-hidden="true">→</span></button>
+            <button class="button button--primary button--full button--large" type="submit" :disabled="submitting || !csrf">{{ t('auth.signIn') }} <span aria-hidden="true">→</span></button>
           </form>
           <div class="login-assurance">
             <span>✓ {{ t('common.trustControl') }}</span>
@@ -127,5 +137,6 @@ onMounted(async () => {
       <div class="public-brand"><img :src="'/images/qcoding-logo.png'" alt="" /><span><strong>{{ t('common.productBy') }}</strong><small>{{ t('common.productFocus') }}</small></span></div>
       <span>© 2026 QCoding</span>
     </footer>
+    <ToastMessage :message="toast" tone="info" />
   </div>
 </template>

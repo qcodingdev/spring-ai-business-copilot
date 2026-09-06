@@ -7,6 +7,7 @@ import dev.qcoding.businesscopilot.aicore.PromptTemplateService;
 import dev.qcoding.businesscopilot.aicore.RenderedPrompt;
 import dev.qcoding.businesscopilot.commonweb.api.BusinessException;
 import dev.qcoding.businesscopilot.commonweb.api.ErrorCode;
+import dev.qcoding.businesscopilot.commonweb.request.BusinessRequestContextHolder;
 import dev.qcoding.businesscopilot.resumecopilot.privacy.ResumePrivacySanitizer;
 
 import java.util.List;
@@ -33,6 +34,7 @@ public class JobDraftService {
     }
 
     public JobDraftResponse generate(String requestedTitle, String requirements) {
+        boolean english = usesEnglish();
         if (requirements == null || requirements.isBlank() || requirements.length() > 2000) {
             throw new BusinessException(
                     ErrorCode.VALIDATION_ERROR, "岗位需求不能为空且不能超过 2000 个字符。");
@@ -44,7 +46,10 @@ public class JobDraftService {
         String sanitized = sanitizer.sanitizeJobDescription(requirements);
         RenderedPrompt prompt = prompts.renderWithMetadata(
                 PROMPT, "v1.1", Map.of(
-                        "jobTitle", title.isBlank() ? "请根据岗位需求确定职位名称" : title,
+                        "jobTitle", title.isBlank()
+                                ? (english ? "Determine the title from the job requirements"
+                                : "请根据岗位需求确定职位名称")
+                                : title,
                         "jobRequirements", sanitized));
         AiInvocationResult<LlmJobDraftOutput> invocation = ai.generateJsonWithMetadata(
                 "resume.job-draft", prompt.content(), LlmJobDraftOutput.class);
@@ -56,33 +61,35 @@ public class JobDraftService {
         AiInvocationMetadata metadata = invocation.metadata();
         String resolvedTitle = title.isBlank() ? clean(output.title()) : title;
         if (isPlaceholderOutput(output)) {
-            InputDerivedDraft derived = deriveFromRequirements(resolvedTitle, sanitized);
+            InputDerivedDraft derived = deriveFromRequirements(resolvedTitle, sanitized, english);
             return new JobDraftResponse(
                     resolvedTitle,
                     derived.profile(),
                     derived.responsibilities(),
                     derived.requiredQualifications(),
                     derived.preferredQualifications(),
-                    completeJdDraft(resolvedTitle, sanitized, derived),
-                    List.of("已根据当前填写的岗位需求生成草稿；请补充未在原始需求中说明的组织信息。"),
+                    completeJdDraft(resolvedTitle, sanitized, derived, english),
+                    List.of(english
+                            ? "The draft uses the supplied requirements; add organizational details that were not provided."
+                            : "已根据当前填写的岗位需求生成草稿；请补充未在原始需求中说明的组织信息。"),
                     metadata == null ? ai.modelName() : metadata.modelName(),
-                    List.of("岗位画像和 JD 是待编辑草稿，岗位标准确认后才可用于简历证据分析。"));
+                    List.of(draftLimitation(english)));
         }
         /*
          * 招聘条件属于高影响输入。模型可以帮助组织语言，但不能凭常识新增学历、年限、
          * 技术栈或行业门槛，因此正式草稿的职责/必选/加分只从招聘负责人输入确定性提取。
          */
-        InputDerivedDraft completed = deriveFromRequirements(resolvedTitle, sanitized);
+        InputDerivedDraft completed = deriveFromRequirements(resolvedTitle, sanitized, english);
         return new JobDraftResponse(
                 resolvedTitle,
                 completed.profile(),
                 completed.responsibilities(),
                 completed.requiredQualifications(),
                 completed.preferredQualifications(),
-                completeJdDraft(resolvedTitle, sanitized, completed),
+                completeJdDraft(resolvedTitle, sanitized, completed, english),
                 clean(output.verificationNotes()),
                 metadata == null ? ai.modelName() : metadata.modelName(),
-                List.of("岗位画像和 JD 是待编辑草稿，岗位标准确认后才可用于简历证据分析。"));
+                List.of(draftLimitation(english)));
     }
 
     private String clean(String value) {
@@ -100,8 +107,13 @@ public class JobDraftService {
      * but add the missing editable sections so the recruiter can always continue to criteria extraction.
      */
     private String completeJdDraft(String title, String requirements, LlmJobDraftOutput output) {
+        boolean english = usesEnglish();
         String draft = clean(output.jdDraft());
-        long sections = List.of("岗位概述", "主要职责", "任职资格", "加分项", "协作对象", "90 天", "待确认")
+        List<String> expectedSections = english
+                ? List.of("Role Overview", "Key Responsibilities", "Required Qualifications",
+                "Preferred Qualifications", "Collaboration", "90 Days", "Confirm")
+                : List.of("岗位概述", "主要职责", "任职资格", "加分项", "协作对象", "90 天", "待确认");
+        long sections = expectedSections
                 .stream().filter(draft::contains).count();
         if (sections >= 5) {
             return draft;
@@ -110,10 +122,51 @@ public class JobDraftService {
                 clean(output.jobProfile()),
                 clean(output.responsibilities()),
                 clean(output.requiredQualifications()),
-                clean(output.preferredQualifications())));
+                clean(output.preferredQualifications())), english);
     }
 
-    private String completeJdDraft(String title, String requirements, InputDerivedDraft draft) {
+    private String completeJdDraft(String title, String requirements,
+                                   InputDerivedDraft draft, boolean english) {
+        if (english) {
+            String profile = draft.profile().isBlank()
+                    ? "Work on the supplied requirements for the " + title + " role."
+                    : draft.profile();
+            return """
+                    # %s
+
+                    ## Role Overview
+                    %s
+
+                    ## Key Responsibilities
+                    %s
+
+                    ## Required Qualifications
+                    %s
+
+                    ## Preferred Qualifications
+                    %s
+
+                    ## Collaboration
+                    - To be confirmed by the hiring owner
+
+                    ## First 90 Days
+                    - Learn the role scope and current workflows, then confirm stage goals with the hiring owner.
+                    - Complete a first verifiable deliverable based on the confirmed responsibilities.
+
+                    ## Items for the Hiring Owner to Confirm
+                    - Team collaboration, business scope, and priorities.
+                    - Work location, compensation, benefits, and other details absent from the original requirements.
+
+                    ## Original Job Requirements
+                    %s
+                    """.formatted(
+                    title,
+                    profile,
+                    bullets(draft.responsibilities(), requirements),
+                    bullets(draft.requiredQualifications(), requirements),
+                    bullets(draft.preferredQualifications(), "Relevant additional experience"),
+                    requirements);
+        }
         String profile = draft.profile().isBlank()
                 ? "围绕“" + title + "”的已填写岗位需求开展工作。" : draft.profile();
         return """
@@ -160,7 +213,9 @@ public class JobDraftService {
                 String.join("\n", clean(output.responsibilities())),
                 String.join("\n", clean(output.requiredQualifications())),
                 String.join("\n", clean(output.preferredQualifications())));
-        return occurrences(combined, "待招聘负责人确认") + occurrences(combined, "待确认") >= 3;
+        return occurrences(combined, "待招聘负责人确认") + occurrences(combined, "待确认")
+                + occurrences(combined.toLowerCase(java.util.Locale.ROOT),
+                "to be confirmed by the hiring owner") >= 3;
     }
 
     private int occurrences(String text, String phrase) {
@@ -174,9 +229,49 @@ public class JobDraftService {
     }
 
     /** Derives usable draft content from the recruiter input when the model returns only placeholders. */
-    private InputDerivedDraft deriveFromRequirements(String title, String requirements) {
+    private InputDerivedDraft deriveFromRequirements(String title, String requirements,
+                                                      boolean english) {
         List<String> statements = java.util.Arrays.stream(requirements.split("[。；;\\n]+"))
                 .map(String::trim).filter(value -> !value.isBlank()).toList();
+        if (english) {
+            List<String> labeledResponsibilities = statements.stream()
+                    .filter(value -> startsWithAnyIgnoreCase(value,
+                            "responsibility", "responsibilities", "duties", "duty"))
+                    .map(this::afterEnglishLabel).filter(value -> !value.isBlank()).toList();
+            List<String> required = statements.stream()
+                    .filter(value -> startsWithAnyIgnoreCase(value,
+                            "required", "requirement", "requirements", "must have", "must-have"))
+                    .map(this::afterEnglishLabel).filter(value -> !value.isBlank()).toList();
+            List<String> preferred = statements.stream()
+                    .filter(value -> startsWithAnyIgnoreCase(value,
+                            "preferred", "nice to have", "nice-to-have", "bonus"))
+                    .map(this::afterEnglishLabel).filter(value -> !value.isBlank()).toList();
+            List<String> responsibilities = labeledResponsibilities;
+            if (responsibilities.isEmpty()) {
+                /*
+                 * The English quick starts are written as natural imperative sentences (for example,
+                 * "Build ...; independently diagnose ..."), not as labeled form fields. Preserve those
+                 * supplied statements verbatim instead of replacing them with a generic placeholder.
+                 * Explicit required/preferred clauses remain in their own sections.
+                 */
+                responsibilities = statements.stream()
+                        .filter(value -> !startsWithAnyIgnoreCase(value,
+                                "required", "requirement", "requirements", "must have", "must-have",
+                                "preferred", "nice to have", "nice-to-have", "bonus"))
+                        .toList();
+            }
+            if (responsibilities.isEmpty()) {
+                responsibilities = List.of(requirements);
+            }
+            if (required.isEmpty()) {
+                required = List.of("Ability to perform the stated responsibilities: "
+                        + String.join("; ", responsibilities));
+            }
+            String joinedResponsibilities = String.join("; ", responsibilities)
+                    .replaceFirst("[.!?]+$", "");
+            String profile = title + " is responsible for: " + joinedResponsibilities + ".";
+            return new InputDerivedDraft(profile, responsibilities, required, preferred);
+        }
         List<String> responsibilities = statements.stream()
                 .filter(value -> value.contains("负责") || value.contains("职责"))
                 .flatMap(value -> splitItems(afterAny(value, "主要负责", "负责", "职责")).stream())
@@ -195,6 +290,28 @@ public class JobDraftService {
         if (required.isEmpty()) required = List.of("具备完成上述岗位职责所需的相关经验与能力");
         String profile = title + "负责" + String.join("、", responsibilities) + "。";
         return new InputDerivedDraft(profile, responsibilities, required, preferred);
+    }
+
+    private boolean startsWithAnyIgnoreCase(String value, String... prefixes) {
+        String normalized = value.toLowerCase(java.util.Locale.ROOT);
+        for (String prefix : prefixes) {
+            if (normalized.startsWith(prefix.toLowerCase(java.util.Locale.ROOT))) return true;
+        }
+        return false;
+    }
+
+    private String afterEnglishLabel(String value) {
+        return value.replaceFirst("(?i)^[a-z -]+\\s*[:：-]\\s*", "").trim();
+    }
+
+    private boolean usesEnglish() {
+        return "en-US".equals(BusinessRequestContextHolder.currentLocale());
+    }
+
+    private String draftLimitation(boolean english) {
+        return english
+                ? "The job profile and description are editable drafts. Confirm the job criteria before using them for resume evidence analysis."
+                : "岗位画像和 JD 是待编辑草稿，岗位标准确认后才可用于简历证据分析。";
     }
 
     private String afterAny(String value, String... prefixes) {

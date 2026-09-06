@@ -24,6 +24,13 @@ public interface KnowledgeDocumentRepository {
     /** 更新文档启用状态，并返回是否更新成功。 */
     boolean updateEnabled(Long id, boolean enabled);
 
+    /**
+     * 复核文档当前是否仍可作为证据使用（启用、当前版本、已索引、未过期、无冲突、ACL 允许）。
+     *
+     * <p>KNOW-03：消费方在加载文档元数据后必须复核，防止使用已停用、过期或冲突的资料。</p>
+     */
+    boolean isRetrievalVisible(Long documentId);
+
     /** 更新受管文档的检索可见范围，来源 ACL 变化时即使正文未变化也必须同步。 */
     boolean updateManagedVisibility(Long id, KnowledgeVisibilityScope visibilityScope);
 

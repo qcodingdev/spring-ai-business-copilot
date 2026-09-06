@@ -10,6 +10,7 @@ import dev.qcoding.businesscopilot.commonweb.api.BusinessException;
 import dev.qcoding.businesscopilot.commonweb.api.ErrorCode;
 import dev.qcoding.businesscopilot.commonweb.request.BusinessRequestContext;
 import dev.qcoding.businesscopilot.commonweb.request.BusinessRequestContextHolder;
+import dev.qcoding.businesscopilot.reportcopilot.generation.ReportComparisonCalculator;
 import dev.qcoding.businesscopilot.reportcopilot.generation.ReportDraftResponse;
 import dev.qcoding.businesscopilot.reportcopilot.generation.ReportGenerationService;
 import dev.qcoding.businesscopilot.reportcopilot.request.ReportGenerateRequest;
@@ -28,6 +29,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.sql.Timestamp;
 import java.time.DateTimeException;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -138,6 +140,8 @@ public class ReportEnterpriseService {
             ReportDraftResponse response = generationService.generate(request);
             if ("DRAFTED".equals(response.status()) && response.content() != null) {
                 consumeHandoffs(claimToken, actorId);
+                // DATA-05：交接消费成功后记录 草稿 ← 交接 ← 结果快照 ← SQL 候选 的可追溯关联。
+                recordDataTraceability(response.draftId(), command.selection().dataHandoffReferences());
             } else {
                 releaseHandoffs(claimToken, actorId);
             }
@@ -165,12 +169,13 @@ public class ReportEnterpriseService {
                     "定时表达式或时区无效，请检查 Cron 与 IANA 时区。", ex);
         }
         String actorId = actorProvider.currentActor().actorId();
+        String locale = BusinessRequestContextHolder.currentLocale();
         return jdbcTemplate.queryForObject("""
                 INSERT INTO report_schedules (
                     schedule_key, report_type, title_template, cron_expression, zone_id,
-                    template_id, template_version, source_config, enabled,
+                    template_id, template_version, source_config, locale, enabled,
                     owner_actor_id, next_run_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?)
                 ON CONFLICT (schedule_key) DO UPDATE SET
                     report_type = EXCLUDED.report_type,
                     title_template = EXCLUDED.title_template,
@@ -179,24 +184,25 @@ public class ReportEnterpriseService {
                     template_id = EXCLUDED.template_id,
                     template_version = EXCLUDED.template_version,
                     source_config = EXCLUDED.source_config,
+                    locale = EXCLUDED.locale,
                     enabled = EXCLUDED.enabled,
                     owner_actor_id = EXCLUDED.owner_actor_id,
                     next_run_at = EXCLUDED.next_run_at,
                     updated_at = now()
                 RETURNING id, schedule_key, report_type, title_template,
-                          cron_expression, zone_id, enabled, owner_actor_id,
+                          cron_expression, zone_id, locale, enabled, owner_actor_id,
                           last_run_at, next_run_at
                 """, this::mapSchedule, command.scheduleKey().trim(),
                 command.reportType().name(), command.titleTemplate().trim(),
                 command.cronExpression().trim(), command.zoneId().trim(),
                 command.templateId().trim(), command.templateVersion().trim(),
-                json(command.selection()), command.enabled(), actorId, Timestamp.from(next));
+                json(command.selection()), locale, command.enabled(), actorId, Timestamp.from(next));
     }
 
     public List<Schedule> schedules() {
         return jdbcTemplate.query("""
                 SELECT id, schedule_key, report_type, title_template,
-                       cron_expression, zone_id, enabled, owner_actor_id,
+                       cron_expression, zone_id, locale, enabled, owner_actor_id,
                        last_run_at, next_run_at
                 FROM report_schedules ORDER BY schedule_key
                 """, this::mapSchedule);
@@ -225,9 +231,13 @@ public class ReportEnterpriseService {
         return jdbcTemplate.query("""
                 SELECT r.id AS request_id, r.report_type, r.period_start, r.period_end,
                        r.title, r.created_at, d.id AS draft_id, d.status,
-                       d.review_reasons, d.expires_at, d.updated_at
+                       d.review_reasons, d.expires_at, d.updated_at,
+                       review.status AS approval_status
                 FROM report_requests r
                 JOIN report_drafts d ON d.request_id = r.id
+                LEFT JOIN workflow_review_tasks review
+                  ON review.subject_type = 'REPORT_DRAFT'
+                 AND review.subject_id = d.id::text
                 WHERE r.owner_actor_id = ?
                 ORDER BY r.created_at DESC
                 LIMIT 100
@@ -237,7 +247,8 @@ public class ReportEnterpriseService {
                 rs.getObject("period_end", java.time.LocalDate.class), rs.getString("title"),
                 rs.getString("status"), rs.getString("review_reasons"),
                 rs.getTimestamp("expires_at") == null ? null : rs.getTimestamp("expires_at").toInstant(),
-                rs.getTimestamp("created_at").toInstant(), rs.getTimestamp("updated_at").toInstant()), actorId);
+                rs.getTimestamp("created_at").toInstant(), rs.getTimestamp("updated_at").toInstant(),
+                rs.getString("approval_status")), actorId);
     }
 
     @Scheduled(fixedDelayString = "${business-copilot.report-copilot.schedule-poll-delay:PT1M}")
@@ -274,7 +285,7 @@ public class ReportEnterpriseService {
                 RETURNING schedule.id, schedule.schedule_key, schedule.report_type,
                           schedule.title_template, schedule.cron_expression, schedule.zone_id,
                           schedule.template_id, schedule.template_version,
-                          schedule.source_config::text, schedule.owner_actor_id,
+                          schedule.source_config::text, schedule.locale, schedule.owner_actor_id,
                           schedule.claim_token
                 """, this::mapDueSchedule, claimToken);
         return rows.isEmpty() ? null : rows.getFirst();
@@ -290,7 +301,8 @@ public class ReportEnterpriseService {
         ReportPeriod period = new ReportPeriod(end.minusDays(6), end);
         try {
             BusinessRequestContextHolder.set(new BusinessRequestContext(
-                    "report-schedule-" + runId, schedule.ownerActorId(), Set.of("OPERATOR")));
+                    "report-schedule-" + runId, schedule.ownerActorId(), Set.of("OPERATOR"),
+                    schedule.locale()));
             ReportDraftResponse response = generate(new GenerateCommand(
                     schedule.reportType(), period,
                     schedule.titleTemplate().replace("{date}", end.toString()),
@@ -421,7 +433,7 @@ public class ReportEnterpriseService {
         for (String reference : references) {
             List<DataHandoffRow> rows = jdbcTemplate.query("""
                     SELECT handoff.title, handoff.source_reference, result.rows_json::text,
-                           result.created_at, result.row_count
+                           result.explanation_json::text, result.created_at, result.row_count
                     FROM data_report_handoffs handoff
                     JOIN data_query_results result ON result.id = handoff.query_result_id
                     WHERE handoff.source_reference = ? AND handoff.status = 'CLAIMED'
@@ -429,9 +441,15 @@ public class ReportEnterpriseService {
                       AND result.expires_at > now()
                     """, (rs, rowNum) -> new DataHandoffRow(
                     rs.getString("title"), rs.getString("source_reference"),
-                    rs.getString("rows_json"), rs.getInt("row_count"),
+                    rs.getString("rows_json"), rs.getString("explanation_json"),
+                    rs.getInt("row_count"),
                     rs.getTimestamp("created_at").toInstant()), reference, actorId, claimToken);
-            if (rows.isEmpty()) throw new BusinessException(ErrorCode.STATE_CONFLICT);
+            if (rows.isEmpty()) {
+                // REP-03：来源采集失败必须明确列出缺失来源；报告不生成，绝不静默输出看似完整的结果。
+                throw new BusinessException(ErrorCode.STATE_CONFLICT,
+                        "以下 Data 结果交接采集失败（已消费、过期或无权限），报告未生成，"
+                                + "受影响结论全部缺失：" + reference);
+            }
             rows.forEach(row -> sources.addAll(normalizeDataHandoff(row)));
         }
         return sources;
@@ -441,7 +459,8 @@ public class ReportEnterpriseService {
         List<RawReportSource> sources = new ArrayList<>();
         Instant validUntil = row.createdAt().plus(java.time.Duration.ofDays(1));
         sources.add(new RawReportSource(
-                ReportSourceType.KNOWLEDGE, row.title(), row.rowsJson(),
+                ReportSourceType.KNOWLEDGE, row.title(), row.rowsJson()
+                        + (row.explanationJson() == null ? "" : "\n" + row.explanationJson()),
                 Map.of("rowCount", String.valueOf(row.rowCount())),
                 "data-copilot", row.sourceReference(), row.createdAt(),
                 "Asia/Shanghai", "query-result", validUntil));
@@ -487,18 +506,29 @@ public class ReportEnterpriseService {
     }
 
     private RawReportSource compareDataHandoffs(String current, String previous, String actorId) {
+        // REP-02：环比由确定性计算器完成，输入、公式、周期、单位可核验；零分母明确标记不可计算。
         Integer currentRows = handoffRows(current, actorId);
         Integer previousRows = handoffRows(previous, actorId);
-        double change = previousRows == null || previousRows == 0
-                ? 0 : ((double) currentRows - previousRows) / previousRows * 100;
-        String severity = Math.abs(change) >= 20 ? "需要复核" : "正常";
+        ReportComparisonCalculator.ComparisonResult comparison =
+                new ReportComparisonCalculator().compute(
+                        BigDecimal.valueOf(currentRows), BigDecimal.valueOf(previousRows),
+                        "percent", current, previous);
+        String valueText = comparison.computable()
+                ? comparison.changePercent().toPlainString()
+                : "不可计算";
+        String severity = comparison.needsReview() ? "需要复核" : "正常";
         Instant observedAt = Instant.now();
         return new RawReportSource(ReportSourceType.METRIC, "环比差异与来源异常",
                 "当前结果行数=" + currentRows + "，对比期行数=" + previousRows
-                        + "，变化=" + String.format(java.util.Locale.ROOT, "%.2f%%", change)
-                        + "，状态=" + severity,
-                Map.of("name", "data.rowCount.change", "value",
-                        String.format(java.util.Locale.ROOT, "%.2f", change), "unit", "percent"),
+                        + "，变化=" + valueText + "%，状态=" + severity
+                        + "，公式=" + comparison.formula()
+                        + (comparison.notComputableReason() == null
+                                ? "" : "，说明=" + comparison.notComputableReason()),
+                Map.of("name", "data.rowCount.change", "value", valueText, "unit", "percent",
+                        "formula", comparison.formula(),
+                        "currentValue", String.valueOf(currentRows),
+                        "previousValue", String.valueOf(previousRows),
+                        "currentPeriod", current, "previousPeriod", previous),
                 "report-difference", observedAt.toString(), observedAt,
                 "Asia/Shanghai", "percent", observedAt.plus(java.time.Duration.ofDays(7)));
     }
@@ -555,6 +585,53 @@ public class ReportEnterpriseService {
                 SET status = 'READY', claim_token = NULL, claimed_at = NULL
                 WHERE claim_token = ? AND owner_actor_id = ? AND status = 'CLAIMED'
                 """, claimToken, actorId);
+    }
+
+    /** DATA-05：记录 草稿 ← 交接 ← 结果快照 ← SQL 候选 的追溯关联；只读查询供交付审计使用。 */
+    private void recordDataTraceability(Long draftId, List<String> references) {
+        if (draftId == null || references == null || references.isEmpty()) {
+            return;
+        }
+        for (String reference : references) {
+            jdbcTemplate.update("""
+                    INSERT INTO report_draft_data_links (
+                        draft_id, source_reference, query_result_id, candidate_id, handoff_id
+                    )
+                    SELECT ?, handoff.source_reference, result.id, result.candidate_id, handoff.id
+                    FROM data_report_handoffs handoff
+                    JOIN data_query_results result ON result.id = handoff.query_result_id
+                    WHERE handoff.source_reference = ?
+                    ON CONFLICT (draft_id, source_reference) DO NOTHING
+                    """, draftId, reference);
+        }
+    }
+
+    /** DATA-05：读取草稿的数据追溯链；链接由交接消费时写入，未消费的交接不产生链接。 */
+    public List<DataTraceLink> dataTraceability(long draftId) {
+        CurrentActor actor = actorProvider.currentActor();
+        Integer visible = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM report_drafts
+                WHERE id = ? AND (? OR owner_actor_id = ?)
+                """, Integer.class, draftId, actor.hasRole(BusinessRole.ADMIN), actor.actorId());
+        if (visible == null || visible == 0) {
+            throw new BusinessException(ErrorCode.NOT_FOUND);
+        }
+        return jdbcTemplate.query("""
+                SELECT draft_id, source_reference, query_result_id, candidate_id, handoff_id, linked_at
+                FROM report_draft_data_links
+                WHERE draft_id = ?
+                ORDER BY linked_at, id
+                """, (rs, rowNum) -> new DataTraceLink(
+                rs.getLong("draft_id"),
+                rs.getString("source_reference"),
+                rs.getObject("query_result_id", Long.class),
+                rs.getString("candidate_id"),
+                rs.getObject("handoff_id", Long.class),
+                rs.getTimestamp("linked_at").toInstant()), draftId);
+    }
+
+    public record DataTraceLink(long draftId, String sourceReference, Long queryResultId,
+                                String candidateId, Long handoffId, Instant linkedAt) {
     }
 
     private void requireRepeatableSources(SourceSelection selection) {
@@ -634,7 +711,7 @@ public class ReportEnterpriseService {
         return new Schedule(rs.getLong("id"), rs.getString("schedule_key"),
                 ReportType.valueOf(rs.getString("report_type")), rs.getString("title_template"),
                 rs.getString("cron_expression"), rs.getString("zone_id"),
-                rs.getBoolean("enabled"), rs.getString("owner_actor_id"),
+                rs.getString("locale"), rs.getBoolean("enabled"), rs.getString("owner_actor_id"),
                 instant(rs.getTimestamp("last_run_at")), instant(rs.getTimestamp("next_run_at")));
     }
 
@@ -645,7 +722,8 @@ public class ReportEnterpriseService {
                     rs.getString("cron_expression"), rs.getString("zone_id"),
                     rs.getString("template_id"), rs.getString("template_version"),
                     objectMapper.readValue(rs.getString("source_config"), SourceSelection.class),
-                    rs.getString("owner_actor_id"), rs.getObject("claim_token", UUID.class));
+                    rs.getString("locale"), rs.getString("owner_actor_id"),
+                    rs.getObject("claim_token", UUID.class));
         } catch (JacksonException ex) {
             throw new IllegalStateException("报告定时来源配置读取失败", ex);
         }
@@ -696,18 +774,20 @@ public class ReportEnterpriseService {
                                   String templateVersion, SourceSelection selection,
                                   boolean enabled) { }
     public record Schedule(long id, String scheduleKey, ReportType reportType, String titleTemplate,
-                           String cronExpression, String zoneId, boolean enabled,
+                           String cronExpression, String zoneId, String locale, boolean enabled,
                            String ownerActorId, Instant lastRunAt, Instant nextRunAt) { }
     public record ScheduleRun(long id, long scheduleId, Long draftId, String status,
                               String reason, Instant startedAt, Instant finishedAt) { }
     public record ReportRecord(long requestId, long draftId, String reportType,
                                java.time.LocalDate periodStart, java.time.LocalDate periodEnd,
                                String title, String status, String reviewReasons,
-                               Instant expiresAt, Instant createdAt, Instant updatedAt) { }
+                               Instant expiresAt, Instant createdAt, Instant updatedAt,
+                               String approvalStatus) { }
     private record DueSchedule(long id, String scheduleKey, ReportType reportType,
                                String titleTemplate, String cronExpression, String zoneId,
                                String templateId, String templateVersion,
-                               SourceSelection selection, String ownerActorId, UUID claimToken) { }
+                               SourceSelection selection, String locale,
+                               String ownerActorId, UUID claimToken) { }
     private record DataHandoffRow(String title, String sourceReference, String rowsJson,
-                                  int rowCount, Instant createdAt) { }
+                                  String explanationJson, int rowCount, Instant createdAt) { }
 }

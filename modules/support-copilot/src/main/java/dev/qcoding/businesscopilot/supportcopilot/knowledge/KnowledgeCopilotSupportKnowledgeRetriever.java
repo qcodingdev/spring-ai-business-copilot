@@ -62,8 +62,12 @@ public class KnowledgeCopilotSupportKnowledgeRetriever implements SupportKnowled
         List<SupportKnowledgeEvidence> evidence = new ArrayList<>();
         for (RetrievedKnowledgeChunk rc : chunks) {
             var chunk = rc.chunk();
-            // chunk 来自 enabled 文档（retrievalService 只检索 enabled 文档的 chunk）
             var doc = documentRepository.findById(chunk.documentId());
+            // KNOW-03：召回与加载之间存在时间窗口，消费前复核文档仍可作为证据使用。
+            if (doc.isEmpty() || !documentRepository.isRetrievalVisible(chunk.documentId())) {
+                log.warn("知识文档 {} 已失效或不可见，丢弃对应证据分片 {}", chunk.documentId(), chunk.id());
+                continue;
+            }
             String sourceTitle = doc.map(d -> d.title()).orElse("未知文档");
 
             evidence.add(new SupportKnowledgeEvidence(
@@ -82,6 +86,9 @@ public class KnowledgeCopilotSupportKnowledgeRetriever implements SupportKnowled
         log.info("工单知识依据检索完成：数量={}，category={}",
                 evidence.size(), query.category());
 
+        if (evidence.isEmpty()) {
+            return SupportKnowledgeResult.expired("已检索到的知识证据在复核时失效（文档被停用、过期或撤销），建议转人工处理");
+        }
         return SupportKnowledgeResult.of(evidence);
     }
 

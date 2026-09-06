@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_LOCALE, LOCALE_STORAGE_KEY, resolveLocale, setLocale } from './index'
 import { messages } from './messages'
-import { formatDate, formatNumber } from './format'
+import { displayTimeZone, formatDate, formatNumber } from './format'
 
 function keys(value: unknown, prefix = ''): string[] {
   if (typeof value !== 'object' || value === null) return [prefix]
@@ -11,6 +11,11 @@ function keys(value: unknown, prefix = ''): string[] {
 describe('frontend locale contract', () => {
   it('keeps Chinese and English keys exactly aligned', () => {
     expect(keys(messages['en-US']).sort()).toEqual(keys(messages['zh-CN']).sort())
+  })
+
+  it('keeps the support quality owner column localized', () => {
+    expect(messages['zh-CN'].support.qualityCases.createdBy).toBe('创建人')
+    expect(messages['en-US'].support.qualityCases.createdBy).toBe('Created by')
   })
 
   it('defaults invalid and missing values to Simplified Chinese', () => {
@@ -30,5 +35,12 @@ describe('frontend locale contract', () => {
     expect(formatNumber(12345.5, 'en-US')).toContain('12,345')
     expect(formatNumber(12345.5, 'zh-CN')).toContain('12,345')
     expect(formatDate('2026-07-29T08:00:00Z', 'en-US')).not.toBe('')
+  })
+
+  it('uses product time zones instead of the browser time zone', () => {
+    expect(displayTimeZone('zh-CN')).toBe('Asia/Shanghai')
+    expect(displayTimeZone('en-US')).toBe('America/Los_Angeles')
+    expect(formatDate('2026-07-29T08:00:00Z', 'zh-CN')).toContain('16:00')
+    expect(formatDate('2026-07-29T08:00:00Z', 'en-US')).toMatch(/1:00\s*AM/)
   })
 })

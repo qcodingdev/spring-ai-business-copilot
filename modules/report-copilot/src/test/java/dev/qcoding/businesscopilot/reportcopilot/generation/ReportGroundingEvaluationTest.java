@@ -20,7 +20,8 @@ class ReportGroundingEvaluationTest {
                 .lines().filter(line -> !line.isBlank() && !line.startsWith("#")).toList();
         assertThat(lines).as("Report 固定评测集不能缩减到 10 条以下").hasSizeGreaterThanOrEqualTo(10);
         ReportSource source = new ReportSource(
-                "source-1", ReportSourceType.METRIC, "Orders", "Orders: 1284",
+                "source-1", ReportSourceType.METRIC, "Orders",
+                "Orders remained stable. Orders: 1284",
                 "a".repeat(64), Map.of("name", "Orders", "value", "1284", "unit", "orders"));
         ReportGenerationOutputValidator validator = new ReportGenerationOutputValidator();
 

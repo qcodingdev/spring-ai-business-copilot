@@ -69,6 +69,61 @@ async function mockSession(page: Page): Promise<void> {
       }),
     })
   })
+  await page.route('**/api/task-runs/mine?limit=8', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: [],
+        success: true,
+        requestId: 'e2e-empty-task-runs',
+        timestamp: new Date().toISOString(),
+      }),
+    })
+  })
+  await page.route('**/api/reviews/queue?subjectType=*', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: [],
+        success: true,
+        requestId: 'e2e-empty-independent-review-queue',
+        timestamp: new Date().toISOString(),
+      }),
+    })
+  })
+  await page.route('**/api/report-copilot/enterprise/drafts/*/data-trace', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: [],
+        success: true,
+        requestId: 'e2e-empty-report-data-trace',
+        timestamp: new Date().toISOString(),
+      }),
+    })
+  })
+  await page.route('**/api/admin/diagnostics', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: { runtimeMode: 'self-hosted', modules: {} },
+        success: true,
+        requestId: 'e2e-default-diagnostics',
+        timestamp: new Date().toISOString(),
+      }),
+    })
+  })
+  await page.route('**/api/report-copilot/enterprise/reports', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: [],
+        success: true,
+        requestId: 'e2e-empty-report-records',
+        timestamp: new Date().toISOString(),
+      }),
+    })
+  })
 }
 
 async function mockReviewerSession(page: Page): Promise<void> {
@@ -79,7 +134,90 @@ async function mockReviewerSession(page: Page): Promise<void> {
       success: true, requestId: 'e2e-reviewer-session', timestamp: new Date().toISOString(),
     }),
   }))
+  await page.route('**/api/task-runs/mine?limit=8', async (route) => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({ data: [], success: true, requestId: 'e2e-empty-reviewer-task-runs', timestamp: new Date().toISOString() }),
+  }))
 }
+
+test('admin acceptance separates runtime readiness from unverified evidence', async ({ page }, testInfo) => {
+  await mockSession(page)
+  await page.route('**/api/admin/diagnostics', route => route.fulfill({
+    json: { success: true, data: {}, requestId: 'acceptance-diagnostics' },
+  }))
+  await page.route('**/api/admin/acceptance-evidence/MODEL_QUALITY', route => route.fulfill({
+    json: { success: true, data: [], requestId: 'acceptance-history' },
+  }))
+  await page.route('**/api/admin/acceptance-evidence', route => route.fulfill({ json: {
+    success: true, requestId: 'acceptance-summary', data: {
+      applicableVersion: '2.4.1-SNAPSHOT',
+      categories: ['RUNTIME_READINESS', 'MODEL_QUALITY', 'VENDOR_ACCEPTANCE', 'RELEASE_GATE']
+        .map(category => ({ category, status: category === 'RUNTIME_READINESS' ? 'PASS' : 'NOT_VERIFIED', evidenceCount: category === 'RUNTIME_READINESS' ? 1 : 0 })),
+      releaseReadiness: { releasable: false, overall: 'NOT_VERIFIED' },
+    },
+  } }))
+  await page.goto('/admin?tab=acceptance')
+  await expect(page.getByRole('heading', { name: '分层验收证据', exact: true })).toBeVisible()
+  await expect(page.getByText('当前版本验收证据尚未全部通过', { exact: false })).toBeVisible()
+  await expect(page.getByRole('button', { name: '追加验收证据', exact: true })).toBeDisabled()
+  await expect(page.locator('.status-grid .status-badge')).toHaveCount(4)
+  await expect(page.locator('.status-grid').getByText('未验证', { exact: false })).toHaveCount(3)
+  await expect(page.getByRole('heading', { name: 'Evaluation Harness 与发布测试集', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: '登记该套件报告' }).first().click()
+  await expect(page.getByLabel('检查名称')).toHaveValue('evaluation-harness-first-40')
+  await expect(page.getByLabel('证据类别')).toHaveValue('MODEL_QUALITY')
+  const accessibility = await new AxeBuilder({ page }).analyze()
+  expect(accessibility.violations).toEqual([])
+  await page.screenshot({ path: testInfo.outputPath('acceptance-zh.png'), fullPage: true })
+  await page.locator('[data-testid="language-switcher"]:visible').click()
+  await expect(page.getByRole('heading', { name: 'Layered acceptance evidence', exact: true })).toBeVisible()
+  await expect(page.locator('.status-grid').getByText('Not verified', { exact: false })).toHaveCount(3)
+  await page.screenshot({ path: testInfo.outputPath('acceptance-en.png'), fullPage: true })
+})
+
+test('Admin exposes versioned prompt governance without production hot editing', async ({ page }) => {
+  await mockSession(page)
+  await page.route('**/api/governance/prompts', async (route) => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({
+      data: [{
+        id: 1,
+        promptKey: 'prompts/data-copilot/sql-generation.st',
+        displayName: 'Data Copilot SQL generation',
+        moduleKey: 'data-copilot',
+        description: 'Generate a guarded read-only SQL candidate.',
+        activeVersionId: 11,
+        previousVersionId: null,
+        rolloutPercent: 100,
+        versions: [{
+          id: 11,
+          versionNumber: 1,
+          status: 'PUBLISHED',
+          content: 'Generate a read-only SQL candidate.',
+          contentHash: 'a'.repeat(64),
+          changeNote: 'Initial governed version',
+        }],
+      }],
+      success: true,
+      requestId: 'prompt-governance-definitions',
+      timestamp: new Date().toISOString(),
+    }),
+  }))
+  await page.route('**/api/governance/evaluations/runs', async (route) => route.fulfill({
+    json: { data: [], success: true, requestId: 'prompt-governance-runs', timestamp: new Date().toISOString() },
+  }))
+  await page.route('**/api/governance/prompts/1/audit', async (route) => route.fulfill({
+    json: { data: [], success: true, requestId: 'prompt-governance-audit', timestamp: new Date().toISOString() },
+  }))
+
+  await page.goto('/admin?tab=prompts')
+  await expect(page.getByRole('heading', { name: 'Prompt 版本与完整性治理', exact: true })).toBeVisible()
+  await expect(page.getByText('prompts/data-copilot/sql-generation.st', { exact: true })).toBeVisible()
+  await expect(page.getByText('a'.repeat(16), { exact: true })).toBeVisible()
+  await expect(page.getByText(/草稿修改不会立即生效/)).toBeVisible()
+  await expect(page.getByLabel('Prompt 内容')).toBeDisabled()
+  await expect(page.getByRole('button', { name: '基于当前内容新建草稿' })).toBeVisible()
+})
 
 test('defaults to Chinese and exposes the five business copilots', async ({ page }, testInfo) => {
   await mockSession(page)
@@ -111,15 +249,22 @@ test('workbench has no serious accessibility violations or horizontal overflow',
 
 test('reviewer navigation exposes only callable review workflows', async ({ page }) => {
   await mockReviewerSession(page)
-  await page.route('**/api/data-copilot/query-results', async (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: [], success: true, requestId: 'reviewer-results', timestamp: new Date().toISOString() }) }))
-  await page.route('**/api/data-copilot/audit-logs', async (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: [], success: true, requestId: 'reviewer-audits', timestamp: new Date().toISOString() }) }))
+  await page.route('**/api/reviews/queue?subjectType=DATA_SQL_CANDIDATE', async (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: [], success: true, requestId: 'reviewer-data-review-queue', timestamp: new Date().toISOString() }) }))
+  await page.route('**/api/reviews/queue?subjectType=REPORT_DRAFT', async (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: [], success: true, requestId: 'reviewer-report-review-queue', timestamp: new Date().toISOString() }) }))
   await page.goto('/')
-  await expect(page.getByRole('link', { name: '经营报告', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('link', { name: '经营报告', exact: true })).toBeVisible()
   await expect(page.getByRole('link', { name: '企业知识', exact: true })).toBeVisible()
   await page.goto('/data')
   await expect(page.getByRole('tab', { name: '执行记录' })).toBeVisible()
   await expect(page.getByRole('tab', { name: '查询' })).toHaveCount(0)
-  await expect(page.getByText('reviewer-audits')).toBeVisible()
+  await expect(page.getByText('reviewer-data-review-queue')).toBeVisible()
+  await expect(page.getByText('当前没有可由你处理的独立复核任务。', { exact: true })).toBeVisible()
+  if ((page.viewportSize()?.width ?? 1280) < 900) {
+    await page.getByRole('button', { name: '打开导航' }).click()
+  }
+  await page.getByRole('link', { name: '经营报告', exact: true }).click()
+  await expect(page.getByRole('tab', { name: '报告记录' })).toBeVisible()
+  await expect(page.getByText('reviewer-report-review-queue')).toBeVisible()
 })
 
 test('reviewer claims and completes an HR assessment review', async ({ page }) => {
@@ -220,6 +365,46 @@ test('keeps the SQL candidate and confirmed query result in the main data workfl
   await expect(page.getByText('e2e-data-execution')).toBeVisible()
 })
 
+test('keeps the SQL candidate visible when a numbered evidence link is opened', async ({ page }) => {
+  await mockSession(page)
+  await page.route('**/api/data-copilot/sql-candidates', async (route) => {
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({
+      data: {
+        candidateId: 'candidate-evidence-1', confirmationToken: 'confirm-evidence-1', executable: true,
+        sql: 'SELECT public.products.name FROM public.products LIMIT 1', summary: '查询一个商品名称。',
+        validation: { passed: true }, adoptedMetrics: [{ metricKey: 'product_name', displayName: '商品名称', version: 2 }],
+      }, success: true, requestId: 'e2e-data-evidence-candidate', timestamp: new Date().toISOString(),
+    }) })
+  })
+
+  await page.goto('/data')
+  await page.getByLabel('业务问题').fill('查询一个商品名称。')
+  await page.getByRole('button', { name: '生成 SQL 候选' }).click()
+  await expect(page.getByRole('link', { name: '[1] 商品名称', exact: true })).toBeVisible()
+  await page.getByRole('link', { name: '[1] 商品名称', exact: true }).click()
+  await expect(page.getByRole('heading', { name: '核对 SQL 候选' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'SQL 预览' })).toBeVisible()
+  await expect(page.locator('.evidence-list').getByRole('link', { name: '商品名称', exact: true })).toBeVisible()
+})
+
+test('shows an expired session as a transient readable toast', async ({ page }) => {
+  await page.route('**/api/session', async (route) => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({
+      data: { authenticated: false, username: null, roles: [], runtimeMode: 'self-hosted', publicDemo: false, aiEnabled: false },
+      success: true,
+      requestId: 'e2e-expired-session',
+      timestamp: new Date().toISOString(),
+    }),
+  }))
+  await page.addInitScript(() => localStorage.clear())
+  await page.goto('/login?expired=1')
+  await expect(page).toHaveURL(/\/login$/)
+  await expect(page.locator('.toast-message').getByText('登录已过期，请重新登录。', { exact: true })).toBeVisible()
+  await expect(page.locator('.public-login-card .alert')).toHaveCount(0)
+  await expect(page.locator('.toast-message')).toBeHidden({ timeout: 6_000 })
+})
+
 test('login and Admin expose the same persistent language switch', async ({ page }) => {
   await page.route('**/api/session', async (route) => {
     await route.fulfill({
@@ -306,9 +491,9 @@ test('login and Admin expose the same persistent language switch', async ({ page
     })
   })
   await page.goto('/admin')
-  await expect(page.getByRole('heading', { name: 'System administration' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'System administration', exact: true })).toBeVisible()
   await expect(page.locator('html')).toHaveAttribute('lang', 'en-US')
-  await page.getByRole('button', { name: 'Experience data' }).click()
+  await page.getByRole('button', { name: 'Test experience data', exact: true }).click()
   await page.getByRole('button', { name: 'Prepare experience data' }).click()
   await page.getByRole('dialog')
     .getByRole('button', { name: 'Prepare experience data' })
@@ -367,7 +552,7 @@ test('Admin reruns five-module readiness, saves evidence, and routes remediation
   }) }))
 
   await page.goto('/admin')
-  await page.getByRole('button', { name: '企业就绪' }).click()
+  await page.getByRole('button', { name: '运行就绪检查', exact: true }).click()
   await expect(page).toHaveURL(/\/admin\?tab=readiness/)
   await expect(page.getByText('结果交接领取超时')).toBeVisible()
   await expect(page.getByText('知识同步失败未恢复')).toBeVisible()
@@ -380,6 +565,7 @@ test('Admin reruns five-module readiness, saves evidence, and routes remediation
 
   await page.locator('.readiness-check').filter({ hasText: '候选人评估复核到期' }).getByRole('link', { name: '进入整改' }).click()
   await expect(page).toHaveURL(/\/hr\?section=recruiting&tab=assessment/)
+  await page.getByRole('button', { name: '切换到候选人复核队列' }).click()
   await expect(page.getByText('虚构逾期评估', { exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: '领取并打开复核' })).toBeVisible()
 
@@ -410,6 +596,76 @@ test('keeps processing results scoped to the tab that produced them', async ({ p
   await page.getByRole('tab', { name: '外部来源' }).click()
   await expect(page.getByText('试用期为三个月。', { exact: true })).toHaveCount(0)
   await expect(page.getByText('本次处理结果')).toHaveCount(0)
+})
+
+test('discards a late answer after leaving and returning while a new request is pending', async ({ page }) => {
+  await mockSession(page)
+  const pending: import('@playwright/test').Route[] = []
+  await page.route('**/api/knowledge-copilot/questions', route => { pending.push(route) })
+  await page.route('**/api/knowledge-copilot/sources', route => route.fulfill({ json: { success: true, data: [] } }))
+  await page.route('**/api/knowledge-copilot/sources/issues', route => route.fulfill({ json: { success: true, data: [] } }))
+  await page.goto('/knowledge')
+  await page.getByLabel('知识问题').fill('旧问题')
+  await page.getByRole('button', { name: '检索并回答' }).click()
+  await expect.poll(() => pending.length).toBe(1)
+  await page.getByRole('tab', { name: '外部来源' }).click()
+  await page.getByRole('tab', { name: '知识问答', exact: true }).click()
+  await page.getByLabel('知识问题').fill('新问题')
+  await page.getByRole('button', { name: '检索并回答' }).click()
+  await expect.poll(() => pending.length).toBe(2)
+  const staleResponse = page.waitForResponse('**/api/knowledge-copilot/questions')
+  await pending[0]!.fulfill({ json: { success: true, data: { status: 'ANSWERED', answer: '过期请求的答案', citations: [] } } })
+  await staleResponse
+  await expect(page.locator('.primary-workflow-form button[type="submit"]')).toBeDisabled()
+  await expect(page.getByText('过期请求的答案', { exact: true })).toHaveCount(0)
+  await pending[1]!.fulfill({ json: { success: true, data: { status: 'ANSWERED', answer: '当前问题的答案', citations: [] } } })
+  await expect(page.getByText('当前问题的答案', { exact: true })).toBeVisible()
+  await expect(page.getByText('过期请求的答案', { exact: true })).toHaveCount(0)
+})
+
+test('submits semantic knowledge feedback and collapses the completed form', async ({ page }) => {
+  await mockSession(page)
+  await page.route('**/api/knowledge-copilot/questions', async (route) => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({
+      data: {
+        answerId: 17,
+        status: 'ANSWERED',
+        answer: '试用期为三个月。',
+        citations: [
+          { chunkId: 71, sourceTitle: '员工手册', snippet: '试用期三个月' },
+          { chunkId: 72, sourceTitle: '转正流程', snippet: '提交转正申请' },
+          { chunkId: 73, sourceTitle: '审批规范', snippet: '直属主管审批' },
+          { chunkId: 74, sourceTitle: '补充说明', snippet: '以最新制度版本为准' },
+        ],
+      },
+      success: true,
+      requestId: 'knowledge-feedback-answer',
+      timestamp: new Date().toISOString(),
+    }),
+  }))
+  await page.route('**/api/knowledge-copilot/answers/17/feedback', async (route) => {
+    expect(route.request().postDataJSON()).toMatchObject({ rating: 'NOT_HELPFUL', reason: 'OUTDATED' })
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ data: { id: 91 }, success: true, requestId: 'knowledge-feedback-saved', timestamp: new Date().toISOString() }),
+    })
+  })
+
+  await page.goto('/knowledge')
+  await page.getByLabel('知识问题').fill('试用期多久？')
+  await page.getByRole('button', { name: '检索并回答' }).click()
+  await expect(page.getByText('补充说明', { exact: true })).toHaveCount(0)
+  await page.getByRole('link', { name: '[4]' }).click()
+  await expect(page.getByText('补充说明', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: '没有帮助' }).click()
+  await expect(page.getByLabel('问题原因')).not.toContainText('OUTDATED')
+  await page.getByLabel('问题原因').selectOption({ label: '内容已过期' })
+  await page.getByLabel('补充说明（可选）').fill('制度版本需要更新。')
+  await page.getByRole('button', { name: '提交反馈' }).click()
+  await expect(page.locator('.feedback-form')).toHaveCount(0)
+  await expect(page.locator('.feedback-complete')).toHaveText('反馈已记录，已进入质量闭环。')
+  await expect(page.getByLabel('补充说明（可选）')).toHaveCount(0)
 })
 
 test('requires confirmation and runs a full sync for a knowledge source issue', async ({ page }) => {
@@ -454,7 +710,7 @@ test('shows and completes the support draft review flow', async ({ page }) => {
   await mockSession(page)
   await page.route('**/api/support-copilot/tickets/analyze', async (route) => {
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify({
-      data: { status: 'DRAFTED', summary: '退款咨询', needsHuman: true, draft: { draftId: 7, replyText: '您好，我们会核实退款条件。', confirmationToken: 'support-token', expiresAt: new Date(Date.now() + 60_000).toISOString(), citations: [] } },
+      data: { status: 'DRAFTED', summary: '退款咨询', needsHuman: true, draft: { draftId: 7, replyText: '您好，我们会核实退款条件。', confirmationToken: 'support-token', expiresAt: new Date(Date.now() + 60_000).toISOString(), citations: [{ chunkId: 81, sourceTitle: '退款制度', snippet: '退款需要核验订单状态。' }] } },
       success: true, requestId: 'support-draft-result', timestamp: new Date().toISOString(),
     }) })
   })
@@ -467,6 +723,8 @@ test('shows and completes the support draft review flow', async ({ page }) => {
   await page.goto('/support')
   await page.getByLabel('客户消息').fill('请协助处理退款。')
   await page.getByRole('button', { name: '分析工单并生成草稿' }).click()
+  await expect(page.locator('.review-editor textarea').first()).toHaveValue('您好，我们会核实退款条件。')
+  await page.getByRole('link', { name: '[1] 退款制度' }).click()
   await expect(page.locator('.review-editor textarea').first()).toHaveValue('您好，我们会核实退款条件。')
   await page.getByRole('button', { name: '确认采用草稿' }).click()
   await page.getByRole('dialog').getByRole('button', { name: '确认客服回复草稿' }).click()
@@ -484,6 +742,13 @@ test('operates the support human review queue instead of exposing raw JSON', asy
   await page.route('**/api/support-copilot/reply-drafts/7/review-session', async (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({
     data: { draftId: 7, suggestedReply: '您好，我们正在核对退款。', confirmationToken: 'review-token-7', status: 'NEEDS_REVIEW', expiresAt: new Date(Date.now() + 60_000).toISOString() },
     success: true, requestId: 'support-review-session', timestamp: new Date().toISOString(),
+  }) }))
+  // SUP-01/02：复核面板打开时拉取追问建议与转人工原因（新端点的 mock 覆盖）。
+  await page.route('**/api/support-copilot/tickets/7/follow-ups', async (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({
+    data: ['请提供相关的订单号或工单号，便于定位记录。'], success: true, requestId: 'support-follow-ups', timestamp: new Date().toISOString(),
+  }) }))
+  await page.route('**/api/support-copilot/tickets/7/handoff', async (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({
+    data: { reason: 'NO_EVIDENCE', nextStep: '补充知识库内容，或由人工直接回复客户' }, success: true, requestId: 'support-handoff', timestamp: new Date().toISOString(),
   }) }))
   await page.route('**/api/support-copilot/reply-drafts/7/edit', async (route) => {
     expect(route.request().postDataJSON().editedText).toContain('两个工作日')
@@ -511,6 +776,13 @@ test('operates the support human review queue instead of exposing raw JSON', asy
 test('persists localized knowledge quality review dimensions', async ({ page }) => {
   await mockSession(page)
   let reviewed = false
+  await page.route('**/api/knowledge-copilot/quality-metrics', async (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({
+    data: { feedbackCount: 1, helpfulCount: 0, notHelpfulCount: 1, pendingReviewCount: reviewed ? 0 : 1, resolvedCount: 0, dismissedCount: 0, knowledgeUpdateRequiredCount: reviewed ? 1 : 0 },
+    success: true, requestId: 'knowledge-quality-metrics', timestamp: new Date().toISOString(),
+  }) }))
+  await page.route('**/api/knowledge-copilot/feedback-history?page=0&size=50', async (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({
+    data: { content: [], totalElements: 0 }, success: true, requestId: 'knowledge-feedback-history', timestamp: new Date().toISOString(),
+  }) }))
   await page.route('**/api/knowledge-copilot/quality-queue?size=50', async (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({
     data: { content: reviewed ? [] : [{ answerId: 17, requestId: 'knowledge-17', question: '报销上限是多少？', answerPreview: '旧制度中的上限为 2000 元。', retrievedChunkIds: '11,12', citedChunkIds: '11', answerStatus: 'ANSWERED', refusalReason: null, rating: 'NOT_HELPFUL', feedbackReason: 'OUTDATED', comment: '制度已经更新', answerCreatedAt: new Date().toISOString(), feedbackUpdatedAt: new Date().toISOString(), issueVersion: 2, issueUpdatedAt: '2026-08-09T10:00:00Z' }], page: 0, size: 50, totalElements: reviewed ? 0 : 1, totalPages: reviewed ? 0 : 1 },
     success: true, requestId: 'knowledge-quality-queue', timestamp: new Date().toISOString(),
@@ -548,13 +820,13 @@ test('shows, edits, and confirms a report draft', async ({ page }) => {
     citations: [{ sourceId: 'meeting-1', title: '周会纪要', excerpt: '本周完成三项交付' }],
   }
   await page.route('**/api/report-copilot/reports/generate', async (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({
-    data: { draftId: 21, status: 'DRAFTED', content, confirmationToken: 'report-token', expiresAt: new Date(Date.now() + 60_000).toISOString() },
+    data: { draftId: 21, status: 'DRAFTED', approvalStatus: 'APPROVED', content, confirmationToken: 'report-token', expiresAt: new Date(Date.now() + 60_000).toISOString() },
     success: true, requestId: 'report-generated', timestamp: new Date().toISOString(),
   }) }))
   await page.route('**/api/report-copilot/reports/21/edit', async (route) => {
     const body = route.request().postDataJSON()
     expect(body.content.executiveSummary).toBe('人工修改后的摘要')
-    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: { draftId: 21, status: 'DRAFTED', content: body.content }, success: true, requestId: 'report-edited', timestamp: new Date().toISOString() }) })
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: { draftId: 21, status: 'DRAFTED', approvalStatus: 'APPROVED', content: body.content }, success: true, requestId: 'report-edited', timestamp: new Date().toISOString() }) })
   })
   await page.route('**/api/report-copilot/reports/21/confirm', async (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: { draftId: 21, status: 'CONFIRMED' }, success: true, requestId: 'report-confirmed', timestamp: new Date().toISOString() }) }))
 
@@ -566,11 +838,88 @@ test('shows, edits, and confirms a report draft', async ({ page }) => {
   await expect(page.locator('.report-edit-section textarea').first()).toHaveValue('完成三项交付')
   await page.getByLabel('执行摘要').fill('人工修改后的摘要')
   await page.getByRole('button', { name: '保存人工修改' }).click()
-  await expect(page.getByText('报告修改已保存，仍需人工确认。')).toBeVisible()
-  await page.getByRole('button', { name: '确认报告' }).click()
+  await expect(page.getByText('报告修改已保存，请继续确认报告后再导出。')).toBeVisible()
   await page.getByRole('dialog').getByRole('button', { name: '确认经营报告' }).click()
   await expect(page.getByText('报告已确认，现在可以导出；系统不会自动发布。')).toBeVisible()
-  await expect(page.getByLabel('执行摘要')).toBeDisabled()
+  await expect(page).toHaveURL(/\/report\?tab=records/)
+  await expect(page.getByRole('tab', { name: '报告记录' })).toHaveAttribute('aria-selected', 'true')
+})
+
+test('opens a report record and keeps its review content visible', async ({ page }) => {
+  await mockSession(page)
+  // An administrator may also be assigned the reviewer role. The admin
+  // operating workspace must still be able to reopen and edit its own draft.
+  await page.unroute('**/api/session')
+  await page.route('**/api/session', async (route) => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({
+      data: { authenticated: true, username: 'fictional.admin', roles: ['ADMIN', 'REVIEWER'], runtimeMode: 'self-hosted', publicDemo: false, aiEnabled: true },
+      success: true, requestId: 'e2e-admin-reviewer-session', timestamp: new Date().toISOString(),
+    }),
+  }))
+  await page.unroute('**/api/data-copilot/report-handoffs')
+  await page.route('**/api/data-copilot/report-handoffs', async (route) => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({
+      data: [{ id: 9, resultId: 91, title: '销售经营分析', status: 'READY', sourceReference: 'data-result:91', rowCount: 24, resultExpiresAt: new Date(Date.now() + 60_000).toISOString(), createdAt: new Date().toISOString() }],
+      success: true, requestId: 'report-data-handoffs', timestamp: new Date().toISOString(),
+    }),
+  }))
+  await page.route('**/api/report-copilot/enterprise/reports', async (route) => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({
+      data: [{
+        requestId: 41, draftId: 42, reportType: 'BUSINESS_WEEKLY',
+        periodStart: '2026-08-24', periodEnd: '2026-08-30', title: '销售经营周报',
+        status: 'DRAFTED', reviewReasons: null, approvalStatus: 'APPROVED',
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+      }],
+      success: true, requestId: 'report-records', timestamp: new Date().toISOString(),
+    }),
+  }))
+  await page.route('**/api/report-copilot/reports/42/review-session', async (route) => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({
+      data: {
+        draftId: 42, status: 'DRAFTED', approvalStatus: 'APPROVED',
+        content: {
+          executiveSummary: '本周销售额保持增长', executiveSummarySourceIds: ['data-result:7'],
+          metricHighlights: [], completedItems: [], risks: [], actionItems: [], suggestions: [],
+          citations: [{ sourceId: 'data-result:7', title: '销售结果', excerpt: '销售额增长' }],
+        }, confirmationToken: 'review-token', expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      },
+      success: true, requestId: 'report-review-session', timestamp: new Date().toISOString(),
+    }),
+  }))
+
+  await page.goto('/report?tab=records')
+  await page.getByRole('button', { name: '打开并继续复核' }).first().click()
+  await expect(page).toHaveURL(/\/report\?tab=generate/)
+  await expect(page.getByLabel('执行摘要')).toHaveValue('本周销售额保持增长')
+  await expect(page.getByText('销售经营分析')).toBeVisible()
+  await expect(page.getByRole('tab', { name: '报告生成' })).toHaveAttribute('aria-selected', 'true')
+})
+
+test('opens a report needing review without a render error', async ({ page }) => {
+  await mockSession(page)
+  await page.route('**/api/report-copilot/enterprise/reports', async (route) => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({
+      data: [{ requestId: 51, draftId: 52, reportType: 'BUSINESS_WEEKLY', periodStart: '2026-08-24', periodEnd: '2026-08-30', title: '需要复核的经营周报', status: 'NEEDS_REVIEW', reviewReasons: '来源证据需要人工复核', approvalStatus: 'PENDING', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }],
+      success: true, requestId: 'report-review-record', timestamp: new Date().toISOString(),
+    }),
+  }))
+  await page.route('**/api/report-copilot/reports/52/review-session', async (route) => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({
+      data: { draftId: 52, status: 'NEEDS_REVIEW', reviewReasons: '来源证据需要人工复核', content: null, confirmationToken: 'review-token', expiresAt: new Date(Date.now() + 60_000).toISOString(), approvalStatus: 'PENDING' },
+      success: true, requestId: 'report-review-needs-review', timestamp: new Date().toISOString(),
+    }),
+  }))
+
+  await page.goto('/report?tab=records')
+  await page.getByRole('button', { name: '打开并继续复核' }).click()
+  await expect(page.locator('.alert--warning').getByText('来源证据需要人工复核', { exact: true })).toBeVisible()
 })
 
 test('starts reports from Data handoffs, quick examples, or an uploaded source', async ({ page }) => {
@@ -585,7 +934,7 @@ test('starts reports from Data handoffs, quick examples, or an uploaded source',
     expect(route.request().url()).toContain('title=CSV+%E7%BB%8F%E8%90%A5%E5%91%A8%E6%8A%A5')
     expect(route.request().postDataBuffer()?.length ?? 0).toBeGreaterThan(0)
     uploadCalled = true
-    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: { draftId: 31, status: 'DRAFTED', content: { executiveSummary: '上传文件生成的摘要', executiveSummarySourceIds: ['upload-1'], metricHighlights: [], completedItems: [], risks: [], actionItems: [], suggestions: [] }, confirmationToken: 'report-upload-token' }, success: true, requestId: 'report-upload-generated', timestamp: new Date().toISOString() }) })
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: { draftId: 31, status: 'DRAFTED', approvalStatus: 'APPROVED', content: { executiveSummary: '上传文件生成的摘要', executiveSummarySourceIds: ['upload-1'], metricHighlights: [], completedItems: [], risks: [], actionItems: [], suggestions: [] }, confirmationToken: 'report-upload-token' }, success: true, requestId: 'report-upload-generated', timestamp: new Date().toISOString() }) })
   })
 
   await page.goto('/report')
@@ -651,10 +1000,12 @@ test('separates recruiting and employee service in the left navigation', async (
   await expect(recruiting).toBeVisible()
   await expect(recruiting).toHaveAttribute('aria-current', 'page')
   await expect(recruiting).toHaveClass(/active/)
+  await expect(employee).toHaveCSS('box-shadow', 'none')
   await employee.click()
   await expect(employee).toHaveAttribute('aria-current', 'page')
   await expect(employee).toHaveClass(/active/)
   await expect(recruiting).not.toHaveAttribute('aria-current', 'page')
+  await expect(recruiting).toHaveCSS('box-shadow', 'none')
   await expect(page.getByRole('tab', { name: '员工问答' })).toBeVisible()
   await expect(page.getByLabel('员工服务问题')).toBeVisible()
   await expect(page.getByRole('tab', { name: '岗位标准' })).toHaveCount(0)
@@ -742,7 +1093,7 @@ test('switches to English, persists it, and sends Accept-Language', async ({ pag
   await expect(page.locator('html')).toHaveAttribute('lang', 'en-US')
   await page.getByLabel('Business question').fill('Show one fictional record')
   await page.getByRole('button', { name: 'Generate SQL candidate' }).click()
-  await expect(page.getByText('SQL preview')).toBeVisible()
+  await expect(page.locator('.task-panel').getByRole('heading', { name: 'SQL preview', exact: true })).toBeVisible()
   expect(acceptLanguage).toBe('en-US')
   await page.reload()
   await expect(page.locator('html')).toHaveAttribute('lang', 'en-US')

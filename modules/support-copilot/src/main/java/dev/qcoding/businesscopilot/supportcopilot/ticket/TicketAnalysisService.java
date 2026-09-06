@@ -15,6 +15,7 @@ import dev.qcoding.businesscopilot.supportcopilot.classification.TicketClassific
 import dev.qcoding.businesscopilot.supportcopilot.draft.ReplyDraftRequest;
 import dev.qcoding.businesscopilot.supportcopilot.draft.ReplyDraftResponse;
 import dev.qcoding.businesscopilot.supportcopilot.draft.ReplyDraftService;
+import dev.qcoding.businesscopilot.supportcopilot.draft.SupportFollowUpService;
 import dev.qcoding.businesscopilot.supportcopilot.knowledge.SupportKnowledgeEvidence;
 import dev.qcoding.businesscopilot.supportcopilot.knowledge.SupportKnowledgeQuery;
 import dev.qcoding.businesscopilot.supportcopilot.knowledge.SupportKnowledgeResult;
@@ -47,6 +48,7 @@ public class TicketAnalysisService {
     private final SupportTicketRepository ticketRepository;
     private final SupportAuditService auditService;
     private final SensitiveTextMasker sensitiveTextMasker;
+    private final SupportFollowUpService followUpService;
     private final SupportCopilotProperties properties;
     private final CurrentActorProvider actorProvider;
 
@@ -57,12 +59,14 @@ public class TicketAnalysisService {
                                   SupportAuditService auditService,
                                   SensitiveTextMasker sensitiveTextMasker,
                                   SupportCopilotProperties properties,
-                                  CurrentActorProvider actorProvider) {
+                                  CurrentActorProvider actorProvider,
+                                  SupportFollowUpService followUpService) {
         this.classificationService = classificationService;
         this.knowledgeRetriever = knowledgeRetriever;
         this.draftService = draftService;
         this.ticketRepository = ticketRepository;
         this.auditService = auditService;
+        this.followUpService = followUpService;
         this.sensitiveTextMasker = sensitiveTextMasker;
         this.properties = properties;
         this.actorProvider = actorProvider;
@@ -165,6 +169,10 @@ public class TicketAnalysisService {
             // Step 3: Draft generation (or needsHuman if no evidence)
             ReplyDraftResponse draftResponse;
             ReplyDraftService.DraftInvocation draftInvocation = null;
+            // SUP-01：确定性识别缺失要素并生成追问建议，待人工审核，不自动发送客户。
+            java.util.List<String> followUps = followUpService.suggestFollowUps(maskedMessage);
+            ticketRepository.saveFollowUps(ticket.id(), followUps);
+
             if (!knowledgeResult.hasResults()) {
                 // 没有知识依据时不生成确定回复，避免模型凭常识承诺客服动作。
                 draftResponse = new ReplyDraftResponse(
@@ -173,6 +181,12 @@ public class TicketAnalysisService {
                         List.of(), null, null, true);
                 ticketRepository.transitionStatus(
                         ticket.id(), SupportTicketStatus.CLASSIFIED, SupportTicketStatus.NEEDS_HUMAN);
+                // SUP-02：证据不足 → 明确转人工原因与下一步。
+                ticketRepository.updateHandoffReason(
+                        ticket.id(), knowledgeResult.status()
+                                == SupportKnowledgeResult.EvidenceStatus.EVIDENCE_EXPIRED
+                                ? SupportHandoffReason.EVIDENCE_EXPIRED
+                                : SupportHandoffReason.NO_EVIDENCE);
             } else {
                 ReplyDraftRequest draftRequest = new ReplyDraftRequest(
                         ticket.id(), maskedMessage,
@@ -187,6 +201,10 @@ public class TicketAnalysisService {
                     if (draftResponse.needsHuman()) {
                         ticketRepository.transitionStatus(
                                 ticket.id(), SupportTicketStatus.CLASSIFIED, SupportTicketStatus.NEEDS_HUMAN);
+                        ticketRepository.updateHandoffReason(ticket.id(),
+                                classification.needsHuman()
+                                        ? SupportHandoffReason.PERMISSION_LIMIT
+                                        : SupportHandoffReason.RISKY_PROMISE);
                     } else {
                         ticketRepository.transitionStatus(
                                 ticket.id(), SupportTicketStatus.CLASSIFIED, SupportTicketStatus.DRAFTED);
@@ -194,6 +212,10 @@ public class TicketAnalysisService {
                 } else if (draftResponse.needsHuman()) {
                     ticketRepository.transitionStatus(
                             ticket.id(), SupportTicketStatus.CLASSIFIED, SupportTicketStatus.NEEDS_HUMAN);
+                    ticketRepository.updateHandoffReason(ticket.id(),
+                            classification.needsHuman()
+                                    ? SupportHandoffReason.PERMISSION_LIMIT
+                                    : SupportHandoffReason.RISKY_PROMISE);
                 }
             }
 
@@ -243,6 +265,9 @@ public class TicketAnalysisService {
             log.error("工单分析发生未预期异常：requestId={}", requestId, ex);
             if (claimedTicket != null) {
                 ticketRepository.failAnalysis(claimedTicket.id());
+                // SUP-02：模型或工具链失败属于工具失败类转人工原因。
+                ticketRepository.updateHandoffReason(claimedTicket.id(),
+                        SupportHandoffReason.TOOL_FAILURE);
             }
             auditService.record(new SupportAuditLog(
                     null, requestId, claimedTicket == null ? null : claimedTicket.id(), "FAILED",

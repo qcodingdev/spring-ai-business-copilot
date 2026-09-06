@@ -36,5 +36,25 @@ public interface SupportTicketRepository {
 
     boolean transitionStatus(Long id, SupportTicketStatus expectedStatus, SupportTicketStatus targetStatus);
 
+    /** SUP-02：记录转人工原因（服务端按分支确定性标注）。 */
+    default boolean updateHandoffReason(Long id, SupportHandoffReason reason) {
+        return false;
+    }
+
+    /** SUP-01：读取工单的追问建议 JSON（缺失要素由确定性服务生成）。 */
+    default java.util.Optional<String> findFollowUps(Long id) {
+        return java.util.Optional.empty();
+    }
+
+    /** SUP-01：保存工单的追问建议（JSON 序列化由仓库实现负责）。 */
+    default boolean saveFollowUps(Long id, java.util.List<String> questions) {
+        return false;
+    }
+
+    /** SUP-02：读取工单的转人工原因（未转人工时为空）。 */
+    default java.util.Optional<SupportHandoffReason> findHandoffReason(Long id) {
+        return java.util.Optional.empty();
+    }
+
     long count();
 }

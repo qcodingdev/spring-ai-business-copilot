@@ -203,4 +203,30 @@ public class JdbcKnowledgeDocumentRepository implements KnowledgeDocumentReposit
     private static java.time.Instant toInstant(Timestamp timestamp) {
         return timestamp != null ? timestamp.toInstant() : null;
     }
+
+    private static final String DOCUMENT_RETRIEVAL_VISIBLE_SQL = """
+            SELECT COUNT(*) = 1
+            FROM knowledge_documents d
+            WHERE d.id = ?
+              AND d.enabled = TRUE
+              AND d.current_version = TRUE
+              AND d.index_status = 'INDEXED'
+              AND (d.expires_at IS NULL OR d.expires_at > now())
+              AND d.conflict_status = 'NONE'
+              AND (d.visibility_scope = 'ALL'
+                   OR (d.visibility_scope = 'HR_REVIEWER' AND ?)
+                   OR (d.visibility_scope = 'ADMIN' AND ?))
+            """;
+
+    @Override
+    public boolean isRetrievalVisible(Long documentId) {
+        if (documentId == null) {
+            return false;
+        }
+        Boolean visible = jdbcTemplate.queryForObject(DOCUMENT_RETRIEVAL_VISIBLE_SQL, Boolean.class,
+                documentId,
+                dev.qcoding.businesscopilot.knowledgecopilot.retrieval.KnowledgeAccessContext.reviewerAllowed(),
+                dev.qcoding.businesscopilot.knowledgecopilot.retrieval.KnowledgeAccessContext.adminAllowed());
+        return Boolean.TRUE.equals(visible);
+    }
 }

@@ -6,6 +6,7 @@ import ConfirmDialog from './ConfirmDialog.vue'
 import RequestId from './RequestId.vue'
 import StatusBadge from './StatusBadge.vue'
 import ToastMessage from './ToastMessage.vue'
+import { formatDate } from '@/locales/format'
 
 interface KnowledgeDocument {
   id: number
@@ -72,7 +73,7 @@ function chooseFile(event: Event): void {
 }
 
 async function upload(): Promise<void> {
-  if (!file.value) return
+  if (loading.value || !file.value) return
   loading.value = true
   const body = new FormData()
   body.append('file', file.value)
@@ -94,6 +95,7 @@ async function upload(): Promise<void> {
 }
 
 async function toggle(document: KnowledgeDocument): Promise<void> {
+  if (loading.value) return
   loading.value = true
   try {
     const response = await api(`/api/knowledge-copilot/documents/${document.id}/enabled`, {
@@ -110,6 +112,7 @@ async function toggle(document: KnowledgeDocument): Promise<void> {
 }
 
 async function reindex(document: KnowledgeDocument): Promise<void> {
+  if (loading.value) return
   loading.value = true
   try {
     const response = await api(`/api/knowledge-copilot/documents/${document.id}/reindex`, { method: 'POST' })
@@ -124,7 +127,7 @@ async function reindex(document: KnowledgeDocument): Promise<void> {
 }
 
 async function remove(): Promise<void> {
-  if (!deleteTarget.value) return
+  if (loading.value || !deleteTarget.value) return
   loading.value = true
   try {
     const response = await api(`/api/knowledge-copilot/documents/${deleteTarget.value.id}`, { method: 'DELETE' })
@@ -140,7 +143,7 @@ async function remove(): Promise<void> {
 }
 
 function date(value: string): string {
-  return new Intl.DateTimeFormat(locale.value, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
+  return formatDate(value, locale.value) || '—'
 }
 
 onMounted(load)
@@ -168,7 +171,7 @@ onMounted(load)
             <td><StatusBadge :label="document.indexStatus" :tone="document.indexStatus === 'INDEXED' ? 'success' : 'warning'" /><small>{{ document.enabled ? t('statuses.ACTIVE') : t('statuses.DISABLED') }}</small></td>
             <td>v{{ document.versionNo }}<small>{{ document.visibilityScope }}</small></td>
             <td>{{ date(document.updatedAt) }}</td>
-            <td><div class="table-actions"><button class="button button--text" type="button" @click="toggle(document)">{{ document.enabled ? t('admin.disableDocument') : t('admin.enableDocument') }}</button><button class="button button--text" type="button" @click="reindex(document)">{{ t('common.reindex') }}</button><button v-if="!document.systemManaged" class="button button--text button--danger-text" type="button" @click="deleteTarget = document">{{ t('admin.deleteDocument') }}</button></div></td>
+            <td><div class="table-actions"><button class="button button--text" type="button" :disabled="loading" @click="toggle(document)">{{ document.enabled ? t('admin.disableDocument') : t('admin.enableDocument') }}</button><button class="button button--text" type="button" :disabled="loading" @click="reindex(document)">{{ t('common.reindex') }}</button><button v-if="!document.systemManaged" class="button button--text button--danger-text" type="button" :disabled="loading" @click="deleteTarget = document">{{ t('admin.deleteDocument') }}</button></div></td>
           </tr>
           <tr v-if="!filtered.length"><td colspan="6" class="empty-state">{{ t('common.noData') }}</td></tr>
         </tbody>

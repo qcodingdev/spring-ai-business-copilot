@@ -6,6 +6,7 @@ import { api, ApiError, jsonBody } from '@/api/client'
 import RequestId from '@/components/RequestId.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import ToastMessage from '@/components/ToastMessage.vue'
+import { formatDate } from '@/locales/format'
 
 type OverallStatus = 'READY' | 'ATTENTION' | 'BLOCKED' | 'NOT_CONFIGURED'
 type CheckStatus = 'PASS' | 'WARNING' | 'BLOCKER'
@@ -102,8 +103,7 @@ function number(value: unknown): string {
 }
 
 function dateTime(value: string): string {
-  return new Intl.DateTimeFormat(locale.value, { dateStyle: 'medium', timeStyle: 'short' })
-    .format(new Date(value))
+  return formatDate(value, locale.value) || t('common.unknown')
 }
 
 function expired(snapshot: ReadinessSnapshot): boolean {

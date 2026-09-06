@@ -19,6 +19,8 @@ export default {
   answerUnderReview: 'Answer under review', noAnswerPreview: 'This historical record has no answer preview. Review the refusal reason and evidence trail.',
   userFeedback: 'User feedback', noUserFeedback: 'No additional user feedback was provided.', evidenceTrace: 'Evidence trail',
   qualityQueueHeading: 'Quality issues awaiting review',
+  feedbackTotal: 'Total feedback', feedbackHelpful: 'Helpful votes', feedbackNotHelpful: 'Not-helpful votes', feedbackPending: 'Pending issues', feedbackResolved: 'Resolved issues', feedbackUpdateRequired: 'Knowledge updates required',
+  feedbackHistoryHeading: 'Helpful / not-helpful history', feedbackHistoryDescription: 'Review every rating with its reason, note, and timestamp for an auditable quality trail.', feedbackTotalRows: '{count} records', feedbackRating: 'Rating', feedbackQuestion: 'Related question', feedbackAnswer: 'Answer preview', feedbackTime: 'Feedback time', feedbackNoRecords: 'No helpful or not-helpful feedback has been recorded.', previousPage: 'Previous', nextPage: 'Next', noFeedbackReason: 'No reason provided', redactedQuestion: 'Question content was removed by the retention policy.', redactedAnswer: 'Answer content was removed by the retention policy.',
   evidenceAssessment: 'Evidence assessment', evidenceAssessmentHint: 'Check coverage, conflicts, and freshness.',
   answerAssessment: 'Answer assessment', answerAssessmentHint: 'Check whether the answer matches available evidence.',
   remediationAction: 'Follow-up action', remediationActionHint: 'Choose the concrete action after review.',
