@@ -65,6 +65,10 @@ business-copilot:
   task-runtime:
     stale-attempt-after: ${BUSINESS_COPILOT_RUNTIME_STALE_ATTEMPT_AFTER:PT15M}
     recovery-scan-delay-ms: ${BUSINESS_COPILOT_RUNTIME_RECOVERY_SCAN_DELAY_MS:60000}
+  evaluation:
+    run-stale-after: ${BUSINESS_COPILOT_EVALUATION_RUN_STALE_AFTER:PT15M}
+    recovery-scan-delay: ${BUSINESS_COPILOT_EVALUATION_RECOVERY_SCAN_DELAY:PT1M}
+    recovery-scan-initial-delay: ${BUSINESS_COPILOT_EVALUATION_RECOVERY_SCAN_INITIAL_DELAY:PT1M}
   common-web:
     # The host adds this filter after authentication in Spring Security.
     register-request-context-filter: false

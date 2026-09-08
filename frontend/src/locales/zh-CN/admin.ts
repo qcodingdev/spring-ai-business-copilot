@@ -98,6 +98,7 @@ export default {
     tokens: 'Token（输入 + 输出）',
     latency: '耗时',
     outcome: '结果',
+    failureCategories: { MODEL: '模型不可用', PARSE: '输出解析失败', PERMISSION: '权限不足', EVIDENCE: '证据不足', BUDGET: '预算限制', PROVIDER: '供应商故障', STATE_CONFLICT: '状态冲突', TOOL: '工具故障', HUMAN_WAIT: '等待人工处理', UNKNOWN_OUTCOME: '外部结果待核验' },
     empty: '当前筛选条件下没有运行记录。',
   },
 }

@@ -12,11 +12,15 @@ import dev.qcoding.businesscopilot.commonweb.api.BusinessException;
 import dev.qcoding.businesscopilot.commonweb.api.ErrorCode;
 import dev.qcoding.businesscopilot.commonweb.request.BusinessRequestContext;
 import dev.qcoding.businesscopilot.commonweb.request.BusinessRequestContextHolder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -32,6 +36,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HexFormat;
@@ -53,6 +58,8 @@ import java.util.regex.PatternSyntaxException;
 @Service
 public class EvaluationManagementService {
 
+    private static final Logger log = LoggerFactory.getLogger(EvaluationManagementService.class);
+
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
     private final CurrentActorProvider actorProvider;
@@ -61,6 +68,9 @@ public class EvaluationManagementService {
     private final TaskExecutor taskExecutor;
     private final TransactionTemplate transaction;
     private final AtomicBoolean catalogSeeded = new AtomicBoolean(false);
+
+    @Value("${business-copilot.evaluation.run-stale-after:PT15M}")
+    private Duration runStaleAfter = Duration.ofMinutes(15);
 
     public EvaluationManagementService(
             JdbcTemplate jdbcTemplate,
@@ -343,14 +353,21 @@ public class EvaluationManagementService {
         String idempotencyKey = normalizeRequired(command.idempotencyKey());
         UUID runId = UUID.randomUUID();
         try {
-            jdbcTemplate.update("""
+            int inserted = jdbcTemplate.update("""
                     INSERT INTO evaluation_runs (
                         id, version_id, prompt_version_id, environment, status,
                         gate_decision, idempotency_key, requested_by
-                    ) VALUES (?, ?, ?, ?, 'QUEUED', 'NOT_VERIFIED', ?, ?)
-                    """, runId, command.versionId(), command.promptVersionId(),
-                    command.environment().name(), idempotencyKey,
-                    actor.actorId());
+                    )
+                    SELECT ?, version.id, ?, ?, 'QUEUED', 'NOT_VERIFIED', ?, ?
+                    FROM evaluation_dataset_versions version
+                    JOIN evaluation_datasets dataset ON dataset.id = version.dataset_id
+                    WHERE version.id = ? AND version.status = 'PUBLISHED' AND dataset.status = 'ACTIVE'
+                    """, runId, command.promptVersionId(), command.environment().name(),
+                    idempotencyKey, actor.actorId(), command.versionId());
+            if (inserted != 1) {
+                throw new BusinessException(ErrorCode.STATE_CONFLICT,
+                        "评测集已归档或版本已停止发布，不能启动评测。");
+            }
         } catch (DuplicateKeyException ex) {
             RunView existing = jdbcTemplate.query("""
                     SELECT id FROM evaluation_runs WHERE requested_by = ? AND idempotency_key = ?
@@ -374,6 +391,29 @@ public class EvaluationManagementService {
                     """, runId);
         }
         return run(runId);
+    }
+
+    @Scheduled(
+            fixedDelayString = "${business-copilot.evaluation.recovery-scan-delay:PT1M}",
+            initialDelayString = "${business-copilot.evaluation.recovery-scan-initial-delay:PT1M}")
+    public void reconcileInterruptedRuns() {
+        int reconciled = reconcileInterruptedRuns(runStaleAfter);
+        if (reconciled > 0) {
+            log.warn("已收敛进程中断遗留的评测运行：count={}", reconciled);
+        }
+    }
+
+    int reconcileInterruptedRuns(Duration staleAfter) {
+        if (staleAfter == null || staleAfter.isNegative() || staleAfter.isZero()) {
+            throw new IllegalArgumentException("staleAfter must be positive");
+        }
+        return jdbcTemplate.update("""
+                UPDATE evaluation_runs
+                SET status = 'FAILED', gate_decision = 'NOT_VERIFIED',
+                    error_category = 'PROCESS_INTERRUPTED', finished_at = now()
+                WHERE status IN ('QUEUED', 'RUNNING')
+                  AND COALESCE(heartbeat_at, started_at, created_at) < ?
+                """, Timestamp.from(Instant.now().minus(staleAfter)));
     }
 
     public List<RunView> runs() {
@@ -495,17 +535,21 @@ public class EvaluationManagementService {
                 "evaluation-" + runId, actorId, Set.of("ADMIN"), locale));
         try {
             int claimed = jdbcTemplate.update("""
-                    UPDATE evaluation_runs SET status = 'RUNNING', started_at = now()
+                    UPDATE evaluation_runs
+                    SET status = 'RUNNING', started_at = now(), heartbeat_at = now()
                     WHERE id = ? AND status = 'QUEUED'
                     """, runId);
             if (claimed != 1) return;
             RunView run = loadRun(runId);
             for (CaseView evaluationCase : version(run.versionId()).cases()) {
-                if (!evaluationCase.enabled() || isCanceled(runId)) continue;
+                if (!isWorkerActive(runId)) return;
+                if (!evaluationCase.enabled()) continue;
+                touchWorkerHeartbeat(runId);
                 CaseExecution result = executeCase(run, evaluationCase);
+                if (!isWorkerActive(runId)) return;
                 saveCaseResult(runId, evaluationCase, result);
             }
-            if (!isCanceled(runId)) finalizeRun(runId, true);
+            if (isWorkerActive(runId)) finalizeRun(runId, true);
         } catch (RuntimeException ex) {
             jdbcTemplate.update("""
                     UPDATE evaluation_runs
@@ -534,7 +578,8 @@ public class EvaluationManagementService {
 
             @Override
             public String beforeAttempt(String operation, String provider, String model, int estimatedTokens) {
-                if (isCanceled(run.id())) throw new BusinessException(ErrorCode.STATE_CONFLICT);
+                if (!isWorkerActive(run.id())) throw new BusinessException(ErrorCode.STATE_CONFLICT);
+                touchWorkerHeartbeat(run.id());
                 if (evaluationCase.maxModelCalls() != null && dispatched >= evaluationCase.maxModelCalls()) {
                     budgetExceeded.set(true);
                     throw new BusinessException(ErrorCode.STATE_CONFLICT);
@@ -621,7 +666,7 @@ public class EvaluationManagementService {
     private void saveCaseResult(UUID runId, CaseView evaluationCase, CaseExecution result) {
         transaction.executeWithoutResult(ignored -> {
             lockRun(runId);
-            if (isCanceled(runId)) return;
+            if (!isWorkerActive(runId)) return;
             jdbcTemplate.update("""
                 INSERT INTO evaluation_case_results (
                     run_id, case_id, status, output_hash, output_summary, score,
@@ -886,7 +931,7 @@ public class EvaluationManagementService {
         if (catalogSeeded.get()) return;
         synchronized (catalogSeeded) {
             if (catalogSeeded.get()) return;
-            seedFirstForty();
+            transaction.executeWithoutResult(ignored -> seedFirstForty());
             catalogSeeded.set(true);
         }
     }
@@ -905,6 +950,8 @@ public class EvaluationManagementService {
                 ON CONFLICT (dataset_key) DO UPDATE SET dataset_key = EXCLUDED.dataset_key
                 RETURNING id
                 """, Long.class);
+        jdbcTemplate.queryForObject(
+                "SELECT id FROM evaluation_datasets WHERE id = ? FOR UPDATE", Long.class, datasetId);
         Integer count = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM evaluation_dataset_versions WHERE dataset_id = ?",
                 Integer.class, datasetId);
@@ -951,9 +998,16 @@ public class EvaluationManagementService {
         if (!"ACTIVE".equals(status)) throw new BusinessException(ErrorCode.STATE_CONFLICT);
     }
 
-    private boolean isCanceled(UUID runId) {
+    private boolean isWorkerActive(UUID runId) {
         return Boolean.TRUE.equals(jdbcTemplate.queryForObject(
-                "SELECT status = 'CANCELED' FROM evaluation_runs WHERE id = ?", Boolean.class, runId));
+                "SELECT status = 'RUNNING' FROM evaluation_runs WHERE id = ?", Boolean.class, runId));
+    }
+
+    private void touchWorkerHeartbeat(UUID runId) {
+        jdbcTemplate.update("""
+                UPDATE evaluation_runs SET heartbeat_at = now()
+                WHERE id = ? AND status = 'RUNNING'
+                """, runId);
     }
 
     private static void validateCase(CaseCommand command) {

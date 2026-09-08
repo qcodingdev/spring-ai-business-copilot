@@ -171,7 +171,7 @@ class PostgresPgvectorIntegrationTest {
 
     private static JdbcTemplate jdbcTemplate;
     private static DriverManagerDataSource dataSource;
-    private static final String LATEST_MIGRATION_VERSION = "41";
+    private static final String LATEST_MIGRATION_VERSION = "42";
 
     /** 归一化来源在 Prompt 中以 sourceId=<快照 UUID> 形式出现，供脚本化模型按证据引用。 */
     private static final Pattern PROMPT_SOURCE_ID = Pattern.compile(

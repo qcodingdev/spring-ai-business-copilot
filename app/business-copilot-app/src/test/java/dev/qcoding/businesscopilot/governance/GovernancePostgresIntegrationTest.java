@@ -23,6 +23,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 import tools.jackson.databind.ObjectMapper;
 
+import java.time.Duration;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -142,6 +143,43 @@ class GovernancePostgresIntegrationTest {
         catch (RuntimeException ignored) { /* Either an API error or a failed run is acceptable. */ }
         assertThat(jdbc.queryForObject("SELECT status FROM evaluation_runs WHERE idempotency_key = ?", String.class, key))
                 .isEqualTo("FAILED");
+    }
+
+    @Test
+    void staleQueuedAndRunningEvaluationsBecomeExplicitlyUnverifiedAfterRestart() {
+        var service = service(task -> { });
+        long version = published(service, external("case-one", true));
+        var queued = service.startRun(new RunCommand(
+                version, null, Environment.LOCAL, UUID.randomUUID().toString()));
+        var running = service.startRun(new RunCommand(
+                version, null, Environment.LOCAL, UUID.randomUUID().toString()));
+        var fresh = service.startRun(new RunCommand(
+                version, null, Environment.LOCAL, UUID.randomUUID().toString()));
+        var activeHeartbeat = service.startRun(new RunCommand(
+                version, null, Environment.LOCAL, UUID.randomUUID().toString()));
+        jdbc.update("UPDATE evaluation_runs SET created_at = now() - interval '1 hour' WHERE id = ?", queued.id());
+        jdbc.update("""
+                UPDATE evaluation_runs
+                SET status = 'RUNNING', started_at = now() - interval '1 hour',
+                    heartbeat_at = now() - interval '1 hour'
+                WHERE id = ?
+                """, running.id());
+        jdbc.update("""
+                UPDATE evaluation_runs
+                SET status = 'RUNNING', started_at = now() - interval '1 hour', heartbeat_at = now()
+                WHERE id = ?
+                """, activeHeartbeat.id());
+
+        assertThat(service.reconcileInterruptedRuns(Duration.ofMinutes(15))).isEqualTo(2);
+        assertThat(service.run(queued.id())).satisfies(run -> {
+            assertThat(run.status()).isEqualTo("FAILED");
+            assertThat(run.gateDecision()).isEqualTo("NOT_VERIFIED");
+            assertThat(run.errorCategory()).isEqualTo("PROCESS_INTERRUPTED");
+            assertThat(run.finishedAt()).isNotNull();
+        });
+        assertThat(service.run(running.id()).status()).isEqualTo("FAILED");
+        assertThat(service.run(fresh.id()).status()).isEqualTo("QUEUED");
+        assertThat(service.run(activeHeartbeat.id()).status()).isEqualTo("RUNNING");
     }
 
     @Test

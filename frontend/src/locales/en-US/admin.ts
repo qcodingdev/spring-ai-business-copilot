@@ -98,6 +98,7 @@ export default {
     tokens: 'Tokens (input + output)',
     latency: 'Latency',
     outcome: 'Outcome',
+    failureCategories: { MODEL: 'Model unavailable', PARSE: 'Output parsing failed', PERMISSION: 'Permission denied', EVIDENCE: 'Insufficient evidence', BUDGET: 'Budget limit', PROVIDER: 'Provider failure', STATE_CONFLICT: 'State conflict', TOOL: 'Tool failure', HUMAN_WAIT: 'Waiting for a person', UNKNOWN_OUTCOME: 'External outcome unknown' },
     empty: 'No runs match the current filter.',
   },
 }

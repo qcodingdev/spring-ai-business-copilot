@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api, ApiError } from '@/api/client'
 import RequestId from './RequestId.vue'
@@ -63,7 +63,7 @@ const toast = ref('')
 const toastTone = ref<'success' | 'danger' | 'info'>('info')
 let toastTimer: ReturnType<typeof setTimeout> | undefined
 
-const filters = computed(() => ['', 'WAITING_CONFIRMATION', 'RUNNING', 'FAILED', 'BUDGET_EXHAUSTED', 'OUTCOME_UNKNOWN'])
+const filters = computed(() => ['WAITING_CONFIRMATION', 'RUNNING', 'FAILED', 'BUDGET_EXHAUSTED', 'OUTCOME_UNKNOWN'])
 
 function showToast(message: string, tone: 'success' | 'danger' | 'info' = 'info'): void {
   if (toastTimer) clearTimeout(toastTimer)
@@ -82,6 +82,17 @@ function statusTone(status: string | null | undefined): 'success' | 'danger' | '
   if (status === 'FAILED' || status === 'CANCELLED' || status === 'BUDGET_EXHAUSTED') return 'danger'
   if (status === 'WAITING_CONFIRMATION' || status === 'OUTCOME_UNKNOWN') return 'warning'
   return 'info'
+}
+
+function statusLabel(status: string | null | undefined): string {
+  if (!status) return '—'
+  return te(`statuses.${status}`) ? t(`statuses.${status}`) : status
+}
+
+function failureLabel(category: string | null | undefined): string {
+  if (!category) return '—'
+  const key = `admin.taskRuns.failureCategories.${category}`
+  return te(key) ? t(key) : category
 }
 
 function shortId(runId: string): string {
@@ -128,6 +139,9 @@ function evidenceList(step: TaskStepView): string {
 }
 
 onMounted(load)
+onUnmounted(() => {
+  if (toastTimer) clearTimeout(toastTimer)
+})
 </script>
 
 <template>
@@ -169,8 +183,8 @@ onMounted(load)
             <td>{{ run.module || '—' }}</td>
             <td>{{ run.refType || '—' }} / {{ run.refId || '—' }}</td>
             <td>{{ run.ownerActorId || '—' }}</td>
-            <td><StatusBadge :label="run.status || '—'" :tone="statusTone(run.status)" /></td>
-            <td>{{ run.failureCategory || '—' }}</td>
+            <td><StatusBadge :label="statusLabel(run.status)" :tone="statusTone(run.status)" /></td>
+            <td>{{ failureLabel(run.failureCategory) }}</td>
             <td>{{ date(run.startedAt) }}</td>
             <td>
               <button class="button button--secondary" type="button" :disabled="timelineLoading" @click="openTimeline(run)">
@@ -208,9 +222,9 @@ onMounted(load)
             <tbody>
               <tr v-for="step in timeline.steps" :key="step.stepId">
                 <td>{{ step.name || step.stepId }}</td>
-                <td><StatusBadge :label="step.status || '—'" :tone="statusTone(step.status)" /></td>
+                <td><StatusBadge :label="statusLabel(step.status)" :tone="statusTone(step.status)" /></td>
                 <td>{{ step.attemptCount ?? 0 }}</td>
-                <td>{{ step.failureCategory || '—' }}</td>
+                <td>{{ failureLabel(step.failureCategory) }}</td>
                 <td>{{ evidenceList(step) || '—' }}</td>
                 <td>{{ step.summary || '—' }}</td>
               </tr>
@@ -243,11 +257,11 @@ onMounted(load)
                 <td>{{ attempt.latencyMs != null ? `${attempt.latencyMs} ms` : '—' }}</td>
                 <td>
                   <StatusBadge
-                    :label="attempt.outcome || '—'"
+                    :label="statusLabel(attempt.outcome)"
                     :tone="attempt.outcome === 'SUCCESS' ? 'success' : attempt.outcome === 'FAILURE' ? 'danger' : 'warning'"
                   />
                 </td>
-                <td>{{ attempt.failureCategory || '—' }}</td>
+                <td>{{ failureLabel(attempt.failureCategory) }}</td>
               </tr>
               <tr v-if="!timeline.attempts.length">
                 <td colspan="7" class="empty-state">{{ t('common.noData') }}</td>
@@ -263,12 +277,27 @@ onMounted(load)
 </template>
 
 <style scoped>
+.section-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--space-3);
+}
+.section-heading > div {
+  grid-column: 1 / -1;
+}
 .task-run-filter {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
+  justify-self: end;
+}
+.task-run-filter span,
+.section-heading > .button {
+  white-space: nowrap;
 }
 .task-run-filter select {
+  min-width: 8rem;
   min-height: 2.2rem;
   border: 1px solid var(--border, #d7dbe7);
   border-radius: var(--radius-sm, 8px);
@@ -281,5 +310,13 @@ onMounted(load)
 }
 .task-run-timeline h4 {
   margin: var(--space-2) 0 0;
+}
+@media (max-width: 720px) {
+  .task-run-filter {
+    justify-self: start;
+  }
+  .section-heading > .button {
+    justify-self: end;
+  }
 }
 </style>
