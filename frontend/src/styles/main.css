@@ -1,5 +1,5 @@
 * { box-sizing: border-box; }
-html { scroll-behavior: smooth; font-family: Inter, "SF Pro Display", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif; background: var(--page); color: var(--text); line-height: var(--line); }
+html { scroll-behavior: auto; font-family: Inter, "SF Pro Display", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif; background: var(--page); color: var(--text); line-height: var(--line); }
 body { margin: 0; min-width: 20rem; -webkit-font-smoothing: antialiased; }
 button, input, textarea, select { font: inherit; }
 button, a, input, textarea, select { outline: none; }

@@ -1,4 +1,10 @@
 export default {
+  jiraProjectKeys: 'Jira 项目键（逗号分隔）',
+  frequency: '生成频率',
+  frequencies: { weekly: '每周一 09:00', daily: '每天 09:00', monthly: '每月 1 日 09:00', custom: '自定义排期（高级）' },
+  sourceNames: '选择报告来源',
+  noExternalSources: '暂无启用的外部来源，可使用客服指标或先由管理员配置来源。',
+
   title: '证据化报告生成与导出',
   description: '先预览来源与新鲜度，再生成可人工确认的报告草稿；系统不会自动发布。',
   tabs: { generate: '报告生成', records: '报告记录', sources: '来源管理', schedules: '调度与导出' },

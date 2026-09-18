@@ -80,6 +80,15 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void missingResourceReturns404WithoutInternalPath() {
+        var response = handler.handleUnexpected(new org.springframework.web.server.ResponseStatusException(
+                HttpStatus.NOT_FOUND, "/internal/missing resource"), request);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(response.getBody().errorCode()).isEqualTo(ErrorCode.NOT_FOUND.code());
+        assertThat(response.getBody().message()).doesNotContain("internal", "resource");
+    }
+
+    @Test
     void unexpectedExceptionReturnsGeneric500WithoutInternals() {
         Exception ex = new RuntimeException("NPE at internal service XYZ");
 

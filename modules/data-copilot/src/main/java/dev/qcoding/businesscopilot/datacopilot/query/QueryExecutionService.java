@@ -92,14 +92,15 @@ public class QueryExecutionService {
      * @param confirmationToken the confirmation token
      * @return execution response containing the result table and AI explanation
      */
-    @Transactional
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     public SqlExecutionResponse execute(String candidateId, String confirmationToken) {
         long startMs = System.currentTimeMillis();
 
         // 1. 确认候选（校验 candidateId + token + 过期 + executable）
         SqlCandidate candidate;
         try {
-            candidate = confirmationService.confirmAndConsume(candidateId, confirmationToken);
+            candidate = confirmationService.consumeWithIntent(candidateId, confirmationToken,
+                    consumed -> recordExecutionIntent(consumed, startMs));
         } catch (SqlCandidateNotExecutableException | SqlCandidateExpiredException ex) {
             // 确认失败：用户未有效确认，记录 QUERY_NOT_CONFIRMED 审计
             recordNotConfirmedAudit(candidateId, ex.getMessage(), startMs);
@@ -112,21 +113,6 @@ public class QueryExecutionService {
         String sql = candidate.sql();
         String modelName = candidate.modelName();
         var aiMetadata = candidate.aiMetadata();
-
-        // External execution is forbidden unless a durable intent exists in the platform database.
-        auditService.recordRequired(new AuditEvent(
-                requestId, AuditEventType.QUERY_EXECUTION_INTENT,
-                null, sql, sql, AuditStatus.EXECUTION_PENDING,
-                null, true, null, null, modelName,
-                System.currentTimeMillis() - startMs,
-                candidate.ownerActorId(), candidate.actionActorId(),
-                aiMetadata != null ? aiMetadata.providerName() : null,
-                aiMetadata != null ? aiMetadata.providerRequestId() : null,
-                candidate.promptName(), candidate.promptVersion(), candidate.promptHash(),
-                candidate.policyVersion(), null,
-                aiMetadata != null ? aiMetadata.inputTokens() : null,
-                aiMetadata != null ? aiMetadata.outputTokens() : null,
-                aiMetadata != null ? aiMetadata.finishReason() : null));
 
         // 2. 执行 SQL（内部包含二次 guardrails 校验、超时、max rows、脱敏）；登记对象归属供取消校验
         QueryResultTable table;
@@ -230,6 +216,25 @@ public class QueryExecutionService {
         log.info("取消查询请求处理完成：executionId={}，cancelled={}，actor={}",
                 executionId, cancelled, actor.actorId());
         return cancelled;
+    }
+
+    private void recordExecutionIntent(SqlCandidate candidate, long startMs) {
+        var aiMetadata = candidate.aiMetadata();
+        // External execution is forbidden unless a durable intent exists in the platform database.
+        auditService.recordRequired(new AuditEvent(
+                candidate.requestId(), AuditEventType.QUERY_EXECUTION_INTENT,
+                null, candidate.sql(), candidate.sql(), AuditStatus.EXECUTION_PENDING,
+                null, true, null, null, candidate.modelName(),
+                System.currentTimeMillis() - startMs,
+                candidate.ownerActorId(), candidate.actionActorId(),
+                aiMetadata != null ? aiMetadata.providerName() : null,
+                aiMetadata != null ? aiMetadata.providerRequestId() : null,
+                candidate.promptName(), candidate.promptVersion(), candidate.promptHash(),
+                candidate.policyVersion(), null,
+                aiMetadata != null ? aiMetadata.inputTokens() : null,
+                aiMetadata != null ? aiMetadata.outputTokens() : null,
+                aiMetadata != null ? aiMetadata.finishReason() : null));
+
     }
 
     private CurrentActor currentActor() {

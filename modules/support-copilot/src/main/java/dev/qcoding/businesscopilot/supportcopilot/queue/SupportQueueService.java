@@ -1,6 +1,7 @@
 package dev.qcoding.businesscopilot.supportcopilot.queue;
 
 import dev.qcoding.businesscopilot.commonsecurity.CurrentActorProvider;
+import dev.qcoding.businesscopilot.commonsecurity.BusinessRole;
 import dev.qcoding.businesscopilot.commonweb.api.BusinessException;
 import dev.qcoding.businesscopilot.commonweb.api.ErrorCode;
 import dev.qcoding.businesscopilot.supportcopilot.audit.SupportAuditLog;
@@ -31,6 +32,7 @@ public class SupportQueueService {
 
     public List<QueueItem> find(
             String status, String category, String urgency, String riskLevel, int limit) {
+        var actor = actorProvider.currentActor();
         int boundedLimit = Math.max(1, Math.min(limit, 100));
         return jdbcTemplate.query("""
                 SELECT t.id AS ticket_id, t.external_id, t.customer_message, t.category, t.sentiment,
@@ -50,7 +52,9 @@ public class SupportQueueService {
                   AND (?::text IS NULL OR t.category = ?::text)
                   AND (?::text IS NULL OR t.urgency = ?::text)
                   AND (?::text IS NULL OR d.risk_level = ?::text)
-                  AND (t.system_managed = TRUE OR t.owner_actor_id = ?)
+                  AND (? OR t.system_managed = TRUE OR t.owner_actor_id = ?
+                       OR (? AND d.review_queue = TRUE
+                           AND (d.reviewer_actor_id IS NULL OR d.reviewer_actor_id = ?)))
                 ORDER BY
                     CASE t.urgency
                         WHEN 'CRITICAL' THEN 1 WHEN 'HIGH' THEN 2
@@ -79,7 +83,8 @@ public class SupportQueueService {
                 blankToNull(category), blankToNull(category),
                 blankToNull(urgency), blankToNull(urgency),
                 blankToNull(riskLevel), blankToNull(riskLevel),
-                actorProvider.currentActor().actorId(),
+                actor.hasRole(BusinessRole.ADMIN), actor.actorId(),
+                actor.hasRole(BusinessRole.REVIEWER) && !actor.hasRole(BusinessRole.OPERATOR), actor.actorId(),
                 boundedLimit);
     }
 

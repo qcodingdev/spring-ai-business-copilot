@@ -123,15 +123,27 @@ public class KnowledgeCopilotAutoConfiguration {
                 jobRepository, documentRepository, embeddingService);
     }
 
+    @Bean(defaultCandidate = false)
+    public org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor knowledgeIndexWorker() {
+        var worker = new org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor();
+        worker.setCorePoolSize(1);
+        worker.setMaxPoolSize(1);
+        worker.setQueueCapacity(0);
+        worker.setThreadNamePrefix("knowledge-index-");
+        worker.setAwaitTerminationSeconds(5);
+        return worker;
+    }
+
     @Bean
     public KnowledgeIndexingService knowledgeIndexingService(
             KnowledgeIndexJobRepository jobRepository,
             KnowledgeDocumentRepository documentRepository,
             KnowledgeChunkRepository chunkRepository,
             KnowledgeEmbeddingService embeddingService,
-            KnowledgeIndexLifecycleService lifecycleService) {
+            KnowledgeIndexLifecycleService lifecycleService,
+            @org.springframework.beans.factory.annotation.Qualifier("knowledgeIndexWorker") java.util.concurrent.Executor worker) {
         return new KnowledgeIndexingService(
-                jobRepository, documentRepository, chunkRepository, embeddingService, lifecycleService);
+                jobRepository, documentRepository, chunkRepository, embeddingService, lifecycleService, worker);
     }
 
     @Bean

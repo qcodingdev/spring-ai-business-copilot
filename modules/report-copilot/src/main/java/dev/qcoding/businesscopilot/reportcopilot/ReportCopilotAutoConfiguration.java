@@ -143,9 +143,10 @@ public class ReportCopilotAutoConfiguration {
     public ReportDraftPersistenceService reportDraftPersistenceService(ReportDraftRepository draftRepository,
                                                                        ReportAuditService auditService,
                                                                        ReportCopilotProperties properties,
-                                                                       org.springframework.beans.factory.ObjectProvider<dev.qcoding.businesscopilot.commonsecurity.IndependentReviewService> reviewService) {
+                                                                       org.springframework.beans.factory.ObjectProvider<dev.qcoding.businesscopilot.commonsecurity.IndependentReviewService> reviewService,
+                                                                       dev.qcoding.businesscopilot.reportcopilot.enterprise.ReportLifecycleService lifecycle) {
         return new ReportDraftPersistenceService(draftRepository, auditService, properties,
-                reviewService.getIfAvailable());
+                reviewService.getIfAvailable(), lifecycle);
     }
 
     @Bean
@@ -211,6 +212,23 @@ public class ReportCopilotAutoConfiguration {
     }
 
     @Bean
+    public dev.qcoding.businesscopilot.reportcopilot.enterprise.ReportLifecycleService reportLifecycleService(
+            JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
+        return new dev.qcoding.businesscopilot.reportcopilot.enterprise.ReportLifecycleService(jdbcTemplate, objectMapper);
+    }
+
+    @Bean(defaultCandidate = false)
+    public org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor reportScheduleWorker() {
+        var worker = new org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor();
+        worker.setCorePoolSize(1);
+        worker.setMaxPoolSize(1);
+        worker.setQueueCapacity(0);
+        worker.setThreadNamePrefix("report-schedule-");
+        worker.setAwaitTerminationSeconds(5);
+        return worker;
+    }
+
+    @Bean
     @ConditionalOnMissingBean
     public ReportEnterpriseService reportEnterpriseService(
             JdbcTemplate jdbcTemplate,
@@ -219,10 +237,12 @@ public class ReportCopilotAutoConfiguration {
             ExternalSecretResolver secretResolver,
             ObjectMapper objectMapper,
             ExternalEndpointPolicy endpointPolicy,
-            ExternalHttpClientFactory clientFactory) {
+            ExternalHttpClientFactory clientFactory,
+            @org.springframework.beans.factory.annotation.Qualifier("reportScheduleWorker") java.util.concurrent.Executor worker,
+            dev.qcoding.businesscopilot.reportcopilot.enterprise.ReportLifecycleService lifecycle) {
         return new ReportEnterpriseService(
                 jdbcTemplate, generationService, actorProvider, secretResolver,
-                objectMapper, endpointPolicy, clientFactory);
+                objectMapper, endpointPolicy, clientFactory, worker, lifecycle);
     }
 
     @Bean

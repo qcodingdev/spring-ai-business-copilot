@@ -43,6 +43,8 @@ class QueryExecutionServiceTest {
     @BeforeEach
     void setUp() {
         confirmationService = mock(SqlConfirmationService.class);
+        org.mockito.Mockito.doCallRealMethod().when(confirmationService).consumeWithIntent(
+                any(), any(), any());
         queryExecutor = mock(ReadOnlyQueryExecutor.class);
         explanationService = mock(ResultExplanationService.class);
         auditService = mock(AuditService.class);

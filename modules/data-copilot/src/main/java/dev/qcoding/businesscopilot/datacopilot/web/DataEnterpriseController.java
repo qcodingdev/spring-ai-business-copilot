@@ -162,10 +162,15 @@ public class DataEnterpriseController {
                 resultService.exportXlsx(resultId));
     }
 
+    @GetMapping("/query-results/{resultId}/handoff-options")
+    public ResponseEntity<ApiResponse<?>> handoffOptions(@PathVariable long resultId) {
+        return ResponseEntity.ok(ApiResponse.ok(resultService.handoffOptions(resultId)));
+    }
+
     @PostMapping("/query-results/{resultId}/report-handoff")
     public ResponseEntity<ApiResponse<?>> handoff(
             @PathVariable long resultId, @Valid @RequestBody HandoffRequest request) {
-        return ResponseEntity.ok(ApiResponse.ok(resultService.createReportHandoff(resultId, request.title())));
+        return ResponseEntity.ok(ApiResponse.ok(resultService.createReportHandoff(resultId, request.title(), request.metricScope())));
     }
 
     private ResponseEntity<byte[]> download(String fileName, String contentType, byte[] content) {
@@ -187,5 +192,6 @@ public class DataEnterpriseController {
             @NotBlank @Size(max = 1000) String description,
             @NotBlank @Size(max = 10000) String sql) { }
     public record SqlRequest(@NotBlank @Size(max = 10000) String sql) { }
-    public record HandoffRequest(@NotBlank @Size(max = 300) String title) { }
+    public record HandoffRequest(@NotBlank @Size(max = 300) String title,
+                                 @Valid DataQueryResultService.MetricScope metricScope) { }
 }

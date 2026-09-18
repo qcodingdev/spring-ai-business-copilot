@@ -10,6 +10,8 @@ const { t } = useI18n()
 const username = ref('')
 const password = ref('')
 const csrf = ref('')
+const localLoginEnabled = ref(true)
+const enterpriseLoginUrl = ref<string | null>(null)
 const query = new URLSearchParams(location.search)
 const message = computed(() => query.has('error') ? t('auth.invalid') : '')
 const toast = ref('')
@@ -30,7 +32,9 @@ onMounted(async () => {
     history.replaceState(null, '', '/login')
   }
   try {
-    await fetchSession()
+    const session = await fetchSession()
+    localLoginEnabled.value = session.localLoginEnabled !== false
+    enterpriseLoginUrl.value = session.enterpriseLoginUrl ?? null
   } catch {
     // Anonymous access initializes the CSRF cookie for the login form.
   }
@@ -83,7 +87,8 @@ onUnmounted(() => { if (toastTimer) clearTimeout(toastTimer) })
           </div>
           <p class="login-subtitle">{{ t('auth.subtitle') }}</p>
           <div v-if="message" class="alert alert--warning" role="status">{{ message }}</div>
-          <form action="/login" method="post" @submit="submitting = true">
+          <a v-if="enterpriseLoginUrl" class="button button--primary button--full" :href="enterpriseLoginUrl">{{ t('auth.enterpriseLogin') }}</a>
+          <form v-if="localLoginEnabled" action="/login" method="post" @submit="submitting = true">
             <input type="hidden" name="_csrf" :value="csrf" />
             <label>{{ t('auth.username') }}<input v-model="username" name="username" autocomplete="username" required /></label>
             <label>{{ t('auth.password') }}<input v-model="password" name="password" type="password" autocomplete="current-password" required /></label>

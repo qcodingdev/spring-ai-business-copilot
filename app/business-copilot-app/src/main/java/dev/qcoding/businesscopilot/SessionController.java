@@ -19,11 +19,21 @@ import java.util.Set;
 @RestController
 public class SessionController {
 
+    private final boolean enterpriseLogin;
+
     private final RuntimeModeProperties runtimeModeProperties;
     private final ObjectProvider<AiChatService> aiChatServiceProvider;
 
     public SessionController(RuntimeModeProperties runtimeModeProperties,
                              ObjectProvider<AiChatService> aiChatServiceProvider) {
+        this(runtimeModeProperties, aiChatServiceProvider, false);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public SessionController(RuntimeModeProperties runtimeModeProperties,
+                             ObjectProvider<AiChatService> aiChatServiceProvider,
+                             @org.springframework.beans.factory.annotation.Value("${business-copilot.security.oidc.enabled:false}") boolean enterpriseLogin) {
+        this.enterpriseLogin = enterpriseLogin;
         this.runtimeModeProperties = runtimeModeProperties;
         this.aiChatServiceProvider = aiChatServiceProvider;
     }
@@ -47,10 +57,12 @@ public class SessionController {
                 Set.copyOf(roles),
                 mode.propertyValue(),
                 mode == RuntimeMode.PUBLIC_DEMO,
-                ai != null && ai.isModelEnabled())));
+                ai != null && ai.isModelEnabled(), !enterpriseLogin,
+                enterpriseLogin ? "/oauth2/authorization/enterprise" : null)));
     }
 
     public record SessionView(boolean authenticated, String username, Set<String> roles,
-                              String runtimeMode, boolean publicDemo, boolean aiEnabled) {
+                              String runtimeMode, boolean publicDemo, boolean aiEnabled,
+                              boolean localLoginEnabled, String enterpriseLoginUrl) {
     }
 }

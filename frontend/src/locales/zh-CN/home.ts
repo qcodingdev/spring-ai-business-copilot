@@ -1,5 +1,6 @@
 export default {
   myTaskRuns: {
+    openBusiness: '前往业务页检查并重新发起',
     title: '我的任务运行',
     description: '你发起的业务任务的统一运行记录：状态、失败类别与停止原因；只显示本人运行。',
     run: '运行',

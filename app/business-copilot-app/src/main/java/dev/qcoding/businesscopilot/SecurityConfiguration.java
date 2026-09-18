@@ -25,13 +25,16 @@ import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 
+import dev.qcoding.businesscopilot.identity.EnterpriseOidcProperties;
+import dev.qcoding.businesscopilot.identity.EnterpriseOidcUserService;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
 /** 应用的单组织认证与角色边界配置。 */
 @Configuration(proxyBeanMethods = false)
 @EnableWebSecurity
-@EnableConfigurationProperties({RuntimeModeProperties.class, PublicDemoProperties.class})
+@EnableConfigurationProperties({RuntimeModeProperties.class, PublicDemoProperties.class, EnterpriseOidcProperties.class})
 public class SecurityConfiguration {
 
     @Bean
@@ -40,6 +43,7 @@ public class SecurityConfiguration {
     }
 
     @Bean
+    @ConditionalOnProperty(name = "business-copilot.security.oidc.enabled", havingValue = "false", matchIfMissing = true)
     UserDetailsService userDetailsService(
             PasswordEncoder encoder,
             @Value("${business-copilot.security.admin.username:admin}") String adminUsername,
@@ -58,7 +62,7 @@ public class SecurityConfiguration {
     SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             RuntimeModeProperties runtimeModeProperties,
-            BusinessRequestContextFilter businessRequestContextFilter) throws Exception {
+            BusinessRequestContextFilter businessRequestContextFilter, EnterpriseOidcProperties oidc) throws Exception {
         CookieCsrfTokenRepository csrfRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
         CsrfTokenRequestAttributeHandler csrfRequestHandler = new CsrfTokenRequestAttributeHandler();
 
@@ -218,7 +222,6 @@ public class SecurityConfiguration {
                 .csrf(csrf -> csrf
                         .csrfTokenRepository(csrfRepository)
                         .csrfTokenRequestHandler(csrfRequestHandler))
-                .formLogin(form -> form.loginPage("/login").defaultSuccessUrl("/", true).permitAll())
                 .logout(logout -> logout.logoutSuccessUrl("/login?logout"))
                 .exceptionHandling(exceptions -> exceptions
                         .defaultAuthenticationEntryPointFor(
@@ -231,6 +234,14 @@ public class SecurityConfiguration {
                 .addFilterAfter(new PublicDemoBoundaryFilter(runtimeModeProperties),
                         BusinessRequestContextFilter.class);
 
+        if (oidc.enabled()) {
+            http.addFilterBefore(new dev.qcoding.businesscopilot.identity.OidcSessionExpiryFilter(), AnonymousAuthenticationFilter.class);
+            http.oauth2Login(login -> login.loginPage("/login").defaultSuccessUrl("/", true)
+                    .failureUrl("/login?error").permitAll()
+                    .userInfoEndpoint(info -> info.oidcUserService(new EnterpriseOidcUserService(oidc))));
+        } else {
+            http.formLogin(form -> form.loginPage("/login").defaultSuccessUrl("/", true).permitAll());
+        }
         return http.build();
     }
 

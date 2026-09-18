@@ -146,35 +146,22 @@ public class HrEnterpriseService {
                 """, this::mapConsent, actor.actorId(), isAdmin(actor));
     }
 
-    @Transactional
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     public ResumeAssessmentService.AssessmentResponse assessAuthorized(
             long jobId, String candidateReference, String consentReference, String resumeText) {
         Consent consent = requireValidConsent(
                 consentReference, candidateReference, ConsentPurpose.ASSESSMENT);
-        ResumeAssessmentService.AssessmentResponse response =
-                assessmentService.assess(jobId, resumeText);
-        jdbcTemplate.update("""
-                UPDATE resume_submissions
-                SET consent_id = ?, candidate_reference = ?
-                WHERE id = ?
-                """, consent.id(), candidateReference.trim(), response.submissionId());
-        return response;
+        return assessmentService.assess(jobId, resumeText, consent.id(), candidateReference.trim());
     }
 
-    @Transactional
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     public ResumeAssessmentService.AssessmentResponse assessAuthorizedFile(
             long jobId, String candidateReference, String consentReference,
             String fileName, String contentType, byte[] content) {
         Consent consent = requireValidConsent(
                 consentReference, candidateReference, ConsentPurpose.ASSESSMENT);
-        ResumeAssessmentService.AssessmentResponse response =
-                assessmentService.assessFile(jobId, fileName, contentType, content);
-        jdbcTemplate.update("""
-                UPDATE resume_submissions
-                SET consent_id = ?, candidate_reference = ?
-                WHERE id = ?
-                """, consent.id(), candidateReference.trim(), response.submissionId());
-        return response;
+        return assessmentService.assessFile(jobId, fileName, contentType, content,
+                consent.id(), candidateReference.trim());
     }
 
     @Transactional

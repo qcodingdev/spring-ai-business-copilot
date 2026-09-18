@@ -171,11 +171,21 @@ class PostgresPgvectorIntegrationTest {
 
     private static JdbcTemplate jdbcTemplate;
     private static DriverManagerDataSource dataSource;
-    private static final String LATEST_MIGRATION_VERSION = "42";
+    private static final String LATEST_MIGRATION_VERSION = "43";
 
     /** 归一化来源在 Prompt 中以 sourceId=<快照 UUID> 形式出现，供脚本化模型按证据引用。 */
     private static final Pattern PROMPT_SOURCE_ID = Pattern.compile(
             "sourceId=([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})");
+
+    @SuppressWarnings("unchecked")
+    private static <T> T transactional(T target) {
+        var factory = new org.springframework.aop.framework.ProxyFactory(target);
+        factory.setProxyTargetClass(true);
+        factory.addAdvice(new org.springframework.transaction.interceptor.TransactionInterceptor(
+                new JdbcTransactionManager(dataSource),
+                new org.springframework.transaction.annotation.AnnotationTransactionAttributeSource()));
+        return (T) factory.getProxy();
+    }
 
     @BeforeAll
     static void migrateDatabase() {
@@ -252,7 +262,7 @@ class PostgresPgvectorIntegrationTest {
                 actor, new DefaultObjectAccessPolicy(), restartedClock, Duration.ofMinutes(15));
         assertThat(restarted.reconcileInterruptedAttempts()).isEqualTo(2);
         assertThat(restarted.timeline(modelRun.runId()).run().status())
-                .isEqualTo(TaskRunStatus.WAITING_CONFIRMATION);
+                .isEqualTo(TaskRunStatus.FAILED);
         assertThat(restarted.timeline(modelRun.runId()).attempts()).singleElement()
                 .satisfies(attempt -> {
                     assertThat(attempt.outcome()).isEqualTo(TaskAttempt.Outcome.FAILURE);
@@ -1878,10 +1888,12 @@ class PostgresPgvectorIntegrationTest {
                 aiChatService, new PromptTemplateService(), new ReportPromptContextFactory(),
                 new ReportGenerationOutputValidator(),
                 new ReportOutputSanitizer(new SensitiveTextMasker()),
-                new ReportDraftPersistenceService(
+                transactional(new ReportDraftPersistenceService(
                         new JdbcReportDraftRepository(jdbcTemplate, actor,
                                 new ConfirmationTokenService(), objectMapper, properties.reviewSla()),
-                        new ReportAuditService(jdbcTemplate), properties));
+                        new ReportAuditService(jdbcTemplate), properties, null,
+                        transactional(new dev.qcoding.businesscopilot.reportcopilot.enterprise.ReportLifecycleService(
+                                jdbcTemplate, objectMapper)))));
         ReportEnterpriseService reportService = new ReportEnterpriseService(jdbcTemplate,
                 generationService, actor, mock(ExternalSecretResolver.class), objectMapper,
                 mock(ExternalEndpointPolicy.class), mock(ExternalHttpClientFactory.class));
@@ -2107,7 +2119,7 @@ class PostgresPgvectorIntegrationTest {
                 RETURNING id
                 """, Long.class, scheduleKey);
         ReportGenerationService generationService = mock(ReportGenerationService.class);
-        when(generationService.generate(any())).thenAnswer(invocation -> {
+        when(generationService.generate(any(), any())).thenAnswer(invocation -> {
             var request = invocation.getArgument(0,
                     dev.qcoding.businesscopilot.reportcopilot.request.ReportGenerateRequest.class);
             assertThat(BusinessRequestContextHolder.currentLocale()).isEqualTo("en-US");
@@ -2127,9 +2139,9 @@ class PostgresPgvectorIntegrationTest {
         assertThat(jdbcTemplate.queryForObject("""
                 SELECT status FROM report_schedule_runs
                 WHERE schedule_id = ? ORDER BY id DESC LIMIT 1
-                """, String.class, scheduleId)).isEqualTo("NEEDS_REVIEW");
+                """, String.class, scheduleId)).isEqualTo("FAILED");
         assertThat(BusinessRequestContextHolder.current()).isNull();
-        org.mockito.Mockito.verify(generationService).generate(any());
+        org.mockito.Mockito.verify(generationService).generate(any(), any());
     }
 
     /** KNOW-01：固定问题的召回质量以版本化报告记录并通过门禁（确定性回归层）。 */
@@ -2456,10 +2468,12 @@ class PostgresPgvectorIntegrationTest {
                 aiChatService, new PromptTemplateService(), new ReportPromptContextFactory(),
                 new ReportGenerationOutputValidator(),
                 new ReportOutputSanitizer(new SensitiveTextMasker()),
-                new ReportDraftPersistenceService(
+                transactional(new ReportDraftPersistenceService(
                         new JdbcReportDraftRepository(jdbcTemplate, actor,
                                 new ConfirmationTokenService(), objectMapper, properties.reviewSla()),
-                        new ReportAuditService(jdbcTemplate), properties),
+                        new ReportAuditService(jdbcTemplate), properties, null,
+                        transactional(new dev.qcoding.businesscopilot.reportcopilot.enterprise.ReportLifecycleService(
+                                jdbcTemplate, objectMapper)))),
                 runtime);
         ReportEnterpriseService reportService = new ReportEnterpriseService(jdbcTemplate,
                 generationService, actor, mock(ExternalSecretResolver.class), objectMapper,

@@ -134,6 +134,15 @@ public class SqlConfirmationService {
                 now, null, null, null);
     }
 
+    /** Commit the one-time credential and dispatch intent together before external I/O. */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public SqlCandidate consumeWithIntent(String candidateId, String confirmationToken,
+                                         java.util.function.Consumer<SqlCandidate> intentRecorder) {
+        SqlCandidate candidate = confirmAndConsume(candidateId, confirmationToken);
+        intentRecorder.accept(candidate);
+        return candidate;
+    }
+
     @Transactional(noRollbackFor = BusinessException.class)
     public SqlCandidate confirmAndConsume(String candidateId, String confirmationToken) {
         Instant now = Instant.now();

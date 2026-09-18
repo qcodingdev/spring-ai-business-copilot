@@ -18,6 +18,13 @@ public interface ReportDraftRepository {
 
     Optional<ReportDraft> findById(Long draftId);
 
+    default Optional<RequestMetadata> findRequestMetadata(Long requestId) { return Optional.empty(); }
+
+    record RequestMetadata(String title, String reportType, java.time.LocalDate periodStart,
+                           java.time.LocalDate periodEnd, String timezone) {
+        public String periodLabel() { return periodStart + " — " + periodEnd + " (" + timezone + ")"; }
+    }
+
     boolean updateContent(Long draftId, ReportDraftStatus expected, LlmReportOutput content,
                           String actionActorId);
 

@@ -18,6 +18,8 @@ const errorCode = ref('')
 const requestId = ref<string | null>(null)
 const reports = ref<RecordItem[]>([])
 const schedules = ref<RecordItem[]>([])
+const connections = ref<RecordItem[]>([])
+const frequency = ref('weekly')
 const scheduleRuns = ref<RecordItem[]>([])
 const toast = ref('')
 const toastTone = ref<'success' | 'danger'>('success')
@@ -25,7 +27,7 @@ let toastTimer: ReturnType<typeof setTimeout> | undefined
 const schedule = ref({
   scheduleKey: '', reportType: 'TEAM_WEEKLY', titleTemplate: '', cronExpression: '0 0 9 ? * MON',
   zoneId: 'Asia/Shanghai', templateId: 'business-weekly', templateVersion: 'v1', enabled: true,
-  includeSupportMetrics: true, connectionIds: '',
+  includeSupportMetrics: true, connectionIds: [] as number[],
 })
 const reportTypes = ['TEAM_WEEKLY', 'BUSINESS_WEEKLY', 'PROJECT_STATUS', 'INCIDENT_REVIEW', 'SALES_REVIEW']
 
@@ -58,7 +60,13 @@ async function load(): Promise<void> {
   try {
     const response = await api<RecordItem[]>(props.tab === 'records' ? '/api/report-copilot/enterprise/reports' : '/api/report-copilot/enterprise/schedules')
     if (props.tab === 'records') reports.value = response.data ?? []
-    else schedules.value = response.data ?? []
+    else {
+      schedules.value = response.data ?? []
+      if (isAdmin.value) {
+        const sources = await api<RecordItem[]>('/api/report-copilot/enterprise/connections')
+        connections.value = (sources.data ?? []).filter((item) => item.enabled)
+      }
+    }
     requestId.value = response.requestId
   } catch (error) {
     errorCode.value = error instanceof ApiError ? error.errorCode : 'generic'
@@ -74,7 +82,7 @@ async function saveSchedule(): Promise<void> {
       method: 'POST', ...jsonBody({
         ...schedule.value,
         selection: {
-          connectionIds: schedule.value.connectionIds.split(',').map((item) => Number(item.trim())).filter((item) => Number.isInteger(item) && item > 0),
+          connectionIds: schedule.value.connectionIds,
           dataHandoffReferences: [],
           includeSupportMetrics: schedule.value.includeSupportMetrics,
           previousDataHandoffReference: null,
@@ -130,6 +138,11 @@ async function loadRuns(scheduleId: number): Promise<void> {
   } finally { loading.value = false }
 }
 
+watch(frequency, (value) => {
+  const presets: Record<string, string> = { weekly: '0 0 9 ? * MON', daily: '0 0 9 * * *', monthly: '0 0 9 1 * *' }
+  if (presets[value]) schedule.value.cronExpression = presets[value]
+})
+
 watch(() => props.tab, () => { void load() }, { immediate: true })
 onUnmounted(() => { if (toastTimer) clearTimeout(toastTimer) })
 </script>
@@ -180,9 +193,10 @@ onUnmounted(() => { if (toastTimer) clearTimeout(toastTimer) })
           <label>{{ t('report.scheduleKey') }}<input v-model="schedule.scheduleKey" required maxlength="100"></label>
           <label>{{ t('report.scheduleTitle') }}<input v-model="schedule.titleTemplate" required maxlength="300"></label>
           <label>{{ t('report.reportType') }}<select v-model="schedule.reportType"><option v-for="type in reportTypes" :key="type" :value="type">{{ reportTypeLabel(type) }}</option></select></label>
-          <label>{{ t('report.cronExpression') }}<input v-model="schedule.cronExpression" required maxlength="100"></label>
+          <label>{{ t('report.frequency') }}<select v-model="frequency"><option v-for="option in ['weekly', 'daily', 'monthly', 'custom']" :key="option" :value="option">{{ t(`report.frequencies.${option}`) }}</option></select></label>
+          <label v-if="frequency === 'custom'">{{ t('report.cronExpression') }}<input v-model="schedule.cronExpression" required maxlength="100"></label>
           <label>{{ t('report.zoneId') }}<input v-model="schedule.zoneId" required maxlength="80"></label>
-          <label>{{ t('report.connectionIds') }}<input v-model="schedule.connectionIds" maxlength="300" placeholder="1,2"></label>
+          <fieldset><legend>{{ t('report.sourceNames') }}</legend><label v-for="connection in connections" :key="connection.id" class="checkbox-label"><input v-model="schedule.connectionIds" type="checkbox" :value="connection.id"> {{ connection.displayName }}</label><p v-if="!connections.length" class="field-hint">{{ t('report.noExternalSources') }}</p></fieldset>
           <label class="checkbox-label"><input v-model="schedule.includeSupportMetrics" type="checkbox"> {{ t('report.includeSupportMetrics') }}</label>
           <label class="checkbox-label"><input v-model="schedule.enabled" type="checkbox"> {{ t('common.enabled') }}</label>
         </div>

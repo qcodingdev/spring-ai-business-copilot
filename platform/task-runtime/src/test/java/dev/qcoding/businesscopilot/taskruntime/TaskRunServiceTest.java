@@ -304,8 +304,11 @@ class TaskRunServiceTest {
         assertThat(restarted.reconcileInterruptedAttempts(Duration.ofMinutes(15))).isEqualTo(2);
 
         TaskRunService.RecoveryPlan modelPlan = restarted.recoveryPlan(modelRun.runId());
-        assertThat(modelPlan.run().status()).isEqualTo(TaskRunStatus.WAITING_CONFIRMATION);
-        assertThat(modelPlan.retryableSteps()).extracting(TaskStep::name).containsExactly("generate");
+        assertThat(modelPlan.run().status()).isEqualTo(TaskRunStatus.FAILED);
+        assertThat(modelPlan.run().stopReason()).contains("从原业务页");
+        assertThat(modelPlan.retryableSteps()).isEmpty();
+        assertThat(restarted.timeline(modelRun.runId()).steps()).singleElement()
+                .extracting(TaskStep::status).isEqualTo(TaskStep.TaskStepStatus.FAILED);
         assertThat(modelPlan.run().failureCategory()).isEqualTo(FailureCategory.PROVIDER);
         assertThat(restarted.timeline(modelRun.runId()).attempts()).singleElement()
                 .satisfies(attempt -> {

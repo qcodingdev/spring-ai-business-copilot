@@ -287,14 +287,14 @@ public class ReportOfficeExportService {
 
     private ReportMetadata metadata(ReportDraft draft) {
         List<ReportMetadata> rows = jdbcTemplate.query("""
-                SELECT title, report_type, period_start, period_end
+                SELECT title, report_type, period_start, period_end, period_timezone
                 FROM report_requests WHERE id = ?
                 """, (rs, rowNum) -> new ReportMetadata(
                 value(rs.getString("title")), value(rs.getString("report_type")),
-                value(rs.getString("period_start")), value(rs.getString("period_end"))),
+                value(rs.getString("period_start")), value(rs.getString("period_end")), value(rs.getString("period_timezone"))),
                 draft.requestId());
         if (rows == null || rows.isEmpty()) {
-            return new ReportMetadata("企业经营报告", "BUSINESS", "", "");
+            return new ReportMetadata("企业经营报告", "BUSINESS", "", "", "");
         }
         return rows.getFirst();
     }
@@ -381,10 +381,10 @@ public class ReportOfficeExportService {
         return value == null ? "" : value;
     }
 
-    private record ReportMetadata(String title, String type, String periodStart, String periodEnd) {
+    private record ReportMetadata(String title, String type, String periodStart, String periodEnd, String timezone) {
         String periodLabel() {
             if (periodStart.isBlank() && periodEnd.isBlank()) return "已确认报告";
-            return periodStart + " — " + periodEnd;
+            return periodStart + " — " + periodEnd + (timezone.isBlank() ? "" : " (" + timezone + ")");
         }
 
         String typeLabel() {

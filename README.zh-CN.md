@@ -100,6 +100,16 @@ Chat 与 Embedding 端点相互独立，因为很多 OpenAI 兼容 Chat 服务�
 
 管理员可继续进入“系统管理 → 企业就绪”，从风险项跳回上述五模块整改，重新检查并保存绑定用途的证据快照。
 
+<details>
+<summary>接入现有企业身份（可选 OIDC）</summary>
+
+单组织试点可设置 `SPRING_PROFILES_ACTIVE=self-hosted,oidc`（或 `prod,oidc`），并通过部署密钥注入 `BUSINESS_COPILOT_OIDC_ISSUER_URI`、`BUSINESS_COPILOT_OIDC_CLIENT_ID`、`BUSINESS_COPILOT_OIDC_CLIENT_SECRET`。在身份源登记回调 `https://<你的域名>/login/oauth2/code/enterprise`。已签名 ID token 的应用专用数组 `business_copilot_roles` 映射 `ADMIN`、`OPERATOR`、`REVIEWER`；字段名可配置。独立复核时为操作员和复核员分别分配角色。
+
+登录页提供企业入口并禁用三个本地示例账号。对象归属与审计使用 issuer 和 subject 派生的稳定 actor，姓名或邮箱变化不会转移归属；原本地账号的数据不会自动重新分配。会话在 ID token 到期或空闲 20 分钟后失效；身份源即时撤权、单点登出仍须在部署环境验收，请在身份源设置短 token 有效期。使用 HTTPS；仅在清除不可信转发头的入口代理后启用 forwarded headers。配置见[环境变量示例](examples/.env.example)。本模式需要实际身份源验收，不与 `public-demo` 混用。
+
+</details>
+
+
 ## 当前业务能力
 
 | 业务域 | 当前可操作流程 | 关键控制点 |

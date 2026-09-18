@@ -55,6 +55,12 @@ class GovernancePostgresIntegrationTest {
         jdbc = new JdbcTemplate(dataSource);
     }
 
+    @org.junit.jupiter.api.BeforeEach
+    void isolateRunRecoveryFixtures() {
+        // Recovery scans every run; another test's queued fixtures must not age into this case.
+        jdbc.execute("TRUNCATE evaluation_runs CASCADE");
+    }
+
     @AfterEach
     void clearContext() {
         BusinessRequestContextHolder.clear();

@@ -10,7 +10,7 @@ import { expect, test } from '@playwright/test'
 
 const baseUrl = process.env.E2E_BASE_URL ?? 'http://127.0.0.1:8080'
 
-test.skip(!process.env.E2E_BASE_URL, 'real-backend joint tests require E2E_BASE_URL')
+if (!process.env.E2E_BASE_URL) throw new Error('E2E_BASE_URL is required for real backend tests')
 
 test.beforeEach(async ({ page }) => {
   // 真实 UI 登录：匿名会话种下 CSRF cookie → 表单提交 → Spring Security 302 回首页。
@@ -27,9 +27,17 @@ test.beforeEach(async ({ page }) => {
   expect((await session.json()).data.authenticated).toBe(true)
 })
 
-test('home shows the real personal task-run ledger (empty on a fresh database)', async ({ page }) => {
+test('home shows the real personal task-run ledger', async ({ page }) => {
+  const missing = await page.request.get('/api/report-copilot/nonexistent-resource')
+  expect(missing.status()).toBe(404)
+  expect((await missing.json()).message).not.toContain('nonexistent-resource')
   await expect(page.getByTestId('my-task-runs')).toBeVisible()
-  await expect(page.getByTestId('my-task-runs')).toContainText('还没有运行记录')
+  const response = await page.request.get('/api/task-runs/mine?limit=8')
+  expect(response.ok()).toBe(true)
+  const runs = (await response.json()).data
+  const ledger = page.getByTestId('my-task-runs')
+  if (runs.length === 0) await expect(ledger).toContainText('还没有运行记录')
+  else await expect(ledger.locator('tbody tr')).toHaveCount(runs.length)
 })
 
 test('admin task-run timeline tab loads from the real runtime ledger', async ({ page }) => {

@@ -446,8 +446,13 @@ public class TaskRunService {
             transition(run, TaskRunStatus.OUTCOME_UNKNOWN, FailureCategory.UNKNOWN_OUTCOME,
                     "进程中断时工具调用结果未知，必须核对回执后再继续");
         } else {
-            transition(run, TaskRunStatus.WAITING_CONFIRMATION, FailureCategory.PROVIDER,
-                    "进程中断导致模型尝试未完成，已保留恢复点并等待人工恢复");
+            store.findSteps(runId).stream()
+                    .filter(step -> step.status() == TaskStep.TaskStepStatus.PENDING)
+                    .forEach(step -> store.updateStep(new TaskStep(step.stepId(), runId, step.name(),
+                            TaskStep.TaskStepStatus.FAILED, step.attemptCount(), FailureCategory.PROVIDER,
+                            step.evidenceRefs(), "进程中断，需从业务页重新发起", step.startedAt(), now)));
+            transition(run, TaskRunStatus.FAILED, FailureCategory.PROVIDER,
+                    "进程中断，模型结果未完成；请从原业务页检查对象后重新发起，旧运行已关闭");
         }
         return true;
     }

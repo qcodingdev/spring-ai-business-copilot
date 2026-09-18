@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api, ApiError } from '@/api/client'
 import RequestId from './RequestId.vue'
@@ -30,6 +31,11 @@ function statusTone(status: string | null | undefined): 'success' | 'danger' | '
   if (status === 'FAILED' || status === 'CANCELLED' || status === 'BUDGET_EXHAUSTED') return 'danger'
   if (status === 'WAITING_CONFIRMATION' || status === 'OUTCOME_UNKNOWN') return 'warning'
   return 'info'
+}
+
+function businessPath(module: string | null | undefined): string | null {
+  const paths: Record<string, string> = { data: '/data', knowledge: '/knowledge', support: '/support', report: '/report', resume: '/hr', hr: '/hr' }
+  return module ? paths[module] ?? null : null
 }
 
 function shortId(runId: string): string {
@@ -89,6 +95,9 @@ onMounted(load)
             <td>
               <StatusBadge :label="run.status && te(`statuses.${run.status}`) ? t(`statuses.${run.status}`) : (run.status || '—')" :tone="statusTone(run.status)" />
               <small v-if="run.stopReason" class="home-runs__reason">{{ run.stopReason }}</small>
+              <RouterLink v-if="run.status !== 'SUCCEEDED' && businessPath(run.module)" :to="businessPath(run.module)!">
+                {{ t('home.myTaskRuns.openBusiness') }}
+              </RouterLink>
             </td>
             <td>{{ run.failureCategory || '—' }}</td>
             <td>{{ date(run.startedAt) }}</td>

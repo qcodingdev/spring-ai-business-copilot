@@ -1,4 +1,5 @@
 export default {
+  enterpriseLogin: 'Sign in with your organization',
   title: 'Sign in to the business workbench',
   subtitle: 'Enter controlled business workflows according to your role',
   username: 'Username',

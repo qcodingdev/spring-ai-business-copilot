@@ -57,3 +57,9 @@ Confluence 页面/ACL 和 Notion 分页/递归。
 恢复。来源页同时展示索引失败和超时，对孤儿 `PROCESSING` 任务条件取消后建立替换任务。向量替换与任务/文档完成状态在锁定有效租约后原子提交，
 阻止旧工作线程的迟到结果删除或覆盖新任务的向量和状态。企业就绪对卡住
 同步和不可安全检索资料给出阻断，只对尚未被后续成功同步恢复的失败给出关注项。
+
+### Reliability and evidence / 可靠性与证据
+
+Indexing uses a dedicated single-worker executor without an in-memory backlog. A busy worker defers claiming; lease reconciliation and retention scans remain available while embeddings run.
+
+索引使用独立单线程 worker，不设置内存等待队列；繁忙时延后领取，不占用清理和租约巡检的调度线程。

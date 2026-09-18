@@ -46,3 +46,9 @@ Test: `./mvnw -pl modules/support-copilot -am test`
 
 2.4 开发线把 `UNKNOWN` 回写结果和超时的 `PROCESSING` 尝试列为企业就绪阻断项，把仍未
 关闭的 SLA 违约工单列为关注项。整改继续进入人工复核或质量页面，不绕过现有证据与确认流程。
+
+### Reliability and evidence / 可靠性与证据
+
+Writeback preparation and terminal updates are conditional on state and dispatch attempt. An unknown provider outcome requires receipt verification or an explicit evidence-backed resolution. Independent reviewers see unclaimed review drafts and their own claimed drafts; other operators retain owner scope. The internal confirmation flow sends no provider message.
+
+回写准备和终态更新均校验状态与派发次数；供应商结果未知时须核对回执或凭证据人工处理。独立复核员可见未领取及本人领取的复核草稿，其他操作员仍受对象归属限制；内部确认不会向供应商发送消息。

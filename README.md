@@ -100,6 +100,16 @@ Chat and embedding endpoints are independent because many OpenAI-compatible chat
 
 Administrators can then open **System administration → Enterprise readiness**, follow any remediation link back to these five workflows, rerun the checks, and save a purpose-bound evidence snapshot.
 
+<details>
+<summary>Use existing enterprise identities (optional OIDC)</summary>
+
+For a single-organization pilot, set `SPRING_PROFILES_ACTIVE=self-hosted,oidc` (or `prod,oidc`) and the `BUSINESS_COPILOT_OIDC_ISSUER_URI`, `BUSINESS_COPILOT_OIDC_CLIENT_ID`, and `BUSINESS_COPILOT_OIDC_CLIENT_SECRET` variables in your secret-backed deployment. Register `https://<your-host>/login/oauth2/code/enterprise` as the redirect URI. The signed ID token must contain the application-specific array `business_copilot_roles` with `ADMIN`, `OPERATOR`, or `REVIEWER`; the claim name is configurable. Keep operator and reviewer assignments separate for independent review.
+
+The login page exposes enterprise sign-in and disables local sample accounts. Ownership and audit use a stable actor derived from issuer and subject, so a display-name or email change does not transfer ownership. Existing local-account records are not automatically reassigned. The session expires at ID-token expiry or after 20 idle minutes; immediate IdP revocation and single logout still require deployment acceptance. Configure short token lifetimes at the IdP. Use HTTPS; enable forwarded headers only behind an ingress that strips untrusted forwarding headers. See the [environment example](examples/.env.example). This mode must be accepted against your actual IdP and is separate from `public-demo`.
+
+</details>
+
+
 ## Current business capabilities
 
 | Domain | Operational flow available today | Key control |

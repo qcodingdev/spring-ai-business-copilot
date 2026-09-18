@@ -38,6 +38,7 @@ const displayName = ref('')
 const provider = ref('')
 const baseUrl = ref('')
 const secretRef = ref('')
+const jiraProjectKeys = ref('')
 const rootReference = ref('')
 const defaultVisibility = ref<'ALL' | 'HR_REVIEWER' | 'ADMIN'>('ADMIN')
 const enabled = ref(true)
@@ -151,7 +152,7 @@ function connectionRequest(): { path: string; body: Record<string, unknown> } {
     }
   }
   if (props.module === 'support') return { path: '/api/support-copilot/enterprise/connections', body: common }
-  if (props.module === 'report') return { path: '/api/report-copilot/enterprise/connections', body: common }
+  if (props.module === 'report') return { path: '/api/report-copilot/enterprise/connections', body: { ...common, jiraProjectKeys: jiraProjectKeys.value.split(',').map((key) => key.trim().toUpperCase()).filter(Boolean) } }
   return { path: '/api/resume-copilot/enterprise/ats-connections', body: common }
 }
 
@@ -340,6 +341,7 @@ onUnmounted(() => { if (toastTimer) clearTimeout(toastTimer) })
             <option v-for="option in providerOptions" :key="option" :value="option">{{ option }}</option>
           </select>
         </label>
+        <label v-if="module === 'report' && provider === 'JIRA'">{{ t('report.jiraProjectKeys') }}<input v-model="jiraProjectKeys" required maxlength="1000" placeholder="DEMO,OPS"></label>
         <label>{{ t('common.baseUrl') }}<input v-model="baseUrl" type="url" required maxlength="500" placeholder="https://api.example.com"></label>
         <label>{{ t('common.secretRef') }}<input v-model="secretRef" required maxlength="200" autocomplete="off" placeholder="EXTERNAL_PROVIDER_API_KEY"></label>
         <label v-if="module === 'knowledge'">{{ t('common.rootReference') }}<input v-model="rootReference" required maxlength="500"></label>

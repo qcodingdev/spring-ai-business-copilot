@@ -46,7 +46,7 @@ class DataEnterpriseControllerTest {
     void returnsHandoffStatusForResultHandoffTab() {
         when(resultService.listHandoffs(0, 20)).thenReturn(List.of(
                 new DataQueryResultService.HandoffSummary(
-                        9L, 7L, "月度经营结果", "READY", "data-result-7", 4,
+                        9L, 7L, "月度经营结果", "READY", "data-result-7", 4, false, java.util.Map.of(),
                         Instant.parse("2026-08-04T00:00:00Z"), null,
                         Instant.parse("2026-08-03T00:00:00Z"))));
 

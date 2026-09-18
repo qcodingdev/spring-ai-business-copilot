@@ -9,6 +9,7 @@ import dev.qcoding.businesscopilot.aicore.RenderedPrompt;
 import dev.qcoding.businesscopilot.reportcopilot.request.ReportGenerateRequest;
 import dev.qcoding.businesscopilot.reportcopilot.request.ReportRequestPreparationService;
 import dev.qcoding.businesscopilot.reportcopilot.draft.ReportDraftPersistenceService;
+import dev.qcoding.businesscopilot.reportcopilot.enterprise.ReportPublicationClaim;
 import dev.qcoding.businesscopilot.taskruntime.ContextManifest;
 import dev.qcoding.businesscopilot.taskruntime.FailureCategory;
 import dev.qcoding.businesscopilot.taskruntime.RuntimeFailureCategories;
@@ -69,6 +70,10 @@ public class ReportGenerationService {
     }
 
     public ReportDraftResponse generate(ReportGenerateRequest request) {
+        return generate(request, null);
+    }
+
+    public ReportDraftResponse generate(ReportGenerateRequest request, ReportPublicationClaim claim) {
         var preview = preparationService.prepare(request);
         String modelName = aiChatService.modelName();
         if (preview.sources().isEmpty()) {
@@ -78,7 +83,7 @@ public class ReportGenerationService {
         RenderedPrompt prompt = promptTemplateService.renderWithMetadata(
                 PROMPT_LOCATION, preview.templateVersion(), promptContextFactory.create(preview));
         if (taskRunService == null) {
-            return executeGeneration(request, preview, prompt, modelName).response();
+            return executeGeneration(request, preview, prompt, modelName, AiAttemptObserver.noOp(), claim).response();
         }
         // RUN-01/02：运行关联——证据清单进入上下文，模型尝试与失败类别进入时间线。
         TaskRun run = taskRunService.startRun("report", "generation",
@@ -92,7 +97,7 @@ public class ReportGenerationService {
         GenerationOutcome outcome;
         try {
             outcome = executeGeneration(request, preview, prompt, modelName,
-                    taskRunService.aiAttemptObserver(run.runId(), step.stepId()));
+                    taskRunService.aiAttemptObserver(run.runId(), step.stepId()), claim);
         } catch (RuntimeException ex) {
             FailureCategory category = ex instanceof BusinessException business
                     ? RuntimeFailureCategories.from(business) : FailureCategory.MODEL;
@@ -113,14 +118,8 @@ public class ReportGenerationService {
 
     private GenerationOutcome executeGeneration(ReportGenerateRequest request,
                                                 ReportRequestPreparationService.ReportRequestPreview preview,
-                                                RenderedPrompt prompt, String modelName) {
-        return executeGeneration(request, preview, prompt, modelName, AiAttemptObserver.noOp());
-    }
-
-    private GenerationOutcome executeGeneration(ReportGenerateRequest request,
-                                                ReportRequestPreparationService.ReportRequestPreview preview,
                                                 RenderedPrompt prompt, String modelName,
-                                                AiAttemptObserver attemptObserver) {
+                                                AiAttemptObserver attemptObserver, ReportPublicationClaim claim) {
         long startMs = System.currentTimeMillis();
         AiInvocationMetadata invocationMetadata = null;
         try {
@@ -137,18 +136,24 @@ public class ReportGenerationService {
                     ? invocationMetadata.modelName() : modelName;
             ReportGenerationOutputValidator.ValidationResult validation = outputValidator.validate(output, preview.sources());
             if (!validation.valid()) {
-                var draft = draftPersistenceService.createNeedsReviewDraft(
+                var draft = claim == null ? draftPersistenceService.createNeedsReviewDraft(
                         preview, validation.violations(), effectiveModelName, prompt.metadata(),
-                        invocationMetadata, POLICY_VERSION, System.currentTimeMillis() - startMs);
+                        invocationMetadata, POLICY_VERSION, System.currentTimeMillis() - startMs)
+                        : draftPersistenceService.createNeedsReviewDraft(
+                        preview, validation.violations(), effectiveModelName, prompt.metadata(),
+                        invocationMetadata, POLICY_VERSION, System.currentTimeMillis() - startMs, claim);
                 return new GenerationOutcome(new ReportDraftResponse(draft.id(), preview.reportType(), preview.period(), preview.title(),
                         draft.status().name(), null, validation.violations(), draft.confirmationToken(),
                         draft.expiresAt().toString(), effectiveModelName,
                         draftPersistenceService.reviewStatus(draft)), invocationMetadata);
             }
             LlmReportOutput sanitizedOutput = outputSanitizer.sanitize(output);
-            var draft = draftPersistenceService.createDraft(
+            var draft = claim == null ? draftPersistenceService.createDraft(
                     preview, sanitizedOutput, effectiveModelName, prompt.metadata(),
-                    invocationMetadata, POLICY_VERSION, System.currentTimeMillis() - startMs);
+                    invocationMetadata, POLICY_VERSION, System.currentTimeMillis() - startMs)
+                    : draftPersistenceService.createDraft(
+                    preview, sanitizedOutput, effectiveModelName, prompt.metadata(),
+                    invocationMetadata, POLICY_VERSION, System.currentTimeMillis() - startMs, claim);
             return new GenerationOutcome(new ReportDraftResponse(draft.id(), preview.reportType(), preview.period(), preview.title(), draft.status().name(),
                     sanitizedOutput, List.of(), draft.confirmationToken(),
                     draft.expiresAt().toString(), effectiveModelName,

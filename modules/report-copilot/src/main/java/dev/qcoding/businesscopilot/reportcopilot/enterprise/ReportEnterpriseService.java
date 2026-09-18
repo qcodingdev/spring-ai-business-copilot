@@ -51,6 +51,8 @@ public class ReportEnterpriseService {
     private final ObjectMapper objectMapper;
     private final ExternalEndpointPolicy endpointPolicy;
     private final ExternalHttpClientFactory clientFactory;
+    private final java.util.concurrent.Executor worker;
+    private final ReportLifecycleService lifecycle;
 
     public ReportEnterpriseService(
             JdbcTemplate jdbcTemplate,
@@ -60,6 +62,27 @@ public class ReportEnterpriseService {
             ObjectMapper objectMapper,
             ExternalEndpointPolicy endpointPolicy,
             ExternalHttpClientFactory clientFactory) {
+        this(jdbcTemplate, generationService, actorProvider, secretResolver, objectMapper,
+                endpointPolicy, clientFactory, Runnable::run);
+    }
+
+    public ReportEnterpriseService(
+            JdbcTemplate jdbcTemplate, ReportGenerationService generationService,
+            CurrentActorProvider actorProvider, ExternalSecretResolver secretResolver,
+            ObjectMapper objectMapper, ExternalEndpointPolicy endpointPolicy,
+            ExternalHttpClientFactory clientFactory, java.util.concurrent.Executor worker) {
+        this(jdbcTemplate, generationService, actorProvider, secretResolver, objectMapper,
+                endpointPolicy, clientFactory, worker, new ReportLifecycleService(jdbcTemplate, objectMapper));
+    }
+
+    public ReportEnterpriseService(
+            JdbcTemplate jdbcTemplate, ReportGenerationService generationService,
+            CurrentActorProvider actorProvider, ExternalSecretResolver secretResolver,
+            ObjectMapper objectMapper, ExternalEndpointPolicy endpointPolicy,
+            ExternalHttpClientFactory clientFactory, java.util.concurrent.Executor worker,
+            ReportLifecycleService lifecycle) {
+        this.lifecycle = lifecycle;
+        this.worker = worker;
         this.jdbcTemplate = jdbcTemplate;
         this.generationService = generationService;
         this.actorProvider = actorProvider;
@@ -77,28 +100,32 @@ public class ReportEnterpriseService {
         }
         if (command.provider() == Provider.JIRA) {
             ExternalSecretResolver.validateRef(command.secretRef());
+            if (command.enabled() && JiraReportSourceClient.projectKeys(command.jiraProjectKeys()).isEmpty()) {
+                throw new BusinessException(ErrorCode.VALIDATION_ERROR, "启用 Jira 来源前必须选择项目范围");
+            }
         }
         endpointPolicy.validateBaseUrl(command.baseUrl());
         String actorId = actorProvider.currentActor().actorId();
         Connection connection = jdbcTemplate.queryForObject("""
                 INSERT INTO report_external_connections (
                     connection_key, display_name, provider, base_url, secret_ref,
-                    enabled, owner_actor_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    enabled, owner_actor_id, jira_project_keys
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?::jsonb)
                 ON CONFLICT (connection_key) DO UPDATE SET
                     display_name = EXCLUDED.display_name,
                     provider = EXCLUDED.provider,
                     base_url = EXCLUDED.base_url,
                     secret_ref = EXCLUDED.secret_ref,
+                    jira_project_keys = EXCLUDED.jira_project_keys,
                     enabled = EXCLUDED.enabled,
                     owner_actor_id = EXCLUDED.owner_actor_id,
                     updated_at = now()
                 RETURNING id, connection_key, display_name, provider, base_url,
-                          secret_ref, enabled, owner_actor_id
+                          secret_ref, enabled, owner_actor_id, jira_project_keys::text
                 """, this::mapConnection, command.connectionKey().trim(),
                 command.displayName().trim(), command.provider().name(),
                 trimToNull(command.baseUrl()), trimToNull(command.secretRef()),
-                command.enabled(), actorId);
+                command.enabled(), actorId, json(JiraReportSourceClient.projectKeys(command.jiraProjectKeys())));
         if (!connection.enabled()) {
             jdbcTemplate.update("""
                     UPDATE report_schedules schedule
@@ -112,6 +139,13 @@ public class ReportEnterpriseService {
                           WHERE selected.value = ?
                       )
                     """, String.valueOf(connection.id()));
+            jdbcTemplate.update("""
+                    UPDATE report_schedule_runs run
+                    SET status='FAILED', reason='SOURCE_DISABLED', finished_at=now()
+                    FROM report_schedules schedule
+                    WHERE run.schedule_id=schedule.id AND run.status='RUNNING' AND schedule.enabled=FALSE
+                      AND schedule.source_config->'connectionIds' @> ?::jsonb
+                    """, "[" + connection.id() + "]");
         }
         return connection;
     }
@@ -119,12 +153,16 @@ public class ReportEnterpriseService {
     public List<Connection> connections() {
         return jdbcTemplate.query("""
                 SELECT id, connection_key, display_name, provider, base_url,
-                       secret_ref, enabled, owner_actor_id
+                       secret_ref, enabled, owner_actor_id, jira_project_keys::text
                 FROM report_external_connections ORDER BY display_name
                 """, this::mapConnection);
     }
 
     public ReportDraftResponse generate(GenerateCommand command) {
+        return generate(command, null);
+    }
+
+    private ReportDraftResponse generate(GenerateCommand command, DueSchedule schedule) {
         String actorId = actorProvider.currentActor().actorId();
         UUID claimToken = claimHandoffs(command.selection().dataHandoffReferences(), actorId);
         try {
@@ -137,14 +175,13 @@ public class ReportEnterpriseService {
                     command.reportType(), command.period(), command.title(),
                     List.of(), List.of(), List.of(), sources,
                     command.templateId(), command.templateVersion());
-            ReportDraftResponse response = generationService.generate(request);
-            if ("DRAFTED".equals(response.status()) && response.content() != null) {
-                consumeHandoffs(claimToken, actorId);
-                // DATA-05：交接消费成功后记录 草稿 ← 交接 ← 结果快照 ← SQL 候选 的可追溯关联。
-                recordDataTraceability(response.draftId(), command.selection().dataHandoffReferences());
-            } else {
-                releaseHandoffs(claimToken, actorId);
-            }
+            ReportPublicationClaim publication = claimToken == null && schedule == null ? null
+                    : new ReportPublicationClaim(actorId, claimToken, command.selection().dataHandoffReferences(),
+                        schedule == null ? null : schedule.id(), schedule == null ? null : schedule.claimToken(),
+                        schedule == null ? null : schedule.runId(), command.selection().previousDataHandoffReference());
+            ReportDraftResponse response = publication == null ? generationService.generate(request)
+                    : generationService.generate(request, publication);
+            if (response.draftId() == null) releaseHandoffs(claimToken, actorId);
             return response;
         } catch (RuntimeException ex) {
             releaseHandoffs(claimToken, actorId);
@@ -152,6 +189,7 @@ public class ReportEnterpriseService {
         }
     }
 
+    @Transactional
     public Schedule saveSchedule(ScheduleCommand command) {
         requireRepeatableSources(command.selection());
         validateEnabledConnections(command.selection());
@@ -170,7 +208,7 @@ public class ReportEnterpriseService {
         }
         String actorId = actorProvider.currentActor().actorId();
         String locale = BusinessRequestContextHolder.currentLocale();
-        return jdbcTemplate.queryForObject("""
+        Schedule saved = jdbcTemplate.queryForObject("""
                 INSERT INTO report_schedules (
                     schedule_key, report_type, title_template, cron_expression, zone_id,
                     template_id, template_version, source_config, locale, enabled,
@@ -188,6 +226,7 @@ public class ReportEnterpriseService {
                     enabled = EXCLUDED.enabled,
                     owner_actor_id = EXCLUDED.owner_actor_id,
                     next_run_at = EXCLUDED.next_run_at,
+                    claim_token = NULL, claimed_at = NULL,
                     updated_at = now()
                 RETURNING id, schedule_key, report_type, title_template,
                           cron_expression, zone_id, locale, enabled, owner_actor_id,
@@ -197,6 +236,11 @@ public class ReportEnterpriseService {
                 command.cronExpression().trim(), command.zoneId().trim(),
                 command.templateId().trim(), command.templateVersion().trim(),
                 json(command.selection()), locale, command.enabled(), actorId, Timestamp.from(next));
+        jdbcTemplate.update("""
+                UPDATE report_schedule_runs SET status='FAILED', reason='SCHEDULE_CHANGED', finished_at=now()
+                WHERE schedule_id=? AND status='RUNNING'
+                """, saved.id());
+        return saved;
     }
 
     public List<Schedule> schedules() {
@@ -253,6 +297,14 @@ public class ReportEnterpriseService {
 
     @Scheduled(fixedDelayString = "${business-copilot.report-copilot.schedule-poll-delay:PT1M}")
     public void generateDueSchedules() {
+        try {
+            worker.execute(this::processDueSchedules);
+        } catch (java.util.concurrent.RejectedExecutionException ex) {
+            // Nothing is claimed until the bounded worker starts.
+        }
+    }
+
+    public void processDueSchedules() {
         for (int i = 0; i < 20; i++) {
             DueSchedule schedule = claimDueSchedule();
             if (schedule == null) break;
@@ -260,103 +312,30 @@ public class ReportEnterpriseService {
         }
     }
 
-    @Transactional
     DueSchedule claimDueSchedule() {
-        jdbcTemplate.update("""
-                UPDATE report_schedule_runs run
-                SET status = 'FAILED', reason = 'SCHEDULE_LEASE_EXPIRED', finished_at = now()
-                FROM report_schedules schedule
-                WHERE run.schedule_id = schedule.id
-                  AND run.status = 'RUNNING'
-                  AND schedule.claimed_at < now() - interval '15 minutes'
-                """);
-        UUID claimToken = UUID.randomUUID();
-        List<DueSchedule> rows = jdbcTemplate.query("""
-                WITH candidate AS (
-                    SELECT id FROM report_schedules
-                    WHERE enabled = TRUE AND next_run_at <= now()
-                      AND (claimed_at IS NULL OR claimed_at < now() - interval '15 minutes')
-                    ORDER BY next_run_at
-                    FOR UPDATE SKIP LOCKED LIMIT 1
-                )
-                UPDATE report_schedules schedule
-                SET claim_token = ?, claimed_at = now(), updated_at = now()
-                FROM candidate WHERE schedule.id = candidate.id
-                RETURNING schedule.id, schedule.schedule_key, schedule.report_type,
-                          schedule.title_template, schedule.cron_expression, schedule.zone_id,
-                          schedule.template_id, schedule.template_version,
-                          schedule.source_config::text, schedule.locale, schedule.owner_actor_id,
-                          schedule.claim_token
-                """, this::mapDueSchedule, claimToken);
-        return rows.isEmpty() ? null : rows.getFirst();
+        return lifecycle.claimSchedule();
     }
 
     private void runSchedule(DueSchedule schedule) {
-        Long runId = jdbcTemplate.queryForObject("""
-                INSERT INTO report_schedule_runs (schedule_id, status)
-                VALUES (?, 'RUNNING') RETURNING id
-                """, Long.class, schedule.id());
-        ZoneId zone = ZoneId.of(schedule.zoneId());
-        LocalDate end = LocalDate.now(zone);
-        ReportPeriod period = new ReportPeriod(end.minusDays(6), end);
+        ReportPublicationClaim claim = new ReportPublicationClaim(schedule.ownerActorId(), null, List.of(),
+                schedule.id(), schedule.claimToken(), schedule.runId());
+        BusinessRequestContext previous = BusinessRequestContextHolder.current();
         try {
+            ZoneId zone = ZoneId.of(schedule.zoneId());
+            LocalDate end = LocalDate.now(zone);
+            ReportPeriod period = new ReportPeriod(end.minusDays(6), end, schedule.zoneId());
             BusinessRequestContextHolder.set(new BusinessRequestContext(
-                    "report-schedule-" + runId, schedule.ownerActorId(), Set.of("OPERATOR"),
-                    schedule.locale()));
+                    "report-schedule-" + schedule.runId(), schedule.ownerActorId(), Set.of("OPERATOR"), schedule.locale()));
             ReportDraftResponse response = generate(new GenerateCommand(
-                    schedule.reportType(), period,
-                    schedule.titleTemplate().replace("{date}", end.toString()),
-                    schedule.selection(), schedule.templateId(), schedule.templateVersion()));
-            String runStatus = switch (response.status()) {
-                case "DRAFTED" -> "DRAFTED";
-                case "NEEDS_REVIEW" -> "NEEDS_REVIEW";
-                default -> "FAILED";
-            };
-            String reason = "FAILED".equals(runStatus)
-                    ? "GENERATION_" + response.status() : null;
-            jdbcTemplate.update("""
-                    UPDATE report_schedule_runs
-                    SET status = ?, reason = ?, report_draft_id = ?, finished_at = now()
-                    WHERE id = ?
-                    """, runStatus, reason, response.draftId(), runId);
-            updateNextRun(schedule, zone);
+                    schedule.reportType(), period, schedule.titleTemplate().replace("{date}", end.toString()),
+                    schedule.selection(), schedule.templateId(), schedule.templateVersion()), schedule);
+            if (response.draftId() == null) lifecycle.failSchedule(claim, "GENERATION_" + response.status());
         } catch (RuntimeException ex) {
-            jdbcTemplate.update("""
-                    UPDATE report_schedule_runs
-                    SET status = 'FAILED', reason = 'SCHEDULE_GENERATION_FAILED',
-                        finished_at = now()
-                    WHERE id = ?
-                    """, runId);
-            updateNextRun(schedule, zone);
+            lifecycle.failSchedule(claim, "SCHEDULE_GENERATION_FAILED");
         } finally {
-            BusinessRequestContextHolder.clear();
+            if (previous == null) BusinessRequestContextHolder.clear();
+            else BusinessRequestContextHolder.set(previous);
         }
-    }
-
-    private void updateNextRun(DueSchedule schedule, ZoneId zone) {
-        ZonedDateTime nextRun;
-        try {
-            nextRun = CronExpression.parse(schedule.cronExpression())
-                    .next(ZonedDateTime.now(zone));
-        } catch (IllegalArgumentException | DateTimeException ex) {
-            nextRun = null;
-        }
-        if (nextRun == null) {
-            jdbcTemplate.update("""
-                    UPDATE report_schedules
-                    SET enabled = FALSE, last_run_at = now(), claim_token = NULL,
-                        claimed_at = NULL, updated_at = now()
-                    WHERE id = ? AND claim_token = ?
-                    """, schedule.id(), schedule.claimToken());
-            return;
-        }
-        Instant next = nextRun.toInstant();
-        jdbcTemplate.update("""
-                UPDATE report_schedules
-                SET last_run_at = now(), next_run_at = ?, claim_token = NULL,
-                    claimed_at = NULL, updated_at = now()
-                WHERE id = ? AND claim_token = ?
-                """, Timestamp.from(next), schedule.id(), schedule.claimToken());
     }
 
     private List<RawReportSource> collect(SourceSelection selection, ReportPeriod period,
@@ -375,13 +354,13 @@ public class ReportEnterpriseService {
         }
         sources.addAll(loadDataHandoffs(selection.dataHandoffReferences(), actorId, claimToken));
         if (selection.includeSupportMetrics()) {
-            sources.addAll(loadSupportMetrics());
+            sources.addAll(loadSupportMetrics(period));
         }
         if (selection.previousDataHandoffReference() != null
                 && !selection.dataHandoffReferences().isEmpty()) {
             sources.add(compareDataHandoffs(
                     selection.dataHandoffReferences().getFirst(),
-                    selection.previousDataHandoffReference(), actorId));
+                    selection.previousDataHandoffReference(), actorId, period));
         }
         return List.copyOf(sources);
     }
@@ -390,24 +369,7 @@ public class ReportEnterpriseService {
         if (connection.provider() == Provider.JIRA) {
             String secret = secretResolver.resolve(connection.secretRef());
             String auth = secret.contains(" ") ? secret : "Bearer " + secret;
-            RestClient client = clientFactory.builder(connection.baseUrl())
-                    .defaultHeader("Authorization", auth).build();
-            JsonNode response = clientFactory.validatePayload(client.get()
-                    .uri(trimSlash(connection.baseUrl())
-                    + "/rest/api/3/search?jql=updated%20%3E%3D%20"
-                    + period.periodStart() + "&maxResults=100")
-                    .retrieve().body(JsonNode.class));
-            List<RawReportSource> sources = new ArrayList<>();
-            for (JsonNode issue : iterable(response == null ? null : response.path("issues"))) {
-                JsonNode fields = issue.path("fields");
-                String key = issue.path("key").asText();
-                String summary = fields.path("summary").asText("");
-                String status = fields.path("status").path("name").asText("");
-                sources.add(raw(ReportSourceType.TASK, key + " " + summary,
-                        "状态：" + status + "；" + summary,
-                        connection.connectionKey(), fields.path("updated").asText(null), ""));
-            }
-            return sources;
+            return new JiraReportSourceClient(clientFactory).collect(connection, period, auth);
         }
         if (connection.provider() == Provider.MEETING_NOTES) {
             JsonNode response = clientFactory.validatePayload(
@@ -433,7 +395,8 @@ public class ReportEnterpriseService {
         for (String reference : references) {
             List<DataHandoffRow> rows = jdbcTemplate.query("""
                     SELECT handoff.title, handoff.source_reference, result.rows_json::text,
-                           result.explanation_json::text, result.created_at, result.row_count
+                           result.explanation_json::text, result.created_at, result.row_count,
+                           result.expires_at, result.truncated, handoff.metric_snapshot::text
                     FROM data_report_handoffs handoff
                     JOIN data_query_results result ON result.id = handoff.query_result_id
                     WHERE handoff.source_reference = ? AND handoff.status = 'CLAIMED'
@@ -443,7 +406,9 @@ public class ReportEnterpriseService {
                     rs.getString("title"), rs.getString("source_reference"),
                     rs.getString("rows_json"), rs.getString("explanation_json"),
                     rs.getInt("row_count"),
-                    rs.getTimestamp("created_at").toInstant()), reference, actorId, claimToken);
+                    rs.getTimestamp("created_at").toInstant(), rs.getTimestamp("expires_at").toInstant(),
+                    rs.getBoolean("truncated"), objectMapper.readValue(rs.getString("metric_snapshot"),
+                    new TypeReference<Map<String, String>>() { })), reference, actorId, claimToken);
             if (rows.isEmpty()) {
                 // REP-03：来源采集失败必须明确列出缺失来源；报告不生成，绝不静默输出看似完整的结果。
                 throw new BusinessException(ErrorCode.STATE_CONFLICT,
@@ -457,13 +422,27 @@ public class ReportEnterpriseService {
 
     private List<RawReportSource> normalizeDataHandoff(DataHandoffRow row) {
         List<RawReportSource> sources = new ArrayList<>();
-        Instant validUntil = row.createdAt().plus(java.time.Duration.ofDays(1));
+        Instant validUntil = row.expiresAt();
+        Map<String, String> provenance = new java.util.LinkedHashMap<>(row.metric());
+        provenance.put("rowCount", String.valueOf(row.rowCount()));
+        provenance.put("completeness", row.truncated() ? "TRUNCATED" : "COMPLETE_QUERY_RESULT");
+        provenance.put("sourceReference", row.sourceReference());
         sources.add(new RawReportSource(
-                ReportSourceType.KNOWLEDGE, row.title(), row.rowsJson()
+                ReportSourceType.KNOWLEDGE, row.title(), (row.truncated() ? "来源已截断，仅代表返回的部分数据，不可用于总量或环比。\n" : "") + row.rowsJson()
                         + (row.explanationJson() == null ? "" : "\n" + row.explanationJson()),
-                Map.of("rowCount", String.valueOf(row.rowCount())),
+                provenance,
                 "data-copilot", row.sourceReference(), row.createdAt(),
                 "Asia/Shanghai", "query-result", validUntil));
+        if (row.truncated()) return sources;
+        if ("period-total-v1".equals(row.metric().get("schema"))) {
+            var attributes = new java.util.LinkedHashMap<>(provenance);
+            attributes.put("name", row.metric().get("metricKey"));
+            sources.add(new RawReportSource(ReportSourceType.METRIC, row.metric().get("metricName"),
+                    "已人工核验 SQL 及业务周期的期间总量：" + objectMapper.writeValueAsString(row.metric()),
+                    attributes, "data-copilot", row.sourceReference(), row.createdAt(),
+                    row.metric().get("timezone"), row.metric().get("unit"), validUntil));
+            return sources;
+        }
         try {
             JsonNode root = objectMapper.readTree(row.rowsJson());
             if (!root.isArray() || root.size() != 1 || !root.get(0).isObject()) return sources;
@@ -487,61 +466,75 @@ public class ReportEnterpriseService {
         return sources;
     }
 
-    private List<RawReportSource> loadSupportMetrics() {
+    private List<RawReportSource> loadSupportMetrics(ReportPeriod period) {
+        ZoneId zone = ZoneId.of(period.timezone());
+        Instant start = period.periodStart().atStartOfDay(zone).toInstant();
+        Instant end = period.periodEnd().plusDays(1).atStartOfDay(zone).toInstant();
+        Instant observedAt = Instant.now();
         Map<String, Object> metrics = jdbcTemplate.queryForMap("""
                 SELECT
-                    COUNT(*) AS total,
-                    COUNT(*) FILTER (WHERE status = 'CLOSED') AS closed,
+                    COUNT(*) FILTER (WHERE created_at >= ? AND created_at < ?) AS total,
+                    (SELECT COUNT(DISTINCT ticket_id) FROM support_audit_logs
+                     WHERE event_type = 'CUSTOMER_REPLY_RECORDED'
+                       AND created_at >= ? AND created_at < ?) AS closed,
+                    COUNT(*) FILTER (WHERE status NOT IN ('CLOSED', 'CANCELED')) AS backlog,
                     COUNT(*) FILTER (WHERE status = 'NEEDS_HUMAN') AS handed_off,
-                    COUNT(*) FILTER (WHERE sla_status = 'AT_RISK') AS sla_at_risk,
-                    COUNT(*) FILTER (WHERE sla_status = 'BREACHED') AS sla_breached
+                    COUNT(*) FILTER (WHERE status NOT IN ('CLOSED', 'CANCELED')
+                                     AND sla_status = 'AT_RISK') AS sla_at_risk,
+                    COUNT(*) FILTER (WHERE status NOT IN ('CLOSED', 'CANCELED')
+                                     AND sla_status = 'BREACHED') AS sla_breached
                 FROM support_tickets
-                """);
-        Instant observedAt = Instant.now();
-        return metrics.entrySet().stream()
-                .map(entry -> metric("客服质量统计 · " + entry.getKey(),
-                        "support." + entry.getKey(), entry.getValue(), "tickets",
-                        "support-copilot", observedAt))
-                .toList();
+                """, Timestamp.from(start), Timestamp.from(end), Timestamp.from(start), Timestamp.from(end));
+        Map<String, String> definitions = Map.of(
+                "total", "期间创建工单数", "closed", "期间有人工回复记录的去重工单数（仅保留的审计事件）",
+                "backlog", "采集时未关闭工单存量", "handed_off", "采集时待人工处理工单存量",
+                "sla_at_risk", "采集时临近 SLA 的未关闭工单存量",
+                "sla_breached", "采集时超过 SLA 的未关闭工单存量");
+        return metrics.entrySet().stream().map(entry -> {
+            boolean flow = entry.getKey().equals("total") || entry.getKey().equals("closed");
+            String name = "support." + entry.getKey();
+            String definition = definitions.get(entry.getKey());
+            Map<String, String> attributes = new java.util.LinkedHashMap<>();
+            attributes.put("name", name);
+            attributes.put("value", String.valueOf(entry.getValue()));
+            attributes.put("unit", "tickets");
+            attributes.put("metricType", flow ? "PERIOD" : "SNAPSHOT");
+            attributes.put("definition", definition);
+            attributes.put("definitionVersion", "support-metrics-v2");
+            attributes.put("periodStart", start.toString());
+            attributes.put("periodEndExclusive", end.toString());
+            attributes.put("timezone", period.timezone());
+            attributes.put("collectedAt", observedAt.toString());
+            attributes.put("completeness", entry.getKey().equals("closed") ? "RECORDED_EVENTS_ONLY" : "PLATFORM_RECORDS");
+            return new RawReportSource(ReportSourceType.METRIC, definition,
+                    "name=" + name + "\nvalue=" + entry.getValue() + "\nunit=tickets\n口径=" + definition
+                            + (flow ? "；周期=[" + start + ", " + end + ")" : "；时点=" + observedAt),
+                    Map.copyOf(attributes), "support-copilot", "support-metrics-v2", observedAt,
+                    period.timezone(), "tickets", observedAt.plus(java.time.Duration.ofDays(1)));
+        }).toList();
     }
 
-    private RawReportSource compareDataHandoffs(String current, String previous, String actorId) {
-        // REP-02：环比由确定性计算器完成，输入、公式、周期、单位可核验；零分母明确标记不可计算。
-        Integer currentRows = handoffRows(current, actorId);
-        Integer previousRows = handoffRows(previous, actorId);
-        ReportComparisonCalculator.ComparisonResult comparison =
-                new ReportComparisonCalculator().compute(
-                        BigDecimal.valueOf(currentRows), BigDecimal.valueOf(previousRows),
-                        "percent", current, previous);
-        String valueText = comparison.computable()
-                ? comparison.changePercent().toPlainString()
-                : "不可计算";
-        String severity = comparison.needsReview() ? "需要复核" : "正常";
-        Instant observedAt = Instant.now();
-        return new RawReportSource(ReportSourceType.METRIC, "环比差异与来源异常",
-                "当前结果行数=" + currentRows + "，对比期行数=" + previousRows
-                        + "，变化=" + valueText + "%，状态=" + severity
-                        + "，公式=" + comparison.formula()
-                        + (comparison.notComputableReason() == null
-                                ? "" : "，说明=" + comparison.notComputableReason()),
-                Map.of("name", "data.rowCount.change", "value", valueText, "unit", "percent",
-                        "formula", comparison.formula(),
-                        "currentValue", String.valueOf(currentRows),
-                        "previousValue", String.valueOf(previousRows),
-                        "currentPeriod", current, "previousPeriod", previous),
-                "report-difference", observedAt.toString(), observedAt,
-                "Asia/Shanghai", "percent", observedAt.plus(java.time.Duration.ofDays(7)));
+    private RawReportSource compareDataHandoffs(String current, String previous, String actorId, ReportPeriod period) {
+        Map<String, String> currentMetric = handoffMetric(current, actorId);
+        Map<String, String> previousMetric = handoffMetric(previous, actorId);
+        return new DataMetricComparison().compare(currentMetric, previousMetric, current, previous, period);
     }
 
-    private Integer handoffRows(String reference, String actorId) {
-        List<Integer> rows = jdbcTemplate.query("""
-                SELECT result.row_count
+    private Map<String, String> handoffMetric(String reference, String actorId) {
+        var rows = jdbcTemplate.query("""
+                SELECT handoff.metric_snapshot::text, result.truncated, result.expires_at
                 FROM data_report_handoffs handoff
                 JOIN data_query_results result ON result.id = handoff.query_result_id
                 WHERE handoff.source_reference = ? AND handoff.owner_actor_id = ?
                   AND result.expires_at > now()
-                """, (rs, rowNum) -> rs.getInt(1), reference, actorId);
-        if (rows.isEmpty()) throw new BusinessException(ErrorCode.NOT_FOUND);
+                """, (rs, rowNum) -> {
+            Map<String, String> metric = new java.util.LinkedHashMap<>(objectMapper.readValue(
+                    rs.getString("metric_snapshot"), new TypeReference<Map<String, String>>() { }));
+            metric.put("truncated", String.valueOf(rs.getBoolean("truncated")));
+            metric.put("validUntil", rs.getTimestamp("expires_at").toInstant().toString());
+            return Map.copyOf(metric);
+        }, reference, actorId);
+        if (rows.isEmpty()) throw new BusinessException(ErrorCode.NOT_FOUND, "对比来源已过期或不可访问");
         return rows.getFirst();
     }
 
@@ -569,15 +562,6 @@ public class ReportEnterpriseService {
         return claimToken;
     }
 
-    private void consumeHandoffs(UUID claimToken, String actorId) {
-        if (claimToken == null) return;
-        jdbcTemplate.update("""
-                UPDATE data_report_handoffs
-                SET status = 'CONSUMED', consumed_at = now(), claim_token = NULL, claimed_at = NULL
-                WHERE claim_token = ? AND owner_actor_id = ? AND status = 'CLAIMED'
-                """, claimToken, actorId);
-    }
-
     private void releaseHandoffs(UUID claimToken, String actorId) {
         if (claimToken == null) return;
         jdbcTemplate.update("""
@@ -585,25 +569,6 @@ public class ReportEnterpriseService {
                 SET status = 'READY', claim_token = NULL, claimed_at = NULL
                 WHERE claim_token = ? AND owner_actor_id = ? AND status = 'CLAIMED'
                 """, claimToken, actorId);
-    }
-
-    /** DATA-05：记录 草稿 ← 交接 ← 结果快照 ← SQL 候选 的追溯关联；只读查询供交付审计使用。 */
-    private void recordDataTraceability(Long draftId, List<String> references) {
-        if (draftId == null || references == null || references.isEmpty()) {
-            return;
-        }
-        for (String reference : references) {
-            jdbcTemplate.update("""
-                    INSERT INTO report_draft_data_links (
-                        draft_id, source_reference, query_result_id, candidate_id, handoff_id
-                    )
-                    SELECT ?, handoff.source_reference, result.id, result.candidate_id, handoff.id
-                    FROM data_report_handoffs handoff
-                    JOIN data_query_results result ON result.id = handoff.query_result_id
-                    WHERE handoff.source_reference = ?
-                    ON CONFLICT (draft_id, source_reference) DO NOTHING
-                    """, draftId, reference);
-        }
     }
 
     /** DATA-05：读取草稿的数据追溯链；链接由交接消费时写入，未消费的交接不产生链接。 */
@@ -693,7 +658,7 @@ public class ReportEnterpriseService {
     private Connection requireConnection(long id) {
         List<Connection> rows = jdbcTemplate.query("""
                 SELECT id, connection_key, display_name, provider, base_url,
-                       secret_ref, enabled, owner_actor_id
+                       secret_ref, enabled, owner_actor_id, jira_project_keys::text
                 FROM report_external_connections WHERE id = ?
                 """, this::mapConnection, id);
         if (rows.isEmpty()) throw new BusinessException(ErrorCode.NOT_FOUND);
@@ -704,7 +669,8 @@ public class ReportEnterpriseService {
         return new Connection(rs.getLong("id"), rs.getString("connection_key"),
                 rs.getString("display_name"), Provider.valueOf(rs.getString("provider")),
                 rs.getString("base_url"), rs.getString("secret_ref"),
-                rs.getBoolean("enabled"), rs.getString("owner_actor_id"));
+                rs.getBoolean("enabled"), rs.getString("owner_actor_id"),
+                objectMapper.readValue(rs.getString("jira_project_keys"), new TypeReference<List<String>>() { }));
     }
 
     private Schedule mapSchedule(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException {
@@ -713,20 +679,6 @@ public class ReportEnterpriseService {
                 rs.getString("cron_expression"), rs.getString("zone_id"),
                 rs.getString("locale"), rs.getBoolean("enabled"), rs.getString("owner_actor_id"),
                 instant(rs.getTimestamp("last_run_at")), instant(rs.getTimestamp("next_run_at")));
-    }
-
-    private DueSchedule mapDueSchedule(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException {
-        try {
-            return new DueSchedule(rs.getLong("id"), rs.getString("schedule_key"),
-                    ReportType.valueOf(rs.getString("report_type")), rs.getString("title_template"),
-                    rs.getString("cron_expression"), rs.getString("zone_id"),
-                    rs.getString("template_id"), rs.getString("template_version"),
-                    objectMapper.readValue(rs.getString("source_config"), SourceSelection.class),
-                    rs.getString("locale"), rs.getString("owner_actor_id"),
-                    rs.getObject("claim_token", UUID.class));
-        } catch (JacksonException ex) {
-            throw new IllegalStateException("报告定时来源配置读取失败", ex);
-        }
     }
 
     private Iterable<JsonNode> iterable(JsonNode value) {
@@ -755,9 +707,14 @@ public class ReportEnterpriseService {
 
     public enum Provider { JIRA, MEETING_NOTES, DATA_QUERY, SUPPORT_METRICS }
     public record ConnectionCommand(String connectionKey, String displayName, Provider provider,
-                                    String baseUrl, String secretRef, boolean enabled) { }
+                                    String baseUrl, String secretRef, boolean enabled, List<String> jiraProjectKeys) {
+        public ConnectionCommand(String connectionKey, String displayName, Provider provider, String baseUrl,
+                                 String secretRef, boolean enabled) {
+            this(connectionKey, displayName, provider, baseUrl, secretRef, enabled, List.of());
+        }
+    }
     public record Connection(long id, String connectionKey, String displayName, Provider provider,
-                             String baseUrl, String secretRef, boolean enabled, String ownerActorId) { }
+                             String baseUrl, String secretRef, boolean enabled, String ownerActorId, List<String> jiraProjectKeys) { }
     public record SourceSelection(List<Long> connectionIds, List<String> dataHandoffReferences,
                                   boolean includeSupportMetrics, String previousDataHandoffReference) {
         public SourceSelection {
@@ -783,11 +740,12 @@ public class ReportEnterpriseService {
                                String title, String status, String reviewReasons,
                                Instant expiresAt, Instant createdAt, Instant updatedAt,
                                String approvalStatus) { }
-    private record DueSchedule(long id, String scheduleKey, ReportType reportType,
+    record DueSchedule(long id, String scheduleKey, ReportType reportType,
                                String titleTemplate, String cronExpression, String zoneId,
                                String templateId, String templateVersion,
                                SourceSelection selection, String locale,
-                               String ownerActorId, UUID claimToken) { }
+                               String ownerActorId, UUID claimToken, long runId) { }
     private record DataHandoffRow(String title, String sourceReference, String rowsJson,
-                                  String explanationJson, int rowCount, Instant createdAt) { }
+                                  String explanationJson, int rowCount, Instant createdAt, Instant expiresAt,
+                                  boolean truncated, Map<String, String> metric) { }
 }

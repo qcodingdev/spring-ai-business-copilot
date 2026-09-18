@@ -5,6 +5,7 @@ import { api, ApiError, jsonBody } from '@/api/client'
 import { useSession } from '@/composables/useSession'
 import ConfirmDialog from './ConfirmDialog.vue'
 import DataExecutionResult from './DataExecutionResult.vue'
+import DataHandoffMetricForm from './DataHandoffMetricForm.vue'
 import RequestId from './RequestId.vue'
 import StatusBadge from './StatusBadge.vue'
 import ToastMessage from './ToastMessage.vue'
@@ -30,6 +31,9 @@ const queryExecution = ref<DataRecord | null>(null)
 const templateForm = ref({ templateKey: '', name: '', description: '', sql: '' })
 const metricForm = ref({ metricKey: '', displayName: '', description: '', unit: '', expressionSql: '' })
 const handoffTitle = ref('')
+const handoffOptions = ref<DataRecord | null>(null)
+const metricScope = ref<DataRecord | null>(null)
+const metricScopeValid = ref(true)
 const selectedResultId = ref<number | null>(null)
 const pendingAction = ref<PendingAction>(null)
 const pendingQuery = ref<{ kind: 'template' | 'metric'; item: DataRecord } | null>(null)
@@ -57,6 +61,9 @@ function resetTransient(): void {
   queryCandidate.value = null
   queryExecution.value = null
   selectedResultId.value = null
+  handoffOptions.value = null
+  metricScope.value = null
+  metricScopeValid.value = true
   pendingAction.value = null
   pendingQuery.value = null
 }
@@ -177,13 +184,26 @@ function requestMetricLaunch(metric: DataRecord): void {
   pendingAction.value = 'query-launch'
 }
 
-function selectResultForHandoff(resultId: number): void {
-  selectedResultId.value = resultId
-  if (!handoffTitle.value) handoffTitle.value = t('data.defaultHandoffTitle')
+async function selectResultForHandoff(resultId: number): Promise<void> {
+  loading.value = true
+  selectedResultId.value = null
+  handoffOptions.value = null
+  metricScope.value = null
+  metricScopeValid.value = true
+  try {
+    const response = await api<DataRecord>(`/api/data-copilot/query-results/${resultId}/handoff-options`)
+    handoffOptions.value = response.data
+    selectedResultId.value = resultId
+    if (!handoffTitle.value) handoffTitle.value = t('data.defaultHandoffTitle')
+  } catch (error) {
+    errorCode.value = error instanceof ApiError ? error.errorCode : 'generic'
+    requestId.value = error instanceof ApiError ? error.requestId : null
+    showToast(localizedError.value, 'danger')
+  } finally { loading.value = false }
 }
 
 function requestHandoff(): void {
-  if (selectedResultId.value === null || !handoffTitle.value.trim()) return
+  if (selectedResultId.value === null || !handoffTitle.value.trim() || !metricScopeValid.value) return
   pendingAction.value = 'handoff'
 }
 
@@ -243,7 +263,7 @@ async function createHandoff(resultId: number): Promise<void> {
   try {
     const response = await api<DataRecord>(`/api/data-copilot/query-results/${encodeURIComponent(String(resultId))}/report-handoff`, {
       method: 'POST',
-      ...jsonBody({ title: handoffTitle.value }),
+      ...jsonBody({ title: handoffTitle.value, metricScope: metricScope.value }),
     })
     handoffs.value = [response.data, ...handoffs.value]
     requestId.value = response.requestId
@@ -353,6 +373,8 @@ onUnmounted(() => window.removeEventListener('hashchange', revealMetricFromHash)
           <article v-for="handoff in handoffs" :key="handoff.id">
             <div class="section-heading"><h4>{{ handoff.title }}</h4><StatusBadge :label="handoff.status" :tone="handoff.status === 'READY' ? 'success' : 'warning'" /></div>
             <p>{{ t('data.sourceReference') }}: <code>{{ handoff.sourceReference }}</code></p>
+            <p v-if="handoff.truncated" class="warning-text">{{ t('data.resultTruncated') }}</p>
+            <p v-if="handoff.metricSnapshot?.metricName">{{ handoff.metricSnapshot.metricName }} · {{ handoff.metricSnapshot.value }} {{ handoff.metricSnapshot.unit }} · {{ handoff.metricSnapshot.periodStart }} — {{ handoff.metricSnapshot.periodEnd }}</p>
             <small>{{ t('data.resultId') }} #{{ handoff.resultId }} · {{ handoff.rowCount }} {{ t('data.rows') }} · {{ date(handoff.createdAt) }}</small>
           </article>
         </div>
@@ -366,7 +388,8 @@ onUnmounted(() => window.removeEventListener('hashchange', revealMetricFromHash)
           </table>
         </div>
         <p v-else class="empty-state">{{ t('data.noResultsForHandoff') }}</p>
-        <div v-if="selectedResultId !== null" class="form-actions"><label>{{ t('data.handoffTitle') }}<input v-model="handoffTitle" required maxlength="300"></label><button class="button button--primary" type="button" :disabled="loading || !handoffTitle.trim()" @click="requestHandoff">{{ t('data.createHandoff') }}</button></div>
+        <DataHandoffMetricForm v-if="handoffOptions" :key="selectedResultId ?? 0" :options="handoffOptions" @change="(scope, valid) => { metricScope = scope; metricScopeValid = valid }" />
+        <div v-if="selectedResultId !== null" class="form-actions"><label>{{ t('data.handoffTitle') }}<input v-model="handoffTitle" required maxlength="300"></label><button class="button button--primary" type="button" :disabled="loading || !handoffTitle.trim() || !metricScopeValid" @click="requestHandoff">{{ t('data.createHandoff') }}</button></div>
       </section>
     </template>
 

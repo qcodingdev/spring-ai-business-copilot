@@ -52,14 +52,30 @@ class ReportEnterpriseServiceTest {
                 any(), any(), any())).thenAnswer(invocation -> {
             java.sql.ResultSet rs = mock(java.sql.ResultSet.class);
             when(rs.getString("title")).thenReturn("经营数据");
+            when(rs.getString("metric_snapshot")).thenReturn("{}");
             when(rs.getString("source_reference")).thenReturn("data-result");
             when(rs.getString("rows_json")).thenReturn("[{\"count\":1}]");
             when(rs.getInt("row_count")).thenReturn(1);
             when(rs.getTimestamp("created_at")).thenReturn(
                     java.sql.Timestamp.from(java.time.Instant.now()));
+            when(rs.getTimestamp("expires_at")).thenReturn(
+                    java.sql.Timestamp.from(java.time.Instant.now().plusSeconds(3600)));
             org.springframework.jdbc.core.RowMapper<?> mapper = invocation.getArgument(1);
             return List.of(mapper.mapRow(rs, 0));
         });
+    }
+
+    @Test
+    void busyWorkerDefersPollingWithoutClaimingOrBlockingTheScheduler() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        ReportLifecycleService lifecycle = mock(ReportLifecycleService.class);
+        java.util.concurrent.Executor busy = work -> { throw new java.util.concurrent.RejectedExecutionException("busy"); };
+        ReportEnterpriseService service = new ReportEnterpriseService(jdbc, mock(ReportGenerationService.class),
+                actorProvider(), mock(ExternalSecretResolver.class), new ObjectMapper(),
+                mock(dev.qcoding.businesscopilot.commonsecurity.ExternalEndpointPolicy.class),
+                mock(dev.qcoding.businesscopilot.commonsecurity.ExternalHttpClientFactory.class), busy, lifecycle);
+        service.generateDueSchedules();
+        org.mockito.Mockito.verifyNoInteractions(jdbc, lifecycle);
     }
 
     @Test
@@ -158,7 +174,7 @@ class ReportEnterpriseServiceTest {
     void aggregatesSupportMetricsIntoDraftWithoutPublishingIt() {
         JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
         ReportGenerationService generationService = mock(ReportGenerationService.class);
-        when(jdbcTemplate.queryForMap(anyString())).thenReturn(java.util.Map.of(
+        when(jdbcTemplate.queryForMap(anyString(), any(Object[].class))).thenReturn(java.util.Map.of(
                 "total", 120L,
                 "closed", 100L,
                 "handed_off", 8L,
@@ -228,7 +244,7 @@ class ReportEnterpriseServiceTest {
     }
 
     @Test
-    void consumesDataHandoffOnlyAfterDraftGenerationSucceeds() throws Exception {
+    void carriesHandoffOwnershipProofIntoDraftPublication() throws Exception {
         JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
         ReportGenerationService generationService = mock(ReportGenerationService.class);
         ReportDraftResponse draft = new ReportDraftResponse(
@@ -239,7 +255,7 @@ class ReportEnterpriseServiceTest {
                         "已生成", List.of(), List.of(), List.of(), List.of(),
                         List.of(), List.of(), List.of()),
                 List.of(), null, null, "test-model", "APPROVED");
-        when(generationService.generate(any(ReportGenerateRequest.class))).thenReturn(draft);
+        when(generationService.generate(any(ReportGenerateRequest.class), any(ReportPublicationClaim.class))).thenReturn(draft);
         stubClaimedHandoff(jdbcTemplate);
         ReportEnterpriseService service = new ReportEnterpriseService(
                 jdbcTemplate, generationService, actorProvider(), mock(ExternalSecretResolver.class),
@@ -253,9 +269,11 @@ class ReportEnterpriseServiceTest {
                         List.of(), List.of("data-result-20260728"), false, null),
                 "operating-brief", "v1"));
 
-        verify(jdbcTemplate).update(
-                org.mockito.ArgumentMatchers.contains("SET status = 'CONSUMED'"),
-                any(java.util.UUID.class), eq("operator-1"));
+        var proof = ArgumentCaptor.forClass(ReportPublicationClaim.class);
+        verify(generationService).generate(any(ReportGenerateRequest.class), proof.capture());
+        assertThat(proof.getValue().handoffToken()).isNotNull();
+        assertThat(proof.getValue().handoffReferences()).containsExactly("data-result-20260728");
+        assertThat(proof.getValue().ownerActorId()).isEqualTo("operator-1");
     }
 
     @Test
@@ -267,7 +285,7 @@ class ReportEnterpriseServiceTest {
                 new ReportPeriod(LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 28)),
                 "经营简报", "NEEDS_REVIEW", null,
                 List.of("证据不一致"), null, null, "test-model", "PENDING");
-        when(generationService.generate(any(ReportGenerateRequest.class))).thenReturn(draft);
+        when(generationService.generate(any(ReportGenerateRequest.class), any(ReportPublicationClaim.class))).thenReturn(draft);
         stubClaimedHandoff(jdbcTemplate);
         ReportEnterpriseService service = new ReportEnterpriseService(
                 jdbcTemplate, generationService, actorProvider(), mock(ExternalSecretResolver.class),

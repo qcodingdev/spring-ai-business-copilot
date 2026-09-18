@@ -39,3 +39,9 @@ HR Copilot 中的招聘辅助能力：先从岗位需求生成岗位画像和 JD
 
 2.4 开发线对超过可配置人工复核窗口的证据评估和入职必办任务给出企业就绪关注项，整改分别
 回到招聘评估或员工入职页面，继续保持授权、复核员和禁止自动招聘决策边界。
+
+### Reliability and evidence / 可靠性与证据
+
+Consent revocation and expiry apply immediately to assessment details, evidence, queues and review claims. Publication checks consent again after model generation, so withdrawal during a long call cannot create a new assessment.
+
+授权撤回与到期立即作用于评估详情、证据、队列和复核领取；模型生成结束后重新核验授权，处理中撤回不能继续创建派生评估。

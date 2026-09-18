@@ -37,3 +37,9 @@ Test: `./mvnw -pl modules/report-copilot -am test`
 
 2.4 开发线把已启用调度超过租约仍被领取列为企业就绪阻断项，把尚未被后续成功草稿恢复的
 失败运行和超过人工复核窗口的草稿列为关注项。整改回到调度或报告记录页面，就绪操作不会发布报告。
+
+### Reliability and evidence / 可靠性与证据
+
+Support sources separate period creations and verifiable reply events from current backlog snapshots, with timezone, collection time and a versioned definition. Jira uses project-scoped, bounded cursor pagination and fails closed when completeness cannot be established. Report publication, handoff consumption and schedule completion commit together under the current lease; source disablement and schedule edits invalidate old workers. Metric comparison requires the same metric version, unit, timezone and adjacent equally long periods; missing, partial or zero-baseline data produces an explicit non-comparable result. Exports retain the requested title, period and timezone.
+
+客服来源区分期间新增、可验证回复事件和当前积压快照，保存时区、采集时间与口径版本。Jira 限定项目并有界游标翻页，无法确认完整性时拒绝生成。草稿发布、交接消费和排期完成在有效租约下原子提交；停用来源或修改排期后旧 worker 不能发布。环比仅接受同指标版本、单位、时区及相邻等长周期；缺失、截断或零基数会明确返回不可比较。导出保留标题、周期与时区。

@@ -1,4 +1,10 @@
 export default {
+  jiraProjectKeys: 'Jira project keys (comma separated)',
+  frequency: 'Generation frequency',
+  frequencies: { weekly: 'Mondays at 09:00', daily: 'Daily at 09:00', monthly: 'First day of the month at 09:00', custom: 'Custom schedule (advanced)' },
+  sourceNames: 'Select report sources',
+  noExternalSources: 'No external sources are enabled. Use support metrics or ask an administrator to configure a source.',
+
   title: 'Evidence-grounded report generation and export',
   description: 'Preview source freshness before generating a human-confirmed draft. Reports are never auto-published.',
   tabs: { generate: 'Generate report', records: 'Report records', sources: 'Source management', schedules: 'Schedules and export' },

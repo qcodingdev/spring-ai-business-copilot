@@ -109,6 +109,38 @@ class KnowledgeIndexingServiceTest {
         verify(embeddings, never()).persistPreparedIndex(any());
     }
 
+    @Test
+    void slowEmbeddingDoesNotBlockSchedulerOrClaimAnotherJobOnSaturation() throws Exception {
+        var worker = new dev.qcoding.businesscopilot.knowledgecopilot.KnowledgeCopilotAutoConfiguration().knowledgeIndexWorker();
+        worker.initialize();
+        var entered = new java.util.concurrent.CountDownLatch(1);
+        var release = new java.util.concurrent.CountDownLatch(1);
+        var jobs = mock(KnowledgeIndexJobRepository.class);
+        var chunks = mock(KnowledgeChunkRepository.class);
+        var embeddings = mock(KnowledgeEmbeddingService.class);
+        var lifecycle = mock(KnowledgeIndexLifecycleService.class);
+        when(lifecycle.claimNext(any())).thenReturn(Optional.of(job(KnowledgeIndexJobStatus.PROCESSING, 1)));
+        when(chunks.findByDocumentId(1L)).thenReturn(List.of());
+        when(embeddings.prepareIndex(eq(1L), any())).thenAnswer(inv -> {
+            entered.countDown();
+            if (!release.await(5, java.util.concurrent.TimeUnit.SECONDS)) throw new IllegalStateException("test timeout");
+            throw new AiModelNotEnabledException("fixture");
+        });
+        var service = new KnowledgeIndexingService(jobs, mock(KnowledgeDocumentRepository.class), chunks,
+                embeddings, lifecycle, worker);
+        try (var scheduler = java.util.concurrent.Executors.newSingleThreadScheduledExecutor()) {
+            scheduler.submit(service::processPendingJob).get(2, java.util.concurrent.TimeUnit.SECONDS);
+            assertThat(entered.await(2, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            assertThat(scheduler.submit(() -> "cleanup still runs").get(2, java.util.concurrent.TimeUnit.SECONDS))
+                    .isEqualTo("cleanup still runs");
+            scheduler.submit(service::processPendingJob).get(2, java.util.concurrent.TimeUnit.SECONDS);
+            verify(lifecycle, org.mockito.Mockito.times(1)).claimNext(any());
+        } finally {
+            release.countDown();
+            worker.shutdown();
+        }
+    }
+
     private KnowledgeIndexJob job(KnowledgeIndexJobStatus status, int attempts) {
         return new KnowledgeIndexJob(
                 10L, 1L, status, attempts, null, null, null, null,

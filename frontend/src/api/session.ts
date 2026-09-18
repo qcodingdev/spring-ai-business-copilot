@@ -7,6 +7,8 @@ export interface Session {
   runtimeMode: string
   publicDemo: boolean
   aiEnabled: boolean
+  localLoginEnabled?: boolean
+  enterpriseLoginUrl?: string | null
 }
 
 export async function fetchSession(): Promise<Session> {

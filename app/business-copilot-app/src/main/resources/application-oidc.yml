@@ -1,0 +1,24 @@
+# Explicit opt-in: SPRING_PROFILES_ACTIVE=oidc. Configure one application at the existing IdP.
+business-copilot:
+  security:
+    oidc:
+      enabled: true
+      role-claim: ${BUSINESS_COPILOT_OIDC_ROLE_CLAIM:business_copilot_roles}
+spring:
+  security:
+    oauth2:
+      client:
+        registration:
+          enterprise:
+            provider: enterprise
+            client-id: ${BUSINESS_COPILOT_OIDC_CLIENT_ID}
+            client-secret: ${BUSINESS_COPILOT_OIDC_CLIENT_SECRET}
+            authorization-grant-type: authorization_code
+            scope: openid,profile
+        provider:
+          enterprise:
+            issuer-uri: ${BUSINESS_COPILOT_OIDC_ISSUER_URI}
+server:
+  servlet:
+    session:
+      timeout: 20m

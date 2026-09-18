@@ -54,3 +54,9 @@ Vue 工作台已把三个企业阶段串起来：管理员审批版本化模板�
 2.4 开发线把领取超过 15 分钟租约的 `CLAIMED` 交接列为企业就绪阻断项，把超过可配置
 清理宽限仍存在的过期查询结果列为关注项；整改仍回到结果交接或执行记录页面，Admin 不直接
 修改 Data 状态。
+
+### Reliability and evidence / 可靠性与证据
+
+Confirmation consumption and the execution intent commit before the external read-only query starts; failures cannot restore an old token. Report handoffs may freeze one complete numeric result as an approved metric version with an explicitly confirmed business period, timezone and unit. Truncated results remain visibly partial and cannot be registered as period totals.
+
+确认消费与执行意图先提交，再发起外部只读查询；失败不会恢复旧 token。交接可把完整单行数值与已审批指标版本、人工核对的业务周期、时区和单位一起冻结。截断结果明确标记为部分数据，不能登记为期间总量。

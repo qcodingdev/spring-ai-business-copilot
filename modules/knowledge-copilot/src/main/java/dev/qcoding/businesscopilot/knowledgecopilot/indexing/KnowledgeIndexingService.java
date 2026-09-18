@@ -26,12 +26,23 @@ public class KnowledgeIndexingService {
     private final KnowledgeChunkRepository chunkRepository;
     private final KnowledgeEmbeddingService embeddingService;
     private final KnowledgeIndexLifecycleService lifecycleService;
+    private final java.util.concurrent.Executor worker;
 
     public KnowledgeIndexingService(KnowledgeIndexJobRepository jobRepository,
                                     KnowledgeDocumentRepository documentRepository,
                                     KnowledgeChunkRepository chunkRepository,
                                     KnowledgeEmbeddingService embeddingService,
                                     KnowledgeIndexLifecycleService lifecycleService) {
+        this(jobRepository, documentRepository, chunkRepository, embeddingService, lifecycleService, Runnable::run);
+    }
+
+    public KnowledgeIndexingService(KnowledgeIndexJobRepository jobRepository,
+                                    KnowledgeDocumentRepository documentRepository,
+                                    KnowledgeChunkRepository chunkRepository,
+                                    KnowledgeEmbeddingService embeddingService,
+                                    KnowledgeIndexLifecycleService lifecycleService,
+                                    java.util.concurrent.Executor worker) {
+        this.worker = worker;
         this.jobRepository = jobRepository;
         this.documentRepository = documentRepository;
         this.chunkRepository = chunkRepository;
@@ -73,7 +84,12 @@ public class KnowledgeIndexingService {
 
     @Scheduled(fixedDelayString = "${business-copilot.knowledge.index-worker-delay:5000}")
     public void processPendingJob() {
-        processOne();
+        try {
+            worker.execute(this::processOne);
+        } catch (java.util.concurrent.RejectedExecutionException ex) {
+            // Claim inside the worker: saturation never leaves a job leased but unstarted.
+            log.debug("知识索引 worker 忙，本次轮询跳过");
+        }
     }
 
     public Optional<KnowledgeIndexJob> processOne() {

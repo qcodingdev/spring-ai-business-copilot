@@ -1,5 +1,6 @@
 export default {
   myTaskRuns: {
+    openBusiness: 'Open business page to check and restart',
     title: 'My task runs',
     description: 'Unified run records for tasks you started: status, failure category and stop reason; only your own runs are shown.',
     run: 'Run',
