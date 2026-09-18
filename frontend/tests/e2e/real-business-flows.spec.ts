@@ -1,11 +1,15 @@
-import { expect, test, type Page, type Browser } from '@playwright/test'
+import { devices, expect, test, type Page, type Browser } from '@playwright/test'
 
 if (!process.env.E2E_BASE_URL) throw new Error('Real business flows require E2E_BASE_URL')
 const policy = '虚构服务流程：请提供订单编号，客服核验后回复处理进度。'
 
 function newRoleContext(browser: Browser) {
-  const { viewport, deviceScaleFactor, isMobile, hasTouch, userAgent } = test.info().project.use
-  return browser.newContext({ baseURL: process.env.E2E_BASE_URL, viewport, deviceScaleFactor, isMobile, hasTouch, userAgent })
+  const mobile = test.info().project.name === 'mobile-chromium'
+  const device = mobile ? devices['Pixel 7'] : devices['Desktop Chrome']
+  const viewport = device.viewport!
+  const screen = mobile ? { width: viewport.width, height: 915 } : { width: viewport.width, height: viewport.height }
+  const { deviceScaleFactor, isMobile, hasTouch, userAgent } = device
+  return browser.newContext({ baseURL: process.env.E2E_BASE_URL, viewport, screen, deviceScaleFactor, isMobile, hasTouch, userAgent })
 }
 
 async function login(page: Page, role: 'admin' | 'operator' | 'reviewer'): Promise<void> {

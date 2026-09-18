@@ -218,7 +218,7 @@ input:disabled, textarea:disabled, select:disabled { color: var(--disabled); bac
 .alert--warning { border-color: #f2dfbe; border-left-color: var(--warning); background: #fff9ee; }
 .alert--danger { border-color: #f0cfd3; border-left-color: var(--danger); background: #fff3f4; }
 .next-step { border-top: 3px solid var(--success); }
-.code-block, .result-preview { max-width: 100%; max-height: 24rem; overflow: auto; padding: 1rem; border-radius: .65rem; color: #d9e2f1; background: #111827; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .74rem; }
+.code-block, .result-preview, .sql-preview { max-width: 100%; max-height: 24rem; overflow: auto; padding: 1rem; border-radius: .65rem; color: #d9e2f1; background: #111827; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .74rem; }
 .evidence-list { display: grid; gap: .75rem; padding: 0; list-style: none; }
 .evidence-source-card { display: grid; grid-template-columns: 1.75rem minmax(0, 1fr); gap: .7rem; scroll-margin-top: 6rem; padding: .8rem; border: 1px solid var(--border); border-radius: .7rem; background: #fff; }
 .evidence-source-card:target { border-color: #9698ef; box-shadow: 0 0 0 3px rgb(91 92 240 / 10%); }
@@ -480,6 +480,7 @@ input:disabled, textarea:disabled, select:disabled { color: var(--disabled); bac
   .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 64rem) {
+  html { scroll-padding: 4.5rem 0 2rem; }
   .app-shell { grid-template-columns: 1fr; padding-top: 3.75rem; }
   .mobile-topbar { position: fixed; z-index: 30; inset: 0 0 auto; display: grid; grid-template-columns: auto 1fr auto; gap: .75rem; align-items: center; height: 3.75rem; padding: .55rem .8rem; color: #fff; background: var(--nav); }
   .mobile-topbar strong { overflow: hidden; font-size: .8rem; text-overflow: ellipsis; white-space: nowrap; }
@@ -499,6 +500,21 @@ input:disabled, textarea:disabled, select:disabled { color: var(--disabled); bac
   .public-trust, .technology-section { grid-template-columns: 1fr; }
   .admin-layout { grid-template-columns: 1fr; }
   .admin-subnav { position: static; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); overflow-x: auto; }
+  .independent-review-panel { position: relative; z-index: 2; isolation: isolate; }
+  .independent-review-panel, .review-task-card, .review-task-card .button-row,
+  .review-task-card .button-row button { scroll-margin-block: 4.5rem 2rem; }
+  .review-task-card { position: relative; z-index: 1; }
+  .review-task-card .button-row {
+    position: sticky;
+    z-index: 2;
+    bottom: .75rem;
+    margin-inline: -.45rem;
+    padding: .45rem;
+    border: 1px solid rgb(220 225 235 / 88%);
+    border-radius: .7rem;
+    background: rgb(255 255 255 / 96%);
+    box-shadow: 0 8px 22px rgb(20 29 61 / 12%);
+  }
 }
 @media (max-width: 44rem) {
   .public-header { padding-inline: .9rem; }

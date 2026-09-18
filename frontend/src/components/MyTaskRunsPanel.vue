@@ -20,8 +20,16 @@ interface TaskRun {
   startedAt?: string | null
 }
 
+interface RecoveryPlan {
+  run: TaskRun
+  completedSteps?: Array<{ name?: string | null }>
+  retryableSteps?: Array<{ name?: string | null }>
+  sourceStatus?: string | null
+}
+
 const { t, te, locale } = useI18n()
 const runs = ref<TaskRun[]>([])
+const recoveryPlans = ref<RecoveryPlan[]>([])
 const loading = ref(false)
 const available = ref(true)
 const requestId = ref<string | null>(null)
@@ -53,6 +61,14 @@ async function load(): Promise<void> {
     const response = await api<TaskRun[]>('/api/task-runs/mine?limit=8')
     runs.value = response.data ?? []
     requestId.value = response.requestId
+    try {
+      const recoveryResponse = await api<RecoveryPlan[]>('/api/task-runs/mine/recovery')
+      recoveryPlans.value = recoveryResponse.data ?? []
+      requestId.value = recoveryResponse.requestId ?? requestId.value
+    } catch {
+      // Keep the ledger usable when an older deployment has not exposed recovery yet.
+      recoveryPlans.value = []
+    }
     available.value = true
   } catch (error) {
     requestId.value = error instanceof ApiError ? error.requestId : null
@@ -77,6 +93,21 @@ onMounted(load)
       </button>
     </div>
     <p v-if="!available" class="alert alert--warning" role="status">{{ t('home.myTaskRuns.unavailable') }}</p>
+    <div v-if="recoveryPlans.length" class="home-runs__recovery" data-testid="task-run-recovery">
+      <div>
+        <strong>{{ t('home.myTaskRuns.recoveryTitle') }}</strong>
+        <p>{{ t('home.myTaskRuns.recoveryDescription') }}</p>
+      </div>
+      <article v-for="plan in recoveryPlans" :key="plan.run.runId">
+        <div>
+          <StatusBadge :label="plan.run.status && te(`statuses.${plan.run.status}`) ? t(`statuses.${plan.run.status}`) : (plan.run.status || '—')" :tone="statusTone(plan.run.status)" />
+          <small>{{ plan.run.module }} · {{ plan.run.refType || '—' }} / {{ plan.run.refId || '—' }}</small>
+        </div>
+        <p v-if="plan.run.status === 'OUTCOME_UNKNOWN'">{{ t('home.myTaskRuns.unknownOutcome') }}</p>
+        <p v-else>{{ t('home.myTaskRuns.waitingConfirmation') }}</p>
+        <RouterLink v-if="businessPath(plan.run.module)" :to="businessPath(plan.run.module)!">{{ t('home.myTaskRuns.openBusiness') }}</RouterLink>
+      </article>
+    </div>
     <div class="table-scroll">
       <table class="data-table">
         <thead>
@@ -120,6 +151,19 @@ onMounted(load)
   display: block;
   color: var(--muted, #5b6478);
 }
+.home-runs__recovery {
+  display: grid;
+  gap: .7rem;
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px solid #e8c979;
+  border-radius: .75rem;
+  background: #fffaf0;
+}
+.home-runs__recovery > div:first-child p { margin: .25rem 0 0; color: var(--muted, #5b6478); }
+.home-runs__recovery article { display: flex; gap: .75rem; align-items: center; justify-content: space-between; flex-wrap: wrap; padding-top: .65rem; border-top: 1px solid #f0dfaa; }
+.home-runs__recovery article > div { display: grid; gap: .25rem; }
+.home-runs__recovery article small, .home-runs__recovery article p { margin: 0; color: var(--muted, #5b6478); }
 .data-table small {
   display: block;
   color: var(--muted, #5b6478);

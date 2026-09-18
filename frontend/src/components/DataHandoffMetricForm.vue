@@ -25,7 +25,7 @@ watch([enabled, metricKey, resultColumn, periodStart, periodEnd, timezone, confi
   <section class="workflow-card">
     <h4>{{ t('data.metricScopeTitle') }}</h4>
     <p v-if="!eligible">{{ t('data.metricScopeUnavailable') }}</p>
-    <label v-else><input v-model="enabled" type="checkbox"> {{ t('data.metricScopeEnable') }}</label>
+    <label v-else class="checkbox-label"><input v-model="enabled" type="checkbox"> {{ t('data.metricScopeEnable') }}</label>
     <div v-if="enabled" class="form-grid">
       <label>{{ t('data.metricName') }}<select v-model="metricKey"><option value="">{{ t('data.selectMetric') }}</option><option v-for="metric in options.metrics" :key="metric.metricKey" :value="metric.metricKey">{{ metric.displayName }} · v{{ metric.version }} · {{ metric.unit }}</option></select></label>
       <label>{{ t('data.metricResultColumn') }}<select v-model="resultColumn"><option value="">{{ t('data.selectMetricColumn') }}</option><option v-for="column in columns" :key="column">{{ column }}</option></select></label>
@@ -33,8 +33,8 @@ watch([enabled, metricKey, resultColumn, periodStart, periodEnd, timezone, confi
       <label>{{ t('data.metricPeriodEnd') }}<input v-model="periodEnd" type="date" :min="periodStart"></label>
       <label>{{ t('data.metricTimezone') }}<input v-model="timezone" maxlength="80"></label>
       <p v-if="selectedMetric">{{ selectedMetric.description }}</p>
-      <pre>{{ options.sql }}</pre>
-      <label><input v-model="confirmed" type="checkbox"> {{ t('data.metricScopeConfirm') }}</label>
+      <pre class="code-block">{{ options.sql }}</pre>
+      <label class="checkbox-label"><input v-model="confirmed" type="checkbox"> {{ t('data.metricScopeConfirm') }}</label>
     </div>
   </section>
 </template>

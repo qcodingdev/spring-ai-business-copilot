@@ -19,6 +19,7 @@ type DataRecord = Record<string, any>
 type PendingAction = 'query-launch' | 'query-execute' | 'handoff' | null
 
 const loading = ref(false)
+const viewLoading = ref(false)
 const errorCode = ref('')
 const requestId = ref<string | null>(null)
 const metrics = ref<DataRecord[]>([])
@@ -40,6 +41,7 @@ const pendingQuery = ref<{ kind: 'template' | 'metric'; item: DataRecord } | nul
 const toast = ref('')
 const toastTone = ref<'success' | 'danger'>('success')
 let toastTimer: ReturnType<typeof setTimeout> | undefined
+let loadVersion = 0
 
 const localizedError = computed(() => {
   if (!errorCode.value) return ''
@@ -69,7 +71,8 @@ function resetTransient(): void {
 }
 
 async function load(): Promise<void> {
-  loading.value = true
+  const version = ++loadVersion
+  viewLoading.value = true
   errorCode.value = ''
   resetTransient()
   try {
@@ -78,15 +81,19 @@ async function load(): Promise<void> {
         api<DataRecord[]>('/api/data-copilot/metrics'),
         api<DataRecord[]>('/api/data-copilot/query-templates'),
       ])
-      metrics.value = metricResponse.data ?? []
-      templates.value = templateResponse.data ?? []
-      requestId.value = templateResponse.requestId ?? metricResponse.requestId
+      if (version === loadVersion) {
+        metrics.value = metricResponse.data ?? []
+        templates.value = templateResponse.data ?? []
+        requestId.value = templateResponse.requestId ?? metricResponse.requestId
+      }
     } else if (props.tab === 'records') {
       const resultResponse = await api<DataRecord[]>('/api/data-copilot/query-results')
+      if (version !== loadVersion) return
       results.value = resultResponse.data ?? []
       requestId.value = resultResponse.requestId
       if (canReview.value) {
         const auditResponse = await api<DataRecord[]>('/api/data-copilot/audit-logs')
+        if (version !== loadVersion) return
         auditLogs.value = auditResponse.data ?? []
         requestId.value = auditResponse.requestId ?? requestId.value
       } else {
@@ -97,17 +104,26 @@ async function load(): Promise<void> {
         api<DataRecord[]>('/api/data-copilot/report-handoffs'),
         api<DataRecord[]>('/api/data-copilot/query-results'),
       ])
-      handoffs.value = handoffResponse.data ?? []
-      results.value = resultResponse.data ?? []
-      requestId.value = handoffResponse.requestId ?? resultResponse.requestId
+      if (version === loadVersion) {
+        handoffs.value = handoffResponse.data ?? []
+        results.value = resultResponse.data ?? []
+        requestId.value = handoffResponse.requestId ?? resultResponse.requestId
+      }
     }
   } catch (error) {
-    errorCode.value = error instanceof ApiError ? error.errorCode : 'generic'
-    requestId.value = error instanceof ApiError ? error.requestId : null
-    showToast(localizedError.value, 'danger')
+    if (version === loadVersion) {
+      errorCode.value = error instanceof ApiError ? error.errorCode : 'generic'
+      requestId.value = error instanceof ApiError ? error.requestId : null
+      showToast(localizedError.value, 'danger')
+    }
   } finally {
-    loading.value = false
+    if (version === loadVersion) viewLoading.value = false
   }
+}
+
+function invalidateViewLoad(): void {
+  loadVersion += 1
+  viewLoading.value = false
 }
 
 function revealMetricFromHash(): void {
@@ -118,6 +134,7 @@ function revealMetricFromHash(): void {
 }
 
 async function saveTemplate(): Promise<void> {
+  invalidateViewLoad()
   loading.value = true
   errorCode.value = ''
   try {
@@ -139,6 +156,7 @@ async function saveTemplate(): Promise<void> {
 }
 
 async function saveMetric(): Promise<void> {
+  invalidateViewLoad()
   loading.value = true
   try {
     const response = await api<DataRecord>('/api/data-copilot/metrics', {
@@ -294,8 +312,8 @@ onUnmounted(() => window.removeEventListener('hashchange', revealMetricFromHash)
       <div>
         <p class="enterprise-panel__description">{{ t(`data.${tab}Description`) }}</p>
       </div>
-      <button class="button button--secondary" type="button" :disabled="loading" @click="load">
-        {{ loading ? t('common.loading') : t('common.refresh') }}
+      <button class="button button--secondary" type="button" :disabled="loading || viewLoading" @click="load">
+        {{ loading || viewLoading ? t('common.loading') : t('common.refresh') }}
       </button>
     </div>
 

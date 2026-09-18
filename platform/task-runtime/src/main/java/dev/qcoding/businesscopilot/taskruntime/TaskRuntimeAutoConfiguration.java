@@ -43,7 +43,8 @@ public class TaskRuntimeAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean(TaskRunUserController.class)
     public TaskRunUserController taskRunUserController(TaskRunStore taskRunStore,
-                                                       CurrentActorProvider actorProvider) {
-        return new TaskRunUserController(taskRunStore, actorProvider);
+                                                       CurrentActorProvider actorProvider,
+                                                       TaskRunService taskRunService) {
+        return new TaskRunUserController(taskRunStore, actorProvider, taskRunService);
     }
 }
