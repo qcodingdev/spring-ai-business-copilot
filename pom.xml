@@ -46,7 +46,8 @@
         <minio.okhttp-jvm.version>5.1.0</minio.okhttp-jvm.version>
         <bouncycastle.version>1.85</bouncycastle.version>
         <postgresql.version>42.7.12</postgresql.version>
-        <netty.version>4.2.16.Final</netty.version>
+        <netty.version>4.2.17.Final</netty.version>
+        <tomcat.version>11.0.25</tomcat.version>
         <resilience4j.version>2.2.0</resilience4j.version>
         <!-- Keep aligned with the Spring Boot dependency BOM when Boot is upgraded. -->
         <mockito.version>5.23.0</mockito.version>
@@ -93,6 +94,22 @@
                 <groupId>org.bouncycastle</groupId>
                 <artifactId>bcprov-jdk18on</artifactId>
                 <version>${bouncycastle.version}</version>
+            </dependency>
+            <!-- Spring Boot's imported BOM properties cannot be overridden from this standalone parent. -->
+            <dependency>
+                <groupId>org.apache.tomcat.embed</groupId>
+                <artifactId>tomcat-embed-core</artifactId>
+                <version>${tomcat.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.tomcat.embed</groupId>
+                <artifactId>tomcat-embed-el</artifactId>
+                <version>${tomcat.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.tomcat.embed</groupId>
+                <artifactId>tomcat-embed-websocket</artifactId>
+                <version>${tomcat.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
