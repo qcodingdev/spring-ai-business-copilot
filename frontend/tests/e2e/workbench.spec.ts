@@ -80,6 +80,17 @@ async function mockSession(page: Page): Promise<void> {
       }),
     })
   })
+  await page.route('**/api/task-runs/mine/recovery', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: [],
+        success: true,
+        requestId: 'e2e-empty-task-run-recovery',
+        timestamp: new Date().toISOString(),
+      }),
+    })
+  })
   await page.route('**/api/reviews/queue?subjectType=*', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
@@ -138,6 +149,10 @@ async function mockReviewerSession(page: Page): Promise<void> {
     contentType: 'application/json',
     body: JSON.stringify({ data: [], success: true, requestId: 'e2e-empty-reviewer-task-runs', timestamp: new Date().toISOString() }),
   }))
+  await page.route('**/api/task-runs/mine/recovery', async (route) => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({ data: [], success: true, requestId: 'e2e-empty-reviewer-task-run-recovery', timestamp: new Date().toISOString() }),
+  }))
 }
 
 test('admin acceptance separates runtime readiness from unverified evidence', async ({ page }, testInfo) => {
@@ -150,7 +165,7 @@ test('admin acceptance separates runtime readiness from unverified evidence', as
   }))
   await page.route('**/api/admin/acceptance-evidence', route => route.fulfill({ json: {
     success: true, requestId: 'acceptance-summary', data: {
-      applicableVersion: '2.4.1-SNAPSHOT',
+      applicableVersion: '2.4.1',
       categories: ['RUNTIME_READINESS', 'MODEL_QUALITY', 'VENDOR_ACCEPTANCE', 'RELEASE_GATE']
         .map(category => ({ category, status: category === 'RUNTIME_READINESS' ? 'PASS' : 'NOT_VERIFIED', evidenceCount: category === 'RUNTIME_READINESS' ? 1 : 0 })),
       releaseReadiness: { releasable: false, overall: 'NOT_VERIFIED' },

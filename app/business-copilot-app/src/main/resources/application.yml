@@ -89,7 +89,7 @@ business-copilot:
       delete-after: ${BUSINESS_COPILOT_AUDIT_DELETE_AFTER:30d}
       cleanup-cron: ${BUSINESS_COPILOT_AUDIT_CLEANUP_CRON:0 15 3 * * *}
   enterprise-readiness:
-    application-version: ${BUSINESS_COPILOT_APPLICATION_VERSION:2.4.1-SNAPSHOT}
+    application-version: ${BUSINESS_COPILOT_APPLICATION_VERSION:2.4.1}
     snapshot-validity: ${BUSINESS_COPILOT_READINESS_SNAPSHOT_VALIDITY:24h}
     snapshot-retention: ${BUSINESS_COPILOT_READINESS_SNAPSHOT_RETENTION:90d}
     stale-operation-after: ${BUSINESS_COPILOT_READINESS_STALE_OPERATION_AFTER:15m}

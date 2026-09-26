@@ -12,7 +12,7 @@ import AcceptanceEvidencePanel from './AcceptanceEvidencePanel.vue'
 
 const apiMock = vi.mocked(api)
 const assessment = {
-  applicableVersion: '2.4.1-SNAPSHOT',
+  applicableVersion: '2.4.1',
   categories: ['RUNTIME_READINESS', 'MODEL_QUALITY', 'VENDOR_ACCEPTANCE', 'RELEASE_GATE']
     .map(category => ({ category, status: category === 'RUNTIME_READINESS' ? 'PASS' : 'NOT_VERIFIED', evidenceCount: category === 'RUNTIME_READINESS' ? 1 : 0 })),
   releaseReadiness: { releasable: false, overall: 'NOT_VERIFIED' },
@@ -39,7 +39,7 @@ describe('AcceptanceEvidencePanel', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('验收证据尚未全部通过')
     expect(wrapper.text()).toContain('供应商验收')
-    expect(wrapper.text()).toContain('2.4.1-SNAPSHOT')
+    expect(wrapper.text()).toContain('2.4.1')
     expect(wrapper.findAll('.status-badge')).toHaveLength(4)
     expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeDefined()
   })
@@ -56,7 +56,7 @@ describe('AcceptanceEvidencePanel', () => {
     await wrapper.get('form').trigger('submit')
     await flushPromises()
     const body = JSON.parse(String(apiMock.mock.calls.find(([, init]) => init?.method === 'POST')?.[1]?.body))
-    expect(body).toEqual({ category: 'MODEL_QUALITY', name: 'fixed-quality', status: 'NOT_VERIFIED', source: 'artifact:fixture-123', applicableVersion: '2.4.1-SNAPSHOT', note: '' })
+    expect(body).toEqual({ category: 'MODEL_QUALITY', name: 'fixed-quality', status: 'NOT_VERIFIED', source: 'artifact:fixture-123', applicableVersion: '2.4.1', note: '' })
     expect(wrapper.text()).toContain('验收证据已登记')
   })
 

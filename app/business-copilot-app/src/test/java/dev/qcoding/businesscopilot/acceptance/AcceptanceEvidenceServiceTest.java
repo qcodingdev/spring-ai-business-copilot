@@ -28,16 +28,16 @@ class AcceptanceEvidenceServiceTest {
     void setUp() {
         jdbcTemplate = mock(JdbcTemplate.class);
         service = new AcceptanceEvidenceService(jdbcTemplate,
-                () -> new CurrentActor("admin-1", java.util.Set.of(BusinessRole.ADMIN)), "2.4.1-SNAPSHOT");
+                () -> new CurrentActor("admin-1", java.util.Set.of(BusinessRole.ADMIN)), "2.4.1");
         when(jdbcTemplate.query(anyString(), any(org.springframework.jdbc.core.RowMapper.class),
-                eq("2.4.1-SNAPSHOT"))).thenAnswer(invocation -> List.copyOf(latest));
+                eq("2.4.1"))).thenAnswer(invocation -> List.copyOf(latest));
     }
 
     private void givenCategoryReturns(AcceptanceEvidence.Category category,
                                       AcceptanceEvidence.Status... statuses) {
         List<AcceptanceEvidence.Evidence> evidence = java.util.Arrays.stream(statuses)
                 .map(status -> new AcceptanceEvidence.Evidence(1L, category, "check", status,
-                        "test", "2.4.1-SNAPSHOT", null, "tester", null))
+                        "test", "2.4.1", null, "tester", null))
                 .toList();
         latest.removeIf(item -> item.category() == category);
         latest.addAll(evidence);
@@ -106,7 +106,7 @@ class AcceptanceEvidenceServiceTest {
                         .post("/api/admin/acceptance-evidence").contentType(org.springframework.http.MediaType.APPLICATION_JSON)
                         .content("""
                                 {"category":"MODEL_QUALITY","name":"test","status":"PASS",
-                                 "source":"artifact:123","applicableVersion":"2.4.1-SNAPSHOT"}
+                                 "source":"artifact:123","applicableVersion":"2.4.1"}
                                 """))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.success").value(true));
@@ -122,13 +122,13 @@ class AcceptanceEvidenceServiceTest {
     @Test
     void manualRuntimeEvidenceAndNonAdminWritesAreRejected() {
         var runtime = new AcceptanceEvidence.Evidence(null, AcceptanceEvidence.Category.RUNTIME_READINESS,
-                "fake-ready", AcceptanceEvidence.Status.PASS, "manual", "2.4.1-SNAPSHOT", null, "admin", null);
+                "fake-ready", AcceptanceEvidence.Status.PASS, "manual", "2.4.1", null, "admin", null);
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.record(runtime))
                 .isInstanceOf(dev.qcoding.businesscopilot.commonweb.api.BusinessException.class);
         var operatorService = new AcceptanceEvidenceService(jdbcTemplate,
-                () -> new CurrentActor("operator", java.util.Set.of(BusinessRole.OPERATOR)), "2.4.1-SNAPSHOT");
+                () -> new CurrentActor("operator", java.util.Set.of(BusinessRole.OPERATOR)), "2.4.1");
         var quality = new AcceptanceEvidence.Evidence(null, AcceptanceEvidence.Category.MODEL_QUALITY,
-                "quality", AcceptanceEvidence.Status.PASS, "manual", "2.4.1-SNAPSHOT", null, "admin", null);
+                "quality", AcceptanceEvidence.Status.PASS, "manual", "2.4.1", null, "admin", null);
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> operatorService.record(quality))
                 .isInstanceOf(dev.qcoding.businesscopilot.commonweb.api.BusinessException.class);
     }

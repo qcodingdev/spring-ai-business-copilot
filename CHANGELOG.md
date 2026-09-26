@@ -6,6 +6,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [2.4.1] - 2026-09-26
+
 ### Added
 
 - Added object-ownership enforcement for query cancellation: only the execution
@@ -29,15 +31,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   history is append-only and version-scoped; actors and timestamps come from the
   server, and runtime evidence comes only from a server readiness check. Recording
   evidence does not run tests, certify production acceptance or publish releases.
+- Added an optional enterprise OIDC profile with issuer-and-subject-based actor
+  identity, application role mapping, and session expiry enforcement.
+- Added explicit Data metric snapshots and period definitions for Report handoffs,
+  with deterministic comparisons only when metric versions and periods are
+  compatible.
 
 ### Changed
 
 - Bumped the development version to 2.4.1-SNAPSHOT and documented the baseline
   relationship between the main workspace and the analysis workspace (CORE-03).
+- Finalized the Maven, frontend, and application evidence version as 2.4.1.
 - Standardized all nine bundled business Prompt templates on Simplified Chinese by
   default, added request-locale-selected `.en-US` variants with matching variables,
   recorded the actual localized template key in governance and audit metadata, and
   persisted each report schedule's locale for background generation.
+- Added a CI job that exercises the five business flows in a real application
+  backed by PostgreSQL and a controlled model test double.
 
 ### Fixed
 
@@ -46,6 +56,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   interpretive wording.
 - Recorded embedding usage with its configured provider and model identity instead
   of inheriting the chat model identity.
+- Kept Report draft publication and Data handoff consumption in one conditional
+  transaction, preventing a replaced worker from committing late results.
+
+### Security
+
+- Updated Bouncy Castle, Netty, Tomcat, and Vitest to address dependency
+  vulnerabilities.
 
 ## [2.4.0] - 2026-08-26
 
@@ -309,7 +326,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Kept risky actions behind single-use confirmation tokens and explicit human review.
 - Excluded local AI-agent settings, internal planning documents, and generated review evidence from the public repository.
 
-[Unreleased]: https://github.com/qcodingdev/spring-ai-business-copilot/compare/v2.3.1...main
+[Unreleased]: https://github.com/qcodingdev/spring-ai-business-copilot/compare/v2.4.1...main
+[2.4.1]: https://github.com/qcodingdev/spring-ai-business-copilot/compare/v2.4.0...v2.4.1
+[2.4.0]: https://github.com/qcodingdev/spring-ai-business-copilot/compare/v2.3.1...v2.4.0
 [2.3.1]: https://github.com/qcodingdev/spring-ai-business-copilot/compare/v2.3.0...v2.3.1
 [2.3.0]: https://github.com/qcodingdev/spring-ai-business-copilot/compare/v2.2.1...v2.3.0
 [2.2.1]: https://github.com/qcodingdev/spring-ai-business-copilot/compare/v2.2.0...v2.2.1

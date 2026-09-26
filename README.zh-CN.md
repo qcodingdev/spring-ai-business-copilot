@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.4.0"><img alt="正式版 v2.4.0" src="https://img.shields.io/badge/Release-v2.4.0-2563EB"></a>
+  <a href="https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.4.1"><img alt="正式版 v2.4.1" src="https://img.shields.io/badge/Release-v2.4.1-2563EB"></a>
   <a href="https://openjdk.org/projects/jdk/21/"><img alt="Java 21" src="https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&amp;logoColor=white"></a>
   <a href="https://spring.io/projects/spring-boot"><img alt="Spring Boot 4.1" src="https://img.shields.io/badge/Spring%20Boot-4.1-6DB33F?logo=springboot&amp;logoColor=white"></a>
   <a href="https://spring.io/projects/spring-ai"><img alt="Spring AI 2.0" src="https://img.shields.io/badge/Spring%20AI-2.0-6DB33F"></a>
@@ -19,7 +19,7 @@
   <a href="#快速开始">快速开始</a> ·
   <a href="#当前业务能力">业务能力</a> ·
   <a href="#总体架构">总体架构</a> ·
-  <a href="https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.4.0">稳定版 v2.4.0</a> ·
+  <a href="https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.4.1">稳定版 v2.4.1</a> ·
   <a href="https://gitee.com/qcodingdev/spring-ai-business-copilot">Gitee</a>
 </p>
 
@@ -46,7 +46,7 @@
 需要本机已安装 Docker，并支持 Compose。
 
 ```bash
-git clone --branch v2.4.0 --single-branch \
+git clone --branch v2.4.1 --single-branch \
   https://github.com/qcodingdev/spring-ai-business-copilot.git
 cd spring-ai-business-copilot/examples
 cp .env.example .env
@@ -183,7 +183,7 @@ flowchart LR
 
 ## 部署与集成状态
 
-> **稳定版本：** `v2.4.0` 新增仅管理员可用的五模块企业就绪闭环：配置前置条件防止空系统误报 `READY`，运行检查跳回既有页面整改，由服务端重新检查并保存受保留期约束、仅追加且无业务正文的应用证据快照。生产部署仍需由部署方完成统一身份、密钥、网络策略、数据保留、真实模型评测和供应商沙箱验收。
+> **稳定版本：** `v2.4.1` 增加受治理的任务恢复、评测集与 Prompt 版本审核，以及可选的企业 OIDC 模式。Data 到 Report 的指标交接保留来源和周期口径，五个业务流程继续由人工复核并记录审计。生产部署仍需由部署方完成统一身份、密钥、网络策略、数据保留、真实模型评测和供应商沙箱验收。
 
 | 能力 | 当前状态 | 部署方责任 |
 |---|---|---|
@@ -211,7 +211,7 @@ flowchart LR
 
 | 资源 | 链接 |
 |---|---|
-| 稳定版本 | [v2.4.0](https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.4.0) |
+| 稳定版本 | [v2.4.1](https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.4.1) |
 | 版本记录 | [CHANGELOG.md](CHANGELOG.md) · [GitHub Releases](https://github.com/qcodingdev/spring-ai-business-copilot/releases) |
 | 问题与建议 | [GitHub Issues](https://github.com/qcodingdev/spring-ai-business-copilot/issues) |
 | 参与贡献 | [CONTRIBUTING.md](CONTRIBUTING.md) |

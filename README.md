@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.4.0"><img alt="Release v2.4.0" src="https://img.shields.io/badge/Release-v2.4.0-2563EB"></a>
+  <a href="https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.4.1"><img alt="Release v2.4.1" src="https://img.shields.io/badge/Release-v2.4.1-2563EB"></a>
   <a href="https://openjdk.org/projects/jdk/21/"><img alt="Java 21" src="https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&amp;logoColor=white"></a>
   <a href="https://spring.io/projects/spring-boot"><img alt="Spring Boot 4.1" src="https://img.shields.io/badge/Spring%20Boot-4.1-6DB33F?logo=springboot&amp;logoColor=white"></a>
   <a href="https://spring.io/projects/spring-ai"><img alt="Spring AI 2.0" src="https://img.shields.io/badge/Spring%20AI-2.0-6DB33F"></a>
@@ -19,7 +19,7 @@
   <a href="#quick-start">Quick start</a> ·
   <a href="#current-business-capabilities">Capabilities</a> ·
   <a href="#architecture">Architecture</a> ·
-  <a href="https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.4.0">Stable v2.4.0</a> ·
+  <a href="https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.4.1">Stable v2.4.1</a> ·
   <a href="https://gitee.com/qcodingdev/spring-ai-business-copilot">Gitee</a>
 </p>
 
@@ -46,7 +46,7 @@ You can explore the interface without a model key. AI generation requires a chat
 Requirements: Docker with Compose support.
 
 ```bash
-git clone --branch v2.4.0 --single-branch \
+git clone --branch v2.4.1 --single-branch \
   https://github.com/qcodingdev/spring-ai-business-copilot.git
 cd spring-ai-business-copilot/examples
 cp .env.example .env
@@ -183,7 +183,7 @@ flowchart LR
 
 ## Deployment and integration status
 
-> **Stable release:** `v2.4.0` adds an Admin-only five-module readiness loop: configuration prerequisites prevent empty deployments from reporting `READY`, operational checks link back to existing remediation screens, and the server persists retention-bounded, append-only, content-safe application evidence snapshots. Production deployment still requires deployment-owned identity, secrets, network policy, retention settings, real-model evaluation, and vendor sandbox acceptance.
+> **Stable release:** `v2.4.1` adds governed task recovery, versioned evaluation and Prompt review, and an optional enterprise OIDC profile. Data-to-Report metrics retain their source and period definitions, while the five business workflows keep human review and audit boundaries. Production deployment still requires deployment-owned identity, secrets, network policy, retention settings, real-model evaluation, and vendor sandbox acceptance.
 
 | Capability | Status | Deployment responsibility |
 |---|---|---|
@@ -211,7 +211,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow and focused 
 
 | Resource | Link |
 |---|---|
-| Stable release | [v2.4.0](https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.4.0) |
+| Stable release | [v2.4.1](https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.4.1) |
 | Release history | [CHANGELOG.md](CHANGELOG.md) · [GitHub Releases](https://github.com/qcodingdev/spring-ai-business-copilot/releases) |
 | Questions and bugs | [GitHub Issues](https://github.com/qcodingdev/spring-ai-business-copilot/issues) |
 | Contributing | [CONTRIBUTING.md](CONTRIBUTING.md) |
