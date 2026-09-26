@@ -41,6 +41,11 @@ public final class AiCallCoordinator {
     }
 
     public <T> T execute(String type, String operation, Supplier<T> supplier) {
+        return execute(type, operation, null, null, supplier);
+    }
+
+    /** Executes a call with an explicit low-cardinality provider/model identity for accurate usage audit. */
+    public <T> T execute(String type, String operation, String provider, String model, Supplier<T> supplier) {
         String safeType = "embedding".equals(type) ? "embedding" : "chat";
         String safeOperation = normalizeOperation(operation);
         String callId = UUID.randomUUID().toString().replace("-", "").substring(0, 16);
@@ -54,30 +59,31 @@ public final class AiCallCoordinator {
             log.debug("AI 调用开始：类型={}，操作={}", safeType, safeOperation);
             acquired = permits.tryAcquire(properties.acquireTimeout().toMillis(), TimeUnit.MILLISECONDS);
             if (!acquired) {
-                metrics.record(safeType, safeOperation, "busy", System.nanoTime() - startedAt);
+                metrics.record(safeType, safeOperation, "busy", System.nanoTime() - startedAt, provider, model);
                 log.warn("AI 调用并发已满，未在等待时间内取得执行许可：类型={}，操作={}", safeType, safeOperation);
                 throw new BusinessException(ErrorCode.AI_MODEL_ERROR, "AI 服务当前繁忙，请稍后重试。");
             }
-            metrics.beforeExternalCall(safeType, safeOperation);
+            metrics.beforeExternalCall(safeType, safeOperation, provider, model);
             T result = circuitBreaker(safeType).executeSupplier(supplier);
             long latency = System.nanoTime() - startedAt;
-            metrics.record(safeType, safeOperation, "success", latency);
+            metrics.record(safeType, safeOperation, "success", latency, provider, model);
             log.info("AI 调用完成：类型={}，操作={}，耗时毫秒={}",
                     safeType, safeOperation, TimeUnit.NANOSECONDS.toMillis(latency));
             return result;
         } catch (CallNotPermittedException ex) {
-            metrics.record(safeType, safeOperation, "circuit_open", System.nanoTime() - startedAt);
+            metrics.record(safeType, safeOperation, "circuit_open", System.nanoTime() - startedAt, provider, model);
             log.warn("AI 调用已被熔断器拒绝：类型={}，操作={}", safeType, safeOperation);
             throw new BusinessException(ErrorCode.AI_MODEL_ERROR, "AI 服务连续失败，保护机制已暂时停止调用，请稍后重试。");
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
-            metrics.record(safeType, safeOperation, "interrupted", System.nanoTime() - startedAt);
+            metrics.record(safeType, safeOperation, "interrupted", System.nanoTime() - startedAt, provider, model);
             throw new BusinessException(ErrorCode.AI_MODEL_ERROR, "AI 调用等待被中断，请稍后重试。", ex);
         } catch (BusinessException ex) {
-            if (acquired) metrics.record(safeType, safeOperation, "failure", System.nanoTime() - startedAt);
+            if (acquired) metrics.record(safeType, safeOperation, "failure", System.nanoTime() - startedAt,
+                    provider, model);
             throw ex;
         } catch (RuntimeException ex) {
-            metrics.record(safeType, safeOperation, "failure", System.nanoTime() - startedAt);
+            metrics.record(safeType, safeOperation, "failure", System.nanoTime() - startedAt, provider, model);
             // 协调器只记录可检索的链路摘要；完整异常由 Chat/Embedding 封装层记录一次，避免重复堆栈刷屏。
             log.error("AI 调用失败：类型={}，操作={}，异常类型={}",
                     safeType, safeOperation, ex.getClass().getSimpleName());

@@ -63,7 +63,10 @@ public class ReportMarkdownExportService {
     private String render(ReportDraft draft) {
         var content = draft.content();
         StringBuilder markdown = new StringBuilder();
-        markdown.append("# ").append(escape(draft.id() == null ? "业务报告" : "业务报告 " + draft.id())).append("\n\n");
+        var metadata = draftRepository.findRequestMetadata(draft.requestId());
+        markdown.append("# ").append(escape(metadata.map(ReportDraftRepository.RequestMetadata::title)
+                .orElse("业务报告 " + draft.id()))).append("\n\n");
+        metadata.ifPresent(value -> markdown.append("周期：").append(escape(value.periodLabel())).append("\n\n"));
         markdown.append("## 执行摘要\n\n").append(escape(content.executiveSummary())).append("\n");
         appendSources(markdown, content.executiveSummarySourceIds());
         appendMetrics(markdown, content.metricHighlights());

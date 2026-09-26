@@ -1,4 +1,15 @@
 export default {
+  metricScopeTitle: "Business metric and period (optional)",
+  metricScopeUnavailable: "Period comparisons require a complete single-row numeric result using a current approved metric. You can still hand off ordinary evidence.",
+  metricScopeEnable: "Register a verified period total from a numeric column",
+  selectMetric: "Select a metric used by this query",
+  metricResultColumn: "Numeric result column",
+  selectMetricColumn: "Select a numeric column",
+  metricPeriodStart: "Business period start",
+  metricPeriodEnd: "Business period end (inclusive)",
+  metricTimezone: "Business timezone",
+  metricScopeConfirm: "I checked the SQL, metric definition, numeric column, unit and dates. This value is the complete total for this business period. The system does not automatically verify the business meaning of SQL dates.",
+
   title: 'Controlled read-only data query',
   description: 'Generate and inspect SQL, guardrails, and cost before a human confirms execution.',
   tabs: { query: 'Ask and query', governance: 'Governance templates', records: 'Execution records', handoff: 'Result handoff' },
@@ -77,4 +88,12 @@ export default {
     second: 'List the top 10 customers by order value this quarter and show the amount.',
     third: 'Summarize historical sales value and quantity by product category, returning the top five by sales value.',
   },
+
+  clarificationNeeded: 'Business calibers must be clarified first; no candidate was generated:',
+  reviseCandidate: 'Revise candidate',
+  reviseInstruction: 'Revision instruction (e.g. count paid orders only)',
+  reviseSubmit: 'Generate revised candidate',
+  reviseHint: 'Every revision passes SQL safety validation again and issues a brand-new confirmation token; the old candidate and token become invalid immediately.',
+  revisionCreated: 'Revised candidate is ready; please review and confirm again.',
+  revisionNotExecutable: 'The revised candidate failed safety validation; the original candidate remains available.',
 }

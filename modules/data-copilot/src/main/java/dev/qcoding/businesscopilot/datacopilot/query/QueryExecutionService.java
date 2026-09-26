@@ -4,6 +4,10 @@ import dev.qcoding.businesscopilot.audit.AuditEvent;
 import dev.qcoding.businesscopilot.audit.AuditEventType;
 import dev.qcoding.businesscopilot.audit.AuditService;
 import dev.qcoding.businesscopilot.audit.AuditStatus;
+import dev.qcoding.businesscopilot.commonsecurity.CurrentActor;
+import dev.qcoding.businesscopilot.commonsecurity.CurrentActorProvider;
+import dev.qcoding.businesscopilot.commonsecurity.ObjectAccessPolicy;
+import dev.qcoding.businesscopilot.commonsecurity.ObjectAction;
 import dev.qcoding.businesscopilot.commonweb.api.BusinessException;
 import dev.qcoding.businesscopilot.commonweb.api.ErrorCode;
 import dev.qcoding.businesscopilot.datacopilot.confirmation.SqlCandidate;
@@ -43,6 +47,8 @@ public class QueryExecutionService {
     private final ResultExplanationService explanationService;
     private final AuditService auditService;
     private final DataQueryResultService resultService;
+    private final CurrentActorProvider actorProvider;
+    private final ObjectAccessPolicy accessPolicy;
 
     public QueryExecutionService(SqlConfirmationService confirmationService,
                                   ReadOnlyQueryExecutor queryExecutor,
@@ -56,11 +62,24 @@ public class QueryExecutionService {
                                   ResultExplanationService explanationService,
                                   AuditService auditService,
                                   DataQueryResultService resultService) {
+        this(confirmationService, queryExecutor, explanationService, auditService, resultService,
+                null, null);
+    }
+
+    public QueryExecutionService(SqlConfirmationService confirmationService,
+                                  ReadOnlyQueryExecutor queryExecutor,
+                                  ResultExplanationService explanationService,
+                                  AuditService auditService,
+                                  DataQueryResultService resultService,
+                                  CurrentActorProvider actorProvider,
+                                  ObjectAccessPolicy accessPolicy) {
         this.confirmationService = confirmationService;
         this.queryExecutor = queryExecutor;
         this.explanationService = explanationService;
         this.auditService = auditService;
         this.resultService = resultService;
+        this.actorProvider = actorProvider;
+        this.accessPolicy = accessPolicy;
     }
 
     /**
@@ -73,14 +92,15 @@ public class QueryExecutionService {
      * @param confirmationToken the confirmation token
      * @return execution response containing the result table and AI explanation
      */
-    @Transactional
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     public SqlExecutionResponse execute(String candidateId, String confirmationToken) {
         long startMs = System.currentTimeMillis();
 
         // 1. 确认候选（校验 candidateId + token + 过期 + executable）
         SqlCandidate candidate;
         try {
-            candidate = confirmationService.confirmAndConsume(candidateId, confirmationToken);
+            candidate = confirmationService.consumeWithIntent(candidateId, confirmationToken,
+                    consumed -> recordExecutionIntent(consumed, startMs));
         } catch (SqlCandidateNotExecutableException | SqlCandidateExpiredException ex) {
             // 确认失败：用户未有效确认，记录 QUERY_NOT_CONFIRMED 审计
             recordNotConfirmedAudit(candidateId, ex.getMessage(), startMs);
@@ -94,25 +114,10 @@ public class QueryExecutionService {
         String modelName = candidate.modelName();
         var aiMetadata = candidate.aiMetadata();
 
-        // External execution is forbidden unless a durable intent exists in the platform database.
-        auditService.recordRequired(new AuditEvent(
-                requestId, AuditEventType.QUERY_EXECUTION_INTENT,
-                null, sql, sql, AuditStatus.EXECUTION_PENDING,
-                null, true, null, null, modelName,
-                System.currentTimeMillis() - startMs,
-                candidate.ownerActorId(), candidate.actionActorId(),
-                aiMetadata != null ? aiMetadata.providerName() : null,
-                aiMetadata != null ? aiMetadata.providerRequestId() : null,
-                candidate.promptName(), candidate.promptVersion(), candidate.promptHash(),
-                candidate.policyVersion(), null,
-                aiMetadata != null ? aiMetadata.inputTokens() : null,
-                aiMetadata != null ? aiMetadata.outputTokens() : null,
-                aiMetadata != null ? aiMetadata.finishReason() : null));
-
-        // 2. 执行 SQL（内部包含二次 guardrails 校验、超时、max rows、脱敏）
+        // 2. 执行 SQL（内部包含二次 guardrails 校验、超时、max rows、脱敏）；登记对象归属供取消校验
         QueryResultTable table;
         try {
-            table = queryExecutor.execute(candidateId, sql);
+            table = queryExecutor.execute(candidateId, candidate.ownerActorId(), sql);
         } catch (BusinessException ex) {
             // 二次 guardrails 失败或执行失败：区分场景写审计
             if (ex.errorCode() == ErrorCode.SQL_GUARDRAIL_VIOLATION) {
@@ -176,9 +181,64 @@ public class QueryExecutionService {
         return new SqlExecutionResponse(table, explanation, resultId, candidateId);
     }
 
-    /** 取消仍在 JDBC 驱动中执行的查询；不会改变已经消费的一次性确认状态。 */
+    /**
+     * 取消仍在 JDBC 驱动中执行的查询；不会改变已经消费的一次性确认状态。
+     *
+     * <p>取消属于对象级操作：只有对象归属人（通常是确认执行的操作者）和管理员可以取消；
+     * 其他操作者的取消请求被拒绝并写入审计。无法确定当前操作者或策略不可用时拒绝取消（fail-closed）。</p>
+     */
     public boolean cancel(String executionId) {
-        return queryExecutor.cancel(executionId);
+        long startMs = System.currentTimeMillis();
+        String ownerActorId = queryExecutor.executionOwner(executionId);
+        if (ownerActorId == null) {
+            // 查询不存在或已经结束，没有任何可取消对象。
+            return false;
+        }
+        CurrentActor actor = currentActor();
+        if (actor == null || accessPolicy == null
+                || !accessPolicy.allowed(actor, ObjectAction.CANCEL, ownerActorId, null, false)) {
+            log.warn("拒绝越权取消查询：executionId={}，owner={}，actor={}",
+                    executionId, ownerActorId, actor != null ? actor.actorId() : "unknown");
+            auditService.record(new AuditEvent(
+                    executionId, AuditEventType.QUERY_CANCEL_DENIED,
+                    null, null, null, AuditStatus.ACCESS_DENIED, null, false,
+                    null, null, null, System.currentTimeMillis() - startMs,
+                    ownerActorId, actor != null ? actor.actorId() : null));
+            throw new BusinessException(ErrorCode.NOT_FOUND);
+        }
+        boolean cancelled = queryExecutor.cancel(executionId);
+        auditService.record(new AuditEvent(
+                executionId, AuditEventType.QUERY_CANCELLED,
+                null, null, null,
+                cancelled ? AuditStatus.CANCELLED : AuditStatus.EXECUTION_FAILED,
+                null, false, null, null, null, System.currentTimeMillis() - startMs,
+                ownerActorId, actor.actorId()));
+        log.info("取消查询请求处理完成：executionId={}，cancelled={}，actor={}",
+                executionId, cancelled, actor.actorId());
+        return cancelled;
+    }
+
+    private void recordExecutionIntent(SqlCandidate candidate, long startMs) {
+        var aiMetadata = candidate.aiMetadata();
+        // External execution is forbidden unless a durable intent exists in the platform database.
+        auditService.recordRequired(new AuditEvent(
+                candidate.requestId(), AuditEventType.QUERY_EXECUTION_INTENT,
+                null, candidate.sql(), candidate.sql(), AuditStatus.EXECUTION_PENDING,
+                null, true, null, null, candidate.modelName(),
+                System.currentTimeMillis() - startMs,
+                candidate.ownerActorId(), candidate.actionActorId(),
+                aiMetadata != null ? aiMetadata.providerName() : null,
+                aiMetadata != null ? aiMetadata.providerRequestId() : null,
+                candidate.promptName(), candidate.promptVersion(), candidate.promptHash(),
+                candidate.policyVersion(), null,
+                aiMetadata != null ? aiMetadata.inputTokens() : null,
+                aiMetadata != null ? aiMetadata.outputTokens() : null,
+                aiMetadata != null ? aiMetadata.finishReason() : null));
+
+    }
+
+    private CurrentActor currentActor() {
+        return actorProvider != null ? actorProvider.currentActor() : null;
     }
 
     /** Record audit when the user fails to confirm the candidate (cancelled/expired). */

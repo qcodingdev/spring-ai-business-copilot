@@ -10,6 +10,7 @@ import java.util.function.Consumer;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -88,13 +89,13 @@ class AiChatServiceTest {
                 .thenReturn(requestSpec);
         when(requestSpec.call()).thenReturn(responseSpec);
         when(entityParamSpec.validateSchema()).thenReturn(entityParamSpec);
-        when(responseSpec.entity(
+        when(responseSpec.responseEntity(
                 org.mockito.ArgumentMatchers.eq(StructuredOutput.class),
                 org.mockito.ArgumentMatchers.<Consumer<ChatClient.EntityParamSpec>>any()))
                 .thenAnswer(invocation -> {
                     Consumer<ChatClient.EntityParamSpec> spec = invocation.getArgument(1);
                     spec.accept(entityParamSpec);
-                    return expected;
+                    return new org.springframework.ai.chat.client.ResponseEntity<>(null, expected);
                 });
 
         ObjectProvider<ChatClient.Builder> provider = mock(ObjectProvider.class);
@@ -104,6 +105,64 @@ class AiChatServiceTest {
         assertThat(service.generateJson("return a structured response", StructuredOutput.class)).isEqualTo(expected);
         verify(entityParamSpec).validateSchema();
         verify(requestSpec).user(org.mockito.ArgumentMatchers.contains("输出语言要求"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void evidenceJsonPreservesSourceLanguageWithoutStartingASecondProviderCall() {
+        ChatClient.Builder builder = mock(ChatClient.Builder.class);
+        ChatClient chatClient = mock(ChatClient.class);
+        ChatClient.ChatClientRequestSpec requestSpec = mock(ChatClient.ChatClientRequestSpec.class);
+        ChatClient.CallResponseSpec responseSpec = mock(ChatClient.CallResponseSpec.class);
+        ChatClient.EntityParamSpec entityParamSpec = mock(ChatClient.EntityParamSpec.class);
+        StructuredOutput sourceBacked = new StructuredOutput("Source fact: 星海路由器");
+
+        when(builder.build()).thenReturn(chatClient);
+        when(chatClient.prompt()).thenReturn(requestSpec);
+        when(requestSpec.user(org.mockito.ArgumentMatchers.anyString())).thenReturn(requestSpec);
+        when(requestSpec.call()).thenReturn(responseSpec);
+        when(entityParamSpec.validateSchema()).thenReturn(entityParamSpec);
+        when(responseSpec.responseEntity(
+                org.mockito.ArgumentMatchers.eq(StructuredOutput.class),
+                org.mockito.ArgumentMatchers.<Consumer<ChatClient.EntityParamSpec>>any()))
+                .thenAnswer(invocation -> {
+                    Consumer<ChatClient.EntityParamSpec> spec = invocation.getArgument(1);
+                    spec.accept(entityParamSpec);
+                    return new org.springframework.ai.chat.client.ResponseEntity<>(null, sourceBacked);
+                });
+
+        ObjectProvider<ChatClient.Builder> provider = mock(ObjectProvider.class);
+        when(provider.getIfAvailable()).thenReturn(builder);
+        AiChatService service = new AiChatService(provider, new AiModelProperties("test", false, 1000));
+
+        assertThat(service.generateEvidenceJsonWithMetadata(
+                "report.generation", "preserve source facts", StructuredOutput.class).content())
+                .isEqualTo(sourceBacked);
+        verify(chatClient, times(1)).prompt();
+        verify(requestSpec).user("preserve source facts");
+    }
+
+    @Test
+    void cumulativeMetadataSumsTokensAcrossAttemptsAndKeepsUnknownExplicit() {
+        AiInvocationMetadata first = new AiInvocationMetadata(
+                "openai", "gpt-5-mini", "req-1", 100, 40, "STOP", 500);
+        AiInvocationMetadata retry = new AiInvocationMetadata(
+                "openai", "gpt-5-mini", "req-2", 120, 60, "STOP", 700);
+
+        AiInvocationMetadata cumulative = AiInvocationMetadata.cumulative(
+                java.util.List.of(first, retry), 1300);
+        assertThat(cumulative.inputTokens()).isEqualTo(220);
+        assertThat(cumulative.outputTokens()).isEqualTo(100);
+        assertThat(cumulative.latencyMs()).isEqualTo(1300);
+        assertThat(cumulative.providerRequestId()).isEqualTo("req-2");
+
+        // 供应商未返回用量时保持未知（null），不记为零
+        AiInvocationMetadata unknown = new AiInvocationMetadata(
+                "openai", "gpt-5-mini", "req-3", null, 30, "STOP", 100);
+        AiInvocationMetadata merged = AiInvocationMetadata.cumulative(
+                java.util.List.of(first, unknown), 700);
+        assertThat(merged.inputTokens()).isNull();
+        assertThat(merged.outputTokens()).isEqualTo(70);
     }
 
     @Test

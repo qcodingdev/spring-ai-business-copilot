@@ -7,7 +7,7 @@
     <parent>
         <groupId>dev.qcoding</groupId>
         <artifactId>spring-ai-business-copilot</artifactId>
-        <version>2.4.0</version>
+        <version>2.4.1</version>
         <relativePath>../../pom.xml</relativePath>
     </parent>
 
@@ -16,6 +16,11 @@
     <description>Enterprise knowledge assistant with document ingestion, pgvector retrieval, citations, refusal, and audit.</description>
 
     <dependencies>
+        <dependency>
+            <groupId>dev.qcoding</groupId>
+            <artifactId>task-runtime</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>dev.qcoding</groupId>
             <artifactId>ai-core</artifactId>

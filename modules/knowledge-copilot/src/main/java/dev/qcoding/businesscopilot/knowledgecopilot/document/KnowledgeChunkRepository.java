@@ -33,6 +33,13 @@ public interface KnowledgeChunkRepository {
      */
     List<TextSearchResult> findByKeywordSearch(List<String> terms, int limit);
 
+    /**
+     * 复核分片所属文档当前是否仍满足检索可见条件（启用、当前版本、已索引、未过期、无冲突、ACL 允许）。
+     *
+     * <p>KNOW-03：检索结果回表存在时间窗口，消费前必须复核，防止使用已失效资料。</p>
+     */
+    boolean isDocumentVisible(Long documentId);
+
     record TextSearchResult(Long chunkId, double rank) {
     }
 }

@@ -25,6 +25,16 @@ import java.util.UUID;
 /** 简历模块聚合对象、证据批次和审计事件的 JDBC 持久化。 */
 public class ResumeRepository {
     private static final Logger log = LoggerFactory.getLogger(ResumeRepository.class);
+    // One consent and retention boundary for business details, queues and direct evidence reads.
+    private static String activeSubmission(String submissionId) {
+        return "EXISTS (SELECT 1 FROM resume_submissions submission "
+                + "JOIN hr_candidate_consents consent ON consent.id = submission.consent_id "
+                + "WHERE submission.id = " + submissionId
+                + " AND submission.expires_at > now() AND consent.revoked_at IS NULL "
+                + "AND consent.granted_at <= now() AND consent.expires_at > now() "
+                + "AND consent.purpose_code = 'ASSESSMENT')";
+    }
+
     private final JdbcTemplate jdbcTemplate;
     private final Duration reviewSla;
 
@@ -169,10 +179,23 @@ public class ResumeRepository {
         return keys.getKey().longValue();
     }
 
-    @Transactional
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
     public long persistSubmission(long jobId, String sanitizedResume, List<ResumeModels.ResumeEvidence> evidence,
-                                  String fileName, String contentType, Instant expiresAt) {
+                                  String fileName, String contentType, Instant expiresAt,
+                                  long consentId, String candidateReference) {
+        List<Long> valid = jdbcTemplate.query("""
+                SELECT id FROM hr_candidate_consents
+                WHERE id = ? AND candidate_reference = ? AND purpose_code = 'ASSESSMENT'
+                  AND granted_at <= now() AND expires_at > now() AND revoked_at IS NULL
+                FOR UPDATE
+                """, (rs, row) -> rs.getLong(1), consentId, candidateReference);
+        if (valid.isEmpty()) throw consentUnavailable();
         long submissionId = insertSubmission(jobId, sanitizedResume, fileName, contentType, expiresAt);
+        jdbcTemplate.update("""
+                UPDATE resume_submissions SET consent_id = ?, candidate_reference = ?,
+                    expires_at = LEAST(expires_at, (SELECT expires_at FROM hr_candidate_consents WHERE id = ?))
+                WHERE id = ?
+                """, consentId, candidateReference, consentId, submissionId);
         insertEvidence(submissionId, evidence);
         return submissionId;
     }
@@ -190,14 +213,26 @@ public class ResumeRepository {
     public List<ResumeModels.ResumeEvidence> findEvidence(long submissionId) {
         return jdbcTemplate.query(
                 "SELECT evidence_ref, section_name, sanitized_text, position_index "
-                        + "FROM resume_evidence WHERE submission_id = ? ORDER BY position_index",
+                        + "FROM resume_evidence WHERE submission_id = ? AND "
+                        + activeSubmission("resume_evidence.submission_id") + " ORDER BY position_index",
                 (rs, rowNum) -> new ResumeModels.ResumeEvidence(
                         rs.getString("evidence_ref"), rs.getString("section_name"),
                         rs.getString("sanitized_text"), rs.getInt("position_index")),
                 submissionId);
     }
 
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
     public ResumeAssessmentEntity insertAssessment(ResumeAssessmentEntity assessment) {
+        // Lock only during publication. Revocation can complete while the model is running.
+        List<Long> valid = jdbcTemplate.query("""
+                SELECT consent.id FROM hr_candidate_consents consent
+                JOIN resume_submissions submission ON submission.consent_id = consent.id
+                WHERE submission.id = ? AND submission.expires_at > now()
+                  AND consent.granted_at <= now() AND consent.expires_at > now()
+                  AND consent.revoked_at IS NULL AND consent.purpose_code = 'ASSESSMENT'
+                FOR UPDATE OF consent
+                """, (rs, row) -> rs.getLong(1), assessment.getSubmissionId());
+        if (valid.isEmpty()) throw consentUnavailable();
         KeyHolder keys = new GeneratedKeyHolder();
         jdbcTemplate.update(connection -> {
             PreparedStatement statement = connection.prepareStatement(
@@ -233,13 +268,20 @@ public class ResumeRepository {
         return assessment;
     }
 
+    private dev.qcoding.businesscopilot.commonweb.api.BusinessException consentUnavailable() {
+        return new dev.qcoding.businesscopilot.commonweb.api.BusinessException(
+                dev.qcoding.businesscopilot.commonweb.api.ErrorCode.STATE_CONFLICT,
+                "候选人授权已撤回或到期，评估结果未发布");
+    }
+
     public ResumeAssessmentEntity findAssessment(long id) {
         List<ResumeAssessmentEntity> assessments = jdbcTemplate.query(
                 "SELECT id, job_id, submission_id, content_json, status, review_reasons, review_token_digest, "
                         + "owner_actor_id, review_queue, reviewer_actor_id, action_actor_id, expires_at, "
                         + "criteria_version, original_content_json, corrected_content_json, reviewer_feedback, "
                         + "decision_outcome, reviewed_at, created_at, updated_at "
-                        + "FROM resume_assessments WHERE id = ?",
+                        + "FROM resume_assessments WHERE id = ? AND "
+                        + activeSubmission("resume_assessments.submission_id"),
                 (rs, rowNum) -> {
                     ResumeAssessmentEntity assessment = new ResumeAssessmentEntity();
                     assessment.setId(rs.getLong("id"));
@@ -285,6 +327,7 @@ public class ResumeRepository {
                 JOIN resume_submissions submission ON submission.id = assessment.submission_id
                 WHERE assessment.review_queue = TRUE
                   AND assessment.status IN ('DRAFTED', 'NEEDS_REVIEW')
+                  AND %s
                   AND (
                       ?
                       OR (? AND (assessment.reviewer_actor_id IS NULL
@@ -295,7 +338,7 @@ public class ResumeRepository {
                     CASE assessment.status WHEN 'NEEDS_REVIEW' THEN 1 ELSE 2 END,
                     assessment.updated_at DESC
                 LIMIT ?
-                """, (rs, rowNum) -> new AssessmentQueueRow(
+                """.formatted(activeSubmission("assessment.submission_id")), (rs, rowNum) -> new AssessmentQueueRow(
                 rs.getLong("id"), rs.getLong("job_id"), rs.getLong("submission_id"),
                 rs.getString("job_title"), rs.getString("candidate_reference"),
                 rs.getInt("criteria_version"), ResumeModels.Status.valueOf(rs.getString("status")),
@@ -320,12 +363,14 @@ public class ResumeRepository {
                 WHERE id = ?
                   AND review_queue = TRUE
                   AND status IN ('DRAFTED', 'NEEDS_REVIEW')
+                  AND %s
                   AND (
                       ?
                       OR owner_actor_id = ?
                       OR (? AND (reviewer_actor_id IS NULL OR reviewer_actor_id = ?))
                   )
-                """, tokenDigest, reviewer, actorId, timestamp(expiresAt), timestamp(now), id,
+                """.formatted(activeSubmission("resume_assessments.submission_id")),
+                tokenDigest, reviewer, actorId, timestamp(expiresAt), timestamp(now), id,
                 admin, actorId, reviewer, actorId) == 1;
     }
 
@@ -335,9 +380,13 @@ public class ResumeRepository {
                 "UPDATE resume_assessments SET status = ?, review_token_digest = NULL, action_actor_id = ?, "
                         + "decision_outcome = CASE WHEN ? = 'CANCELED' THEN 'REJECTED' ELSE decision_outcome END, "
                         + "reviewed_at = CASE WHEN ? = 'CANCELED' THEN ? ELSE reviewed_at END, updated_at = ? "
-                        + "WHERE id = ? AND status = ? AND expires_at > ?",
+                        + "WHERE id = ? AND status = ? AND expires_at > ? "
+                        + "AND EXISTS (SELECT 1 FROM resume_submissions submission "
+                        + "JOIN hr_candidate_consents consent ON consent.id = submission.consent_id "
+                        + "WHERE submission.id = resume_assessments.submission_id "
+                        + "AND submission.expires_at > ? AND consent.revoked_at IS NULL AND consent.expires_at > ?)",
                 target.name(), actionActorId, target.name(), target.name(), timestamp(now),
-                timestamp(now), id, expected.name(), timestamp(now)) == 1;
+                timestamp(now), id, expected.name(), timestamp(now), timestamp(now), timestamp(now)) == 1;
     }
 
     public boolean reviewAssessment(long id, ResumeModels.Status expected,
@@ -347,16 +396,36 @@ public class ResumeRepository {
                 "UPDATE resume_assessments SET content_json = ?, corrected_content_json = ?, reviewer_feedback = ?, "
                         + "decision_outcome = ?, status = ?, review_token_digest = NULL, action_actor_id = ?, "
                         + "reviewer_actor_id = ?, reviewed_at = ?, updated_at = ? "
-                        + "WHERE id = ? AND status = ? AND expires_at > ?",
+                        + "WHERE id = ? AND status = ? AND expires_at > ? "
+                        + "AND EXISTS (SELECT 1 FROM resume_submissions submission "
+                        + "JOIN hr_candidate_consents consent ON consent.id = submission.consent_id "
+                        + "WHERE submission.id = resume_assessments.submission_id "
+                        + "AND submission.expires_at > ? AND consent.revoked_at IS NULL AND consent.expires_at > ?)",
                 correctedContentJson, correctedContentJson, reviewerFeedback, outcome,
                 ResumeModels.Status.REVIEWED.name(), actionActorId, actionActorId,
-                timestamp(now), timestamp(now), id, expected.name(), timestamp(now)) == 1;
+                timestamp(now), timestamp(now), id, expected.name(), timestamp(now),
+                timestamp(now), timestamp(now)) == 1;
     }
 
     public int deleteExpiredSubmissions(Instant now) {
         return jdbcTemplate.update(
                 "DELETE FROM resume_submissions WHERE expires_at <= ? OR deleted_at IS NOT NULL",
                 timestamp(now));
+    }
+
+    /** Removes expired ATS derivatives and consent receipts after their explicit retention window. */
+    public int deleteExpiredConsentArtifacts(Instant now) {
+        int imports = jdbcTemplate.update("DELETE FROM hr_ats_imports WHERE expires_at <= ?",
+                timestamp(now));
+        int consents = jdbcTemplate.update("""
+                DELETE FROM hr_candidate_consents consent
+                WHERE retention_expires_at <= ?
+                  AND NOT EXISTS (
+                      SELECT 1 FROM resume_submissions submission
+                      WHERE submission.consent_id = consent.id
+                  )
+                """, timestamp(now));
+        return imports + consents;
     }
 
     public boolean deleteSubmission(long submissionId, String ownerActorId, boolean admin) {

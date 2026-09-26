@@ -117,6 +117,17 @@ public class JdbcReportDraftRepository implements ReportDraftRepository {
     }
 
     @Override
+    public Optional<RequestMetadata> findRequestMetadata(Long requestId) {
+        var rows = jdbcTemplate.query("""
+                SELECT title, report_type, period_start, period_end, period_timezone
+                FROM report_requests WHERE id=?
+                """, (rs, row) -> new RequestMetadata(rs.getString("title"), rs.getString("report_type"),
+                rs.getDate("period_start").toLocalDate(), rs.getDate("period_end").toLocalDate(),
+                rs.getString("period_timezone")), requestId);
+        return rows.stream().findFirst();
+    }
+
+    @Override
     public boolean transitionStatus(Long draftId, ReportDraftStatus expected, ReportDraftStatus target,
                                     String actionActorId) {
         int rows = jdbcTemplate.update("UPDATE report_drafts SET status = ?, confirmation_token_digest = NULL, action_actor_id = ?, updated_at = ? "
@@ -155,8 +166,8 @@ public class JdbcReportDraftRepository implements ReportDraftRepository {
         KeyHolder keyHolder = new GeneratedKeyHolder();
         jdbcTemplate.update(connection -> {
             PreparedStatement statement = connection.prepareStatement(
-                    "INSERT INTO report_requests (report_type, period_start, period_end, title, owner_actor_id, template_id, template_version, created_at) "
-                            + "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO report_requests (report_type, period_start, period_end, title, owner_actor_id, template_id, template_version, created_at, period_timezone) "
+                            + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     new String[]{"id"});
             statement.setString(1, preview.reportType().name());
             statement.setObject(2, preview.period().periodStart());
@@ -166,6 +177,7 @@ public class JdbcReportDraftRepository implements ReportDraftRepository {
             statement.setString(6, preview.templateId());
             statement.setString(7, preview.templateVersion());
             statement.setTimestamp(8, Timestamp.from(now));
+            statement.setString(9, preview.period().timezone());
             return statement;
         }, keyHolder);
         return keyHolder.getKey().longValue();
@@ -174,14 +186,14 @@ public class JdbcReportDraftRepository implements ReportDraftRepository {
     private void insertSources(long requestId, List<ReportSource> sources, Instant now) {
         for (ReportSource source : sources) {
             jdbcTemplate.update("INSERT INTO report_sources (request_id, source_type, source_ref, source_title, sanitized_content, source_hash, "
-                            + "snapshot_id, provider_id, source_version, observed_at, source_timezone, source_unit, valid_until, freshness_status, created_at) "
-                            + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                            + "snapshot_id, provider_id, source_version, observed_at, source_timezone, source_unit, valid_until, freshness_status, created_at, attributes_json) "
+                            + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb)",
                     requestId, source.sourceType().name(), source.sourceId(),
                     source.title(), source.sanitizedContent(), source.sourceHash(),
                     source.snapshotId(), source.providerId(), source.sourceVersion(),
                     Timestamp.from(source.observedAt()), source.sourceTimezone(), source.sourceUnit(),
                     source.validUntil() == null ? null : Timestamp.from(source.validUntil()),
-                    source.freshness().name(), Timestamp.from(now));
+                    source.freshness().name(), Timestamp.from(now), objectMapper.writeValueAsString(source.attributes()));
         }
     }
 

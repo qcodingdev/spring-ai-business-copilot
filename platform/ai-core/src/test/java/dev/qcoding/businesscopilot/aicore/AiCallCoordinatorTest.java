@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
 
 import java.time.Duration;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -47,6 +48,34 @@ class AiCallCoordinatorTest {
         assertThatThrownBy(() -> coordinator.execute("chat", "support.reply-draft", () -> "never"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("保护机制");
+    }
+
+    @Test
+    void recordsExplicitEmbeddingProviderAndModel() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        AtomicReference<String> recordedProvider = new AtomicReference<>();
+        AtomicReference<String> recordedModel = new AtomicReference<>();
+        AiUsageRecorder recorder = new AiUsageRecorder() {
+            @Override
+            public void recordCall(String provider, String model, String type, String operation,
+                                   String status, long latencyNanos) {
+                recordedProvider.set(provider);
+                recordedModel.set(model);
+            }
+        };
+        AiModelProperties chat = new AiModelProperties("chat-model", "chat-provider", false, 1000);
+        AiCallCoordinator coordinator = new AiCallCoordinator(defaults(),
+                new AiCallMetrics(registry, chat, recorder));
+
+        assertThat(coordinator.execute("embedding", "knowledge.embedding",
+                "embedding-provider", "embedding-model", () -> "ok")).isEqualTo("ok");
+
+        assertThat(recordedProvider).hasValue("embedding-provider");
+        assertThat(recordedModel).hasValue("embedding-model");
+        assertThat(registry.get("business.copilot.ai.calls")
+                .tags("type", "embedding", "operation", "knowledge.embedding", "status", "success",
+                        "provider", "embedding-provider", "model", "embedding-model")
+                .counter().count()).isEqualTo(1.0d);
     }
 
     private AiResilienceProperties defaults() {

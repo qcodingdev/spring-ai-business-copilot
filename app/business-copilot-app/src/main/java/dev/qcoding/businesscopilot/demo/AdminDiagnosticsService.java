@@ -78,11 +78,11 @@ public class AdminDiagnosticsService {
 
     private Map<String, Boolean> moduleHealth() {
         Map<String, Boolean> health = new LinkedHashMap<>();
-        health.put("企业知识助手", bool("business-copilot.knowledge.enabled", true));
-        health.put("客服工作台", bool("business-copilot.support-copilot.enabled", true));
-        health.put("HR Copilot", bool("business-copilot.resume-copilot.enabled", true));
-        health.put("数据分析助手", true);
-        health.put("报告生成助手", bool("business-copilot.report-copilot.enabled", true));
+        health.put("knowledge", bool("business-copilot.knowledge.enabled", true));
+        health.put("support", bool("business-copilot.support-copilot.enabled", true));
+        health.put("hr", bool("business-copilot.resume-copilot.enabled", true));
+        health.put("data", true);
+        health.put("report", bool("business-copilot.report-copilot.enabled", true));
         return health;
     }
 
@@ -146,40 +146,40 @@ public class AdminDiagnosticsService {
 
     private Map<String, Long> enterpriseExpansion() {
         Map<String, Long> counts = new LinkedHashMap<>();
-        counts.put("Data · 已批准指标", scalar(
+        counts.put("dataApprovedMetrics", scalar(
                 "SELECT COUNT(*) FROM data_metric_definitions WHERE active = TRUE"));
-        counts.put("Data · 已批准查询模板", scalar(
+        counts.put("dataApprovedQueryTemplates", scalar(
                 "SELECT COUNT(*) FROM data_query_templates WHERE active = TRUE"));
-        counts.put("Knowledge · 已启用来源", scalar(
+        counts.put("knowledgeEnabledSources", scalar(
                 "SELECT COUNT(*) FROM knowledge_source_connections WHERE enabled = TRUE"));
-        counts.put("Knowledge · 过期或冲突资料", scalar("""
+        counts.put("knowledgeExpiredOrConflictedDocuments", scalar("""
                 SELECT COUNT(*) FROM knowledge_documents
                 WHERE current_version = TRUE
                   AND (expires_at < now() OR conflict_status <> 'NONE')
                 """));
-        counts.put("Support · 已启用外部工单连接", scalar(
+        counts.put("supportEnabledConnections", scalar(
                 "SELECT COUNT(*) FROM support_external_connections WHERE enabled = TRUE"));
-        counts.put("Support · SLA 风险或违约", scalar("""
+        counts.put("supportSlaRiskOrBreach", scalar("""
                 SELECT COUNT(*) FROM support_tickets
                 WHERE sla_status IN ('AT_RISK', 'BREACHED')
                 """));
-        counts.put("Support · 待确认回写", scalar("""
+        counts.put("supportPendingWritebacks", scalar("""
                 SELECT COUNT(*) FROM support_draft_writebacks
                 WHERE status = 'PENDING_CONFIRMATION'
                 """));
-        counts.put("Report · 已启用来源", scalar(
+        counts.put("reportEnabledSources", scalar(
                 "SELECT COUNT(*) FROM report_external_connections WHERE enabled = TRUE"));
-        counts.put("Report · 已启用定时草稿", scalar(
+        counts.put("reportEnabledSchedules", scalar(
                 "SELECT COUNT(*) FROM report_schedules WHERE enabled = TRUE"));
-        counts.put("HR · 有效候选人授权", scalar("""
+        counts.put("hrValidCandidateConsents", scalar("""
                 SELECT COUNT(*) FROM hr_candidate_consents
                 WHERE revoked_at IS NULL AND expires_at > now()
                 """));
-        counts.put("HR · 已批准面试题", scalar(
+        counts.put("hrApprovedInterviewQuestions", scalar(
                 "SELECT COUNT(*) FROM hr_interview_question_bank WHERE active = TRUE"));
-        counts.put("HR · 已启用 ATS 连接", scalar(
+        counts.put("hrEnabledAtsConnections", scalar(
                 "SELECT COUNT(*) FROM hr_ats_connections WHERE enabled = TRUE"));
-        counts.put("HR · 已批准入职清单", scalar(
+        counts.put("hrApprovedOnboardingChecklists", scalar(
                 "SELECT COUNT(*) FROM hr_onboarding_checklists WHERE active = TRUE"));
         return counts;
     }

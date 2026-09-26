@@ -47,7 +47,11 @@ public class JdbcReadOnlyQueryExecutor implements ReadOnlyQueryExecutor {
     private final GuardrailsProperties guardrailsProperties;
     private final SensitiveDataMasker masker;
     private final QueryExecutionProperties queryProperties;
-    private final Map<String, Statement> activeStatements = new ConcurrentHashMap<>();
+    private final Map<String, ActiveExecution> activeExecutions = new ConcurrentHashMap<>();
+
+    /** 一次执行中的查询及其对象归属；取消时据此做对象级权限校验。 */
+    private record ActiveExecution(Statement statement, String ownerActorId) {
+    }
 
     public JdbcReadOnlyQueryExecutor(JdbcTemplate jdbcTemplate,
                                       SqlGuardrailService guardrailService,
@@ -68,6 +72,11 @@ public class JdbcReadOnlyQueryExecutor implements ReadOnlyQueryExecutor {
 
     @Override
     public QueryResultTable execute(String executionId, String sql) {
+        return execute(executionId, null, sql);
+    }
+
+    @Override
+    public QueryResultTable execute(String executionId, String ownerActorId, String sql) {
         // 1. 防御式二次 guardrails 校验
         SqlValidationResult validationResult = guardrailService.validate(sql, guardrailsProperties);
         if (!validationResult.passed()) {
@@ -89,13 +98,13 @@ public class JdbcReadOnlyQueryExecutor implements ReadOnlyQueryExecutor {
                     stmt.setMaxRows(jdbcMaxRows());
                     stmt.setFetchSize(Math.min(queryProperties.fetchSize(), jdbcMaxRows()));
                     if (executionId != null) {
-                        activeStatements.put(executionId, stmt);
+                        activeExecutions.put(executionId, new ActiveExecution(stmt, ownerActorId));
                     }
                     try (ResultSet rs = stmt.executeQuery(sql)) {
                         return mapResultSet(rs);
                     } finally {
                         if (executionId != null) {
-                            activeStatements.remove(executionId, stmt);
+                            activeExecutions.remove(executionId);
                         }
                     }
                 }
@@ -111,17 +120,23 @@ public class JdbcReadOnlyQueryExecutor implements ReadOnlyQueryExecutor {
 
     @Override
     public boolean cancel(String executionId) {
-        Statement statement = activeStatements.get(executionId);
-        if (statement == null) {
+        ActiveExecution execution = activeExecutions.get(executionId);
+        if (execution == null) {
             return false;
         }
         try {
-            statement.cancel();
+            execution.statement().cancel();
             return true;
         } catch (SQLException ex) {
             log.warn("取消查询失败：executionId={}", executionId);
             return false;
         }
+    }
+
+    @Override
+    public String executionOwner(String executionId) {
+        ActiveExecution execution = activeExecutions.get(executionId);
+        return execution != null ? execution.ownerActorId() : null;
     }
 
     /** Extract the underlying SQLException from a Spring DataAccessException if present. */

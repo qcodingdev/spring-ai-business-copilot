@@ -7,6 +7,7 @@ import RequestId from './RequestId.vue'
 import StatusBadge from './StatusBadge.vue'
 import ToastMessage from './ToastMessage.vue'
 import { useSession } from '@/composables/useSession'
+import { formatDate } from '@/locales/format'
 
 interface QueueItem {
   ticketId: number
@@ -31,13 +32,15 @@ type ReviewSession = { draftId: number; suggestedReply: string; confirmationToke
 type PendingAction = 'confirm' | 'cancel' | 'close' | 'manual' | null
 
 const { t, te, locale } = useI18n()
-const { canOperate } = useSession()
+const { canOperate, canReview } = useSession()
 const loading = ref(false)
 const queue = ref<QueueItem[]>([])
 const search = ref('')
 const statusFilter = ref('OPEN')
 const urgencyFilter = ref('')
 const selected = ref<QueueItem | null>(null)
+const followUps = ref<string[]>([])
+const handoffReason = ref<{ reason: string; nextStep: string } | null>(null)
 const session = ref<ReviewSession | null>(null)
 const editedReply = ref('')
 const editReason = ref('')
@@ -89,6 +92,10 @@ function queueValueLabel(value: string | null): string {
   return value && te(`support.queue.values.${value}`) ? t(`support.queue.values.${value}`) : statusLabel(value)
 }
 
+function date(value: string | null | undefined): string {
+  return value ? (formatDate(value, locale.value) || '—') : '—'
+}
+
 function statusTone(item: QueueItem): 'info' | 'success' | 'warning' | 'danger' {
   if (item.status === 'CLOSED' || item.status === 'CONFIRMED') return 'success'
   if (item.status === 'CANCELED') return 'danger'
@@ -109,10 +116,12 @@ async function load(): Promise<void> {
 }
 
 async function openReview(item: QueueItem): Promise<void> {
+  if (loading.value) return
   selected.value = item
   session.value = null
   editedReply.value = item.suggestedReply ?? ''
   editReason.value = item.editReason ?? ''
+  void loadDiagnostics(item.ticketId)
   if (!item.draftId || !['DRAFTED', 'NEEDS_REVIEW'].includes(item.draftStatus ?? '')) return
   loading.value = true
   try {
@@ -127,7 +136,22 @@ async function openReview(item: QueueItem): Promise<void> {
   } finally { loading.value = false }
 }
 
+/** SUP-01/02：缺失要素追问建议与转人工原因（辅助信息，加载失败静默降级）。 */
+async function loadDiagnostics(ticketId: number): Promise<void> {
+  followUps.value = []
+  handoffReason.value = null
+  try {
+    const followUpResponse = await api<string[]>(`/api/support-copilot/tickets/${ticketId}/follow-ups`)
+    followUps.value = followUpResponse.data ?? []
+  } catch { /* 追问建议为辅助视图，忽略加载失败 */ }
+  try {
+    const handoffResponse = await api<{ reason: string; nextStep: string }>(`/api/support-copilot/tickets/${ticketId}/handoff`)
+    handoffReason.value = handoffResponse.data ?? null
+  } catch { /* 未转人工或加载失败时不显示 */ }
+}
+
 async function analyzeImported(item: QueueItem): Promise<void> {
+  if (loading.value) return
   loading.value = true
   try {
     const response = await api(`/api/support-copilot/tickets/${item.ticketId}/analyze`, { method: 'POST' })
@@ -142,7 +166,7 @@ async function analyzeImported(item: QueueItem): Promise<void> {
 }
 
 async function saveEdit(): Promise<void> {
-  if (!selected.value?.draftId || !session.value || !editedReply.value.trim()) return
+  if (loading.value || !selected.value?.draftId || !session.value || !editedReply.value.trim()) return
   loading.value = true
   try {
     const response = await api(`/api/support-copilot/reply-drafts/${selected.value.draftId}/edit`, {
@@ -165,6 +189,7 @@ function requestQueueAction(item: QueueItem, action: Exclude<PendingAction, 'con
 }
 
 async function runAction(): Promise<void> {
+  if (loading.value) return
   const item = selected.value
   const action = pendingAction.value
   if (!item || !action) return
@@ -225,14 +250,16 @@ onUnmounted(() => { if (toastTimer) clearTimeout(toastTimer) })
     <div v-if="filteredQueue.length" class="review-queue-list">
       <article v-for="item in filteredQueue" :key="`${item.ticketId}-${item.draftId ?? 'manual'}`" class="review-queue-card">
         <div class="review-queue-card__heading"><div><small>{{ item.externalReference ?? `#${item.ticketId}` }}</small><h3>{{ item.customerQuestion }}</h3></div><StatusBadge :label="statusLabel(item.status)" :tone="statusTone(item)" /></div>
-        <div class="review-queue-card__meta"><span>{{ statusLabel(item.urgency) }}</span><span>{{ queueValueLabel(item.category) }}</span><span>{{ queueValueLabel(item.sentiment) }}</span><span>{{ statusLabel(item.riskLevel) }}</span><span>{{ new Date(item.createdAt).toLocaleString(locale) }}</span></div>
+        <div class="review-queue-card__meta"><span>{{ statusLabel(item.urgency) }}</span><span>{{ queueValueLabel(item.category) }}</span><span>{{ queueValueLabel(item.sentiment) }}</span><span>{{ statusLabel(item.riskLevel) }}</span><span>{{ date(item.createdAt) }}</span></div>
         <p v-if="item.suggestedReply" class="review-queue-card__reply">{{ item.suggestedReply }}</p>
         <ul v-if="item.riskReasons?.length" class="risk-reason-list"><li v-for="reason in item.riskReasons" :key="reason">{{ reason }}</li></ul>
         <div class="button-row">
           <button v-if="!item.draftId && ['RECEIVED','FAILED'].includes(item.status) && canOperate" class="button button--primary" type="button" :disabled="loading" @click="analyzeImported(item)">{{ t('support.queue.analyzeImported') }}</button>
-          <button v-else-if="item.draftId && ['DRAFTED','NEEDS_REVIEW'].includes(item.draftStatus ?? '')" class="button button--primary" type="button" :disabled="loading" @click="openReview(item)">{{ t('support.queue.reviewDraft') }}</button>
-          <button v-else-if="item.draftId && item.status === 'CONFIRMED'" class="button button--secondary" type="button" @click="requestQueueAction(item, 'close')">{{ t('support.queue.recordReply') }}</button>
-          <button v-else-if="!item.draftId && item.status === 'NEEDS_HUMAN'" class="button button--secondary" type="button" @click="requestQueueAction(item, 'manual')">{{ t('support.queue.recordManualReply') }}</button>
+          <button v-else-if="item.draftId && item.draftStatus === 'DRAFTED' && canOperate" class="button button--primary" type="button" :disabled="loading" @click="openReview(item)">{{ t('support.queue.reviewDraft') }}</button>
+          <button v-else-if="item.draftId && item.draftStatus === 'NEEDS_REVIEW' && canReview" class="button button--primary" type="button" :disabled="loading" @click="openReview(item)">{{ t('support.queue.reviewDraft') }}</button>
+          <span v-else-if="item.draftId && item.draftStatus === 'NEEDS_REVIEW'" class="field-hint">{{ t('support.queue.awaitingIndependentReviewer') }}</span>
+          <button v-else-if="item.draftId && item.status === 'CONFIRMED'" class="button button--secondary" type="button" :disabled="loading" @click="requestQueueAction(item, 'close')">{{ t('support.queue.recordReply') }}</button>
+          <button v-else-if="!item.draftId && item.status === 'NEEDS_HUMAN'" class="button button--secondary" type="button" :disabled="loading" @click="requestQueueAction(item, 'manual')">{{ t('support.queue.recordManualReply') }}</button>
         </div>
       </article>
     </div>
@@ -241,9 +268,13 @@ onUnmounted(() => { if (toastTimer) clearTimeout(toastTimer) })
     <form v-if="selected && session" class="queue-review-editor" @submit.prevent="saveEdit">
       <div class="section-heading"><div><p class="panel-kicker">{{ selected.externalReference ?? `#${selected.ticketId}` }}</p><h3>{{ t('support.queue.reviewTitle') }}</h3></div><StatusBadge :label="statusLabel(session.status)" tone="warning" /></div>
       <div class="review-context"><div><span>{{ t('support.queue.customerQuestion') }}</span><p>{{ selected.customerQuestion }}</p></div><div><span>{{ t('support.queue.reviewFocus') }}</span><ul><li>{{ t('support.queue.focusAccuracy') }}</li><li>{{ t('support.queue.focusEvidence') }}</li><li>{{ t('support.queue.focusRisk') }}</li><li>{{ t('support.queue.focusTone') }}</li></ul></div></div>
+      <div v-if="handoffReason || followUps.length" class="review-context review-diagnostics" data-testid="ticket-diagnostics">
+        <div v-if="handoffReason"><span>{{ t('support.handoff.title') }}</span><p><StatusBadge :label="handoffReason.reason" tone="warning" /> <small>{{ handoffReason.nextStep }}</small></p></div>
+        <div v-if="followUps.length"><span>{{ t('support.followUps.title') }}</span><ul data-testid="ticket-follow-ups"><li v-for="question in followUps" :key="question">{{ question }}</li></ul><p class="field-hint">{{ t('support.followUps.hint') }}</p></div>
+      </div>
       <label>{{ t('support.replyDraft') }}<textarea v-model="editedReply" required maxlength="4000" rows="9"></textarea></label>
       <label>{{ t('support.editReason') }}<input v-model="editReason" maxlength="500"></label>
-      <p class="field-hint">{{ t('support.queue.tokenHint') }} · {{ session.expiresAt }}</p>
+      <p class="field-hint">{{ t('support.queue.tokenHint') }} · {{ date(session.expiresAt) }}</p>
       <div class="button-row"><button class="button button--secondary" type="submit" :disabled="loading || !editedReply.trim()">{{ t('support.saveEdit') }}</button><button class="button button--primary" type="button" :disabled="loading || !editedReply.trim()" @click="pendingAction = 'confirm'">{{ t('support.queue.confirmAction') }}</button><button class="button button--danger" type="button" :disabled="loading" @click="pendingAction = 'cancel'">{{ t('support.queue.cancelAction') }}</button><button class="button button--ghost" type="button" @click="selected = null; session = null">{{ t('common.close') }}</button></div>
     </form>
 

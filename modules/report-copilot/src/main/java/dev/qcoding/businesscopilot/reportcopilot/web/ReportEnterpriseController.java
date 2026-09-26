@@ -1,5 +1,7 @@
 package dev.qcoding.businesscopilot.reportcopilot.web;
 
+import java.util.List;
+
 import dev.qcoding.businesscopilot.commonweb.api.ApiResponse;
 import dev.qcoding.businesscopilot.reportcopilot.enterprise.ReportEnterpriseService;
 import dev.qcoding.businesscopilot.reportcopilot.export.ReportOfficeExportService;
@@ -45,7 +47,7 @@ public class ReportEnterpriseController {
         return ResponseEntity.ok(ApiResponse.ok(service.saveConnection(
                 new ReportEnterpriseService.ConnectionCommand(
                         request.connectionKey(), request.displayName(), request.provider(),
-                        request.baseUrl(), request.secretRef(), request.enabled()))));
+                        request.baseUrl(), request.secretRef(), request.enabled(), request.jiraProjectKeys()))));
     }
 
     @PostMapping("/reports/generate")
@@ -69,6 +71,12 @@ public class ReportEnterpriseController {
     @GetMapping("/reports")
     public ResponseEntity<ApiResponse<?>> records() {
         return ResponseEntity.ok(ApiResponse.ok(service.records()));
+    }
+
+    /** DATA-05：草稿的数据追溯链（交接 → 结果快照 → SQL 候选）。 */
+    @GetMapping("/drafts/{draftId}/data-trace")
+    public ResponseEntity<ApiResponse<?>> dataTrace(@PathVariable long draftId) {
+        return ResponseEntity.ok(ApiResponse.ok(service.dataTraceability(draftId)));
     }
 
     @PostMapping("/schedules")
@@ -114,7 +122,7 @@ public class ReportEnterpriseController {
             @NotNull ReportEnterpriseService.Provider provider,
             @Size(max = 500) String baseUrl,
             @Size(max = 200) String secretRef,
-            boolean enabled) { }
+            boolean enabled, @Size(max = 20) List<@NotBlank @Size(max = 50) String> jiraProjectKeys) { }
     public record GenerateRequest(
             @NotNull ReportType reportType,
             @NotNull ReportPeriod period,

@@ -5,7 +5,7 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <section class="panel">
+  <section id="data-sql-preview" class="panel">
     <h2>{{ t('data.sqlPreview') }}</h2>
     <pre class="code-block"><code>{{ sql || t('common.noData') }}</code></pre>
   </section>

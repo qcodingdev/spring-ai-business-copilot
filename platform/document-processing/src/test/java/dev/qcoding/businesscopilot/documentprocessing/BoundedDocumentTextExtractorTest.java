@@ -4,8 +4,7 @@ import dev.qcoding.businesscopilot.commonweb.api.BusinessException;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
-import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
-import org.apache.pdfbox.pdmodel.font.PDType1Font;
+import org.apache.pdfbox.pdmodel.font.PDType0Font;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.Test;
@@ -38,7 +37,11 @@ class BoundedDocumentTextExtractorTest {
             pdf.addPage(page);
             try (PDPageContentStream stream = new PDPageContentStream(pdf, page)) {
                 stream.beginText();
-                stream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 12);
+                // Embedded fixture font avoids an unbounded scan of host OS fonts.
+                try (var font = PDDocument.class.getResourceAsStream(
+                        "/org/apache/pdfbox/resources/ttf/LiberationSans-Regular.ttf")) {
+                    stream.setFont(PDType0Font.load(pdf, font), 12);
+                }
                 stream.newLineAtOffset(72, 720);
                 stream.showText("PDF business evidence");
                 stream.endText();

@@ -1,22 +1,25 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api, ApiError, jsonBody } from '@/api/client'
 import { useSession } from '@/composables/useSession'
 import ConfirmDialog from './ConfirmDialog.vue'
 import DataExecutionResult from './DataExecutionResult.vue'
+import DataHandoffMetricForm from './DataHandoffMetricForm.vue'
 import RequestId from './RequestId.vue'
 import StatusBadge from './StatusBadge.vue'
 import ToastMessage from './ToastMessage.vue'
+import { formatDate } from '@/locales/format'
 
 const props = defineProps<{ tab: string }>()
-const { t, te } = useI18n()
+const { t, te, locale } = useI18n()
 const { isAdmin, canOperate, canReview, session } = useSession()
 
 type DataRecord = Record<string, any>
 type PendingAction = 'query-launch' | 'query-execute' | 'handoff' | null
 
 const loading = ref(false)
+const viewLoading = ref(false)
 const errorCode = ref('')
 const requestId = ref<string | null>(null)
 const metrics = ref<DataRecord[]>([])
@@ -29,12 +32,16 @@ const queryExecution = ref<DataRecord | null>(null)
 const templateForm = ref({ templateKey: '', name: '', description: '', sql: '' })
 const metricForm = ref({ metricKey: '', displayName: '', description: '', unit: '', expressionSql: '' })
 const handoffTitle = ref('')
+const handoffOptions = ref<DataRecord | null>(null)
+const metricScope = ref<DataRecord | null>(null)
+const metricScopeValid = ref(true)
 const selectedResultId = ref<number | null>(null)
 const pendingAction = ref<PendingAction>(null)
 const pendingQuery = ref<{ kind: 'template' | 'metric'; item: DataRecord } | null>(null)
 const toast = ref('')
 const toastTone = ref<'success' | 'danger'>('success')
 let toastTimer: ReturnType<typeof setTimeout> | undefined
+let loadVersion = 0
 
 const localizedError = computed(() => {
   if (!errorCode.value) return ''
@@ -48,16 +55,24 @@ function showToast(message: string, tone: 'success' | 'danger' = 'success'): voi
   toastTimer = setTimeout(() => { toast.value = '' }, 5000)
 }
 
+function date(value: unknown): string {
+  return value ? (formatDate(String(value), locale.value) || '—') : '—'
+}
+
 function resetTransient(): void {
   queryCandidate.value = null
   queryExecution.value = null
   selectedResultId.value = null
+  handoffOptions.value = null
+  metricScope.value = null
+  metricScopeValid.value = true
   pendingAction.value = null
   pendingQuery.value = null
 }
 
 async function load(): Promise<void> {
-  loading.value = true
+  const version = ++loadVersion
+  viewLoading.value = true
   errorCode.value = ''
   resetTransient()
   try {
@@ -66,15 +81,19 @@ async function load(): Promise<void> {
         api<DataRecord[]>('/api/data-copilot/metrics'),
         api<DataRecord[]>('/api/data-copilot/query-templates'),
       ])
-      metrics.value = metricResponse.data ?? []
-      templates.value = templateResponse.data ?? []
-      requestId.value = templateResponse.requestId ?? metricResponse.requestId
+      if (version === loadVersion) {
+        metrics.value = metricResponse.data ?? []
+        templates.value = templateResponse.data ?? []
+        requestId.value = templateResponse.requestId ?? metricResponse.requestId
+      }
     } else if (props.tab === 'records') {
       const resultResponse = await api<DataRecord[]>('/api/data-copilot/query-results')
+      if (version !== loadVersion) return
       results.value = resultResponse.data ?? []
       requestId.value = resultResponse.requestId
       if (canReview.value) {
         const auditResponse = await api<DataRecord[]>('/api/data-copilot/audit-logs')
+        if (version !== loadVersion) return
         auditLogs.value = auditResponse.data ?? []
         requestId.value = auditResponse.requestId ?? requestId.value
       } else {
@@ -85,20 +104,37 @@ async function load(): Promise<void> {
         api<DataRecord[]>('/api/data-copilot/report-handoffs'),
         api<DataRecord[]>('/api/data-copilot/query-results'),
       ])
-      handoffs.value = handoffResponse.data ?? []
-      results.value = resultResponse.data ?? []
-      requestId.value = handoffResponse.requestId ?? resultResponse.requestId
+      if (version === loadVersion) {
+        handoffs.value = handoffResponse.data ?? []
+        results.value = resultResponse.data ?? []
+        requestId.value = handoffResponse.requestId ?? resultResponse.requestId
+      }
     }
   } catch (error) {
-    errorCode.value = error instanceof ApiError ? error.errorCode : 'generic'
-    requestId.value = error instanceof ApiError ? error.requestId : null
-    showToast(localizedError.value, 'danger')
+    if (version === loadVersion) {
+      errorCode.value = error instanceof ApiError ? error.errorCode : 'generic'
+      requestId.value = error instanceof ApiError ? error.requestId : null
+      showToast(localizedError.value, 'danger')
+    }
   } finally {
-    loading.value = false
+    if (version === loadVersion) viewLoading.value = false
   }
 }
 
+function invalidateViewLoad(): void {
+  loadVersion += 1
+  viewLoading.value = false
+}
+
+function revealMetricFromHash(): void {
+  if (props.tab !== 'governance') return
+  const id = location.hash.slice(1)
+  if (!id.startsWith('data-metric-')) return
+  void nextTick(() => document.getElementById(id)?.scrollIntoView({ block: 'center' }))
+}
+
 async function saveTemplate(): Promise<void> {
+  invalidateViewLoad()
   loading.value = true
   errorCode.value = ''
   try {
@@ -120,6 +156,7 @@ async function saveTemplate(): Promise<void> {
 }
 
 async function saveMetric(): Promise<void> {
+  invalidateViewLoad()
   loading.value = true
   try {
     const response = await api<DataRecord>('/api/data-copilot/metrics', {
@@ -165,13 +202,26 @@ function requestMetricLaunch(metric: DataRecord): void {
   pendingAction.value = 'query-launch'
 }
 
-function selectResultForHandoff(resultId: number): void {
-  selectedResultId.value = resultId
-  if (!handoffTitle.value) handoffTitle.value = t('data.defaultHandoffTitle')
+async function selectResultForHandoff(resultId: number): Promise<void> {
+  loading.value = true
+  selectedResultId.value = null
+  handoffOptions.value = null
+  metricScope.value = null
+  metricScopeValid.value = true
+  try {
+    const response = await api<DataRecord>(`/api/data-copilot/query-results/${resultId}/handoff-options`)
+    handoffOptions.value = response.data
+    selectedResultId.value = resultId
+    if (!handoffTitle.value) handoffTitle.value = t('data.defaultHandoffTitle')
+  } catch (error) {
+    errorCode.value = error instanceof ApiError ? error.errorCode : 'generic'
+    requestId.value = error instanceof ApiError ? error.requestId : null
+    showToast(localizedError.value, 'danger')
+  } finally { loading.value = false }
 }
 
 function requestHandoff(): void {
-  if (selectedResultId.value === null || !handoffTitle.value.trim()) return
+  if (selectedResultId.value === null || !handoffTitle.value.trim() || !metricScopeValid.value) return
   pendingAction.value = 'handoff'
 }
 
@@ -231,7 +281,7 @@ async function createHandoff(resultId: number): Promise<void> {
   try {
     const response = await api<DataRecord>(`/api/data-copilot/query-results/${encodeURIComponent(String(resultId))}/report-handoff`, {
       method: 'POST',
-      ...jsonBody({ title: handoffTitle.value }),
+      ...jsonBody({ title: handoffTitle.value, metricScope: metricScope.value }),
     })
     handoffs.value = [response.data, ...handoffs.value]
     requestId.value = response.requestId
@@ -247,8 +297,13 @@ async function createHandoff(resultId: number): Promise<void> {
   }
 }
 
-watch(() => props.tab, () => { void load() }, { immediate: true })
+watch(() => props.tab, () => { void load(); revealMetricFromHash() }, { immediate: true })
+onMounted(() => {
+  window.addEventListener('hashchange', revealMetricFromHash)
+  revealMetricFromHash()
+})
 onUnmounted(() => { if (toastTimer) clearTimeout(toastTimer) })
+onUnmounted(() => window.removeEventListener('hashchange', revealMetricFromHash))
 </script>
 
 <template>
@@ -257,8 +312,8 @@ onUnmounted(() => { if (toastTimer) clearTimeout(toastTimer) })
       <div>
         <p class="enterprise-panel__description">{{ t(`data.${tab}Description`) }}</p>
       </div>
-      <button class="button button--secondary" type="button" :disabled="loading" @click="load">
-        {{ loading ? t('common.loading') : t('common.refresh') }}
+      <button class="button button--secondary" type="button" :disabled="loading || viewLoading" @click="load">
+        {{ loading || viewLoading ? t('common.loading') : t('common.refresh') }}
       </button>
     </div>
 
@@ -302,7 +357,7 @@ onUnmounted(() => { if (toastTimer) clearTimeout(toastTimer) })
           <button class="button button--primary" type="submit" :disabled="loading">{{ t('data.createMetric') }}</button>
         </form>
         <div v-if="metrics.length" class="record-grid">
-          <article v-for="metric in metrics" :key="metric.id"><div class="section-heading"><h4>{{ metric.displayName }}</h4><StatusBadge :label="metric.active ? t('data.approved') : t('data.pendingApproval')" :tone="metric.active ? 'success' : 'warning'" /></div><p>{{ metric.description }}</p><small>{{ metric.metricKey }} · {{ metric.unit || t('common.unknown') }} · v{{ metric.version }}</small><pre class="code-block">{{ metric.expressionSql }}</pre><div class="button-row"><button v-if="isAdmin && !metric.active && metric.ownerActorId !== session?.username" class="button button--secondary" type="button" :disabled="loading" @click="govern(`/api/data-copilot/metrics/${metric.id}/approve`, 'metric', metric.id, t('data.metricApproved'))">{{ t('data.approveMetric') }}</button><button v-if="canOperate && metric.active" class="button button--primary" type="button" :disabled="loading" @click="requestMetricLaunch(metric)">{{ t('data.launchMetric') }}</button><button v-if="isAdmin && metric.active" class="button button--danger" type="button" :disabled="loading" @click="govern(`/api/data-copilot/metrics/${metric.id}/deactivate`, 'metric', metric.id, t('data.metricDeactivated'))">{{ t('data.deactivate') }}</button></div></article>
+          <article v-for="metric in metrics" :id="`data-metric-${encodeURIComponent(String(metric.metricKey || metric.displayName || metric.id))}`" :key="metric.id"><div class="section-heading"><h4>{{ metric.displayName }}</h4><StatusBadge :label="metric.active ? t('data.approved') : t('data.pendingApproval')" :tone="metric.active ? 'success' : 'warning'" /></div><p>{{ metric.description }}</p><small>{{ metric.metricKey }} · {{ metric.unit || t('common.unknown') }} · v{{ metric.version }}</small><pre class="code-block">{{ metric.expressionSql }}</pre><div class="button-row"><button v-if="isAdmin && !metric.active && metric.ownerActorId !== session?.username" class="button button--secondary" type="button" :disabled="loading" @click="govern(`/api/data-copilot/metrics/${metric.id}/approve`, 'metric', metric.id, t('data.metricApproved'))">{{ t('data.approveMetric') }}</button><button v-if="canOperate && metric.active" class="button button--primary" type="button" :disabled="loading" @click="requestMetricLaunch(metric)">{{ t('data.launchMetric') }}</button><button v-if="isAdmin && metric.active" class="button button--danger" type="button" :disabled="loading" @click="govern(`/api/data-copilot/metrics/${metric.id}/deactivate`, 'metric', metric.id, t('data.metricDeactivated'))">{{ t('data.deactivate') }}</button></div></article>
         </div>
         <p v-else class="empty-state">{{ t('common.noData') }}</p>
       </section>
@@ -313,7 +368,7 @@ onUnmounted(() => { if (toastTimer) clearTimeout(toastTimer) })
         <h3>{{ t('data.resultSnapshots') }}</h3>
         <div v-if="results.length" class="table-scroll">
           <table class="data-table"><thead><tr><th>{{ t('data.resultId') }}</th><th>{{ t('data.candidateId') }}</th><th>{{ t('data.rows') }}</th><th>{{ t('data.createdAt') }}</th><th>{{ t('data.expiresAt') }}</th><th>{{ t('common.download') }}</th></tr></thead>
-            <tbody><tr v-for="item in results" :key="item.id"><td><strong>#{{ item.id }}</strong></td><td><code>{{ item.candidateId }}</code></td><td>{{ item.rowCount }}<small v-if="item.truncated">{{ t('data.truncated') }}</small></td><td>{{ item.createdAt }}</td><td>{{ item.expiresAt }}</td><td><div class="table-actions"><a class="button button--secondary" :href="`/api/data-copilot/query-results/${item.id}/csv`">CSV</a><a class="button button--secondary" :href="`/api/data-copilot/query-results/${item.id}/xlsx`">XLSX</a></div></td></tr></tbody>
+            <tbody><tr v-for="item in results" :key="item.id"><td><strong>#{{ item.id }}</strong></td><td><code>{{ item.candidateId }}</code></td><td>{{ item.rowCount }}<small v-if="item.truncated">{{ t('data.truncated') }}</small></td><td>{{ date(item.createdAt) }}</td><td>{{ date(item.expiresAt) }}</td><td><div class="table-actions"><a class="button button--secondary" :href="`/api/data-copilot/query-results/${item.id}/csv`">CSV</a><a class="button button--secondary" :href="`/api/data-copilot/query-results/${item.id}/xlsx`">XLSX</a></div></td></tr></tbody>
           </table>
         </div>
         <p v-else class="empty-state">{{ t('data.noResults') }}</p>
@@ -322,7 +377,7 @@ onUnmounted(() => { if (toastTimer) clearTimeout(toastTimer) })
         <h3>{{ t('data.auditRecords') }}</h3>
         <div v-if="auditLogs.length" class="table-scroll">
           <table class="data-table"><thead><tr><th>{{ t('data.createdAt') }}</th><th>{{ t('data.status') }}</th><th>{{ t('data.confirmed') }}</th><th>{{ t('data.rows') }}</th><th>{{ t('data.actor') }}</th><th>{{ t('data.question') }}</th></tr></thead>
-            <tbody><tr v-for="item in auditLogs" :key="item.id"><td>{{ item.createdAt }}</td><td>{{ item.executionStatus || item.validationStatus }}</td><td>{{ item.confirmed ? t('common.yes') : t('common.no') }}</td><td>{{ item.rowCount ?? '—' }}</td><td>{{ item.actorId || item.actionActorId || '—' }}</td><td>{{ item.userQuestion || t('data.confirmedQuery') }}</td></tr></tbody>
+            <tbody><tr v-for="item in auditLogs" :key="item.id"><td>{{ date(item.createdAt) }}</td><td>{{ item.executionStatus || item.validationStatus }}</td><td>{{ item.confirmed ? t('common.yes') : t('common.no') }}</td><td>{{ item.rowCount ?? '—' }}</td><td>{{ item.actorId || item.actionActorId || '—' }}</td><td>{{ item.userQuestion || t('data.confirmedQuery') }}</td></tr></tbody>
           </table>
         </div>
         <p v-else class="empty-state">{{ t('data.noAuditRecords') }}</p>
@@ -336,7 +391,9 @@ onUnmounted(() => { if (toastTimer) clearTimeout(toastTimer) })
           <article v-for="handoff in handoffs" :key="handoff.id">
             <div class="section-heading"><h4>{{ handoff.title }}</h4><StatusBadge :label="handoff.status" :tone="handoff.status === 'READY' ? 'success' : 'warning'" /></div>
             <p>{{ t('data.sourceReference') }}: <code>{{ handoff.sourceReference }}</code></p>
-            <small>{{ t('data.resultId') }} #{{ handoff.resultId }} · {{ handoff.rowCount }} {{ t('data.rows') }} · {{ handoff.createdAt }}</small>
+            <p v-if="handoff.truncated" class="warning-text">{{ t('data.resultTruncated') }}</p>
+            <p v-if="handoff.metricSnapshot?.metricName">{{ handoff.metricSnapshot.metricName }} · {{ handoff.metricSnapshot.value }} {{ handoff.metricSnapshot.unit }} · {{ handoff.metricSnapshot.periodStart }} — {{ handoff.metricSnapshot.periodEnd }}</p>
+            <small>{{ t('data.resultId') }} #{{ handoff.resultId }} · {{ handoff.rowCount }} {{ t('data.rows') }} · {{ date(handoff.createdAt) }}</small>
           </article>
         </div>
         <p v-else class="empty-state">{{ t('data.noHandoffs') }}</p>
@@ -345,11 +402,12 @@ onUnmounted(() => { if (toastTimer) clearTimeout(toastTimer) })
         <h3>{{ t('data.createHandoffFromResult') }}</h3>
         <div v-if="results.length" class="table-scroll">
           <table class="data-table"><thead><tr><th>{{ t('data.resultId') }}</th><th>{{ t('data.rows') }}</th><th>{{ t('data.createdAt') }}</th><th>{{ t('common.controlledAction') }}</th></tr></thead>
-            <tbody><tr v-for="item in results" :key="item.id"><td>#{{ item.id }}</td><td>{{ item.rowCount }}</td><td>{{ item.createdAt }}</td><td><button class="button button--secondary" type="button" :disabled="loading" @click="selectResultForHandoff(item.id)">{{ t('data.selectResult') }}</button></td></tr></tbody>
+            <tbody><tr v-for="item in results" :key="item.id"><td>#{{ item.id }}</td><td>{{ item.rowCount }}</td><td>{{ date(item.createdAt) }}</td><td><button class="button button--secondary" type="button" :disabled="loading" @click="selectResultForHandoff(item.id)">{{ t('data.selectResult') }}</button></td></tr></tbody>
           </table>
         </div>
         <p v-else class="empty-state">{{ t('data.noResultsForHandoff') }}</p>
-        <div v-if="selectedResultId !== null" class="form-actions"><label>{{ t('data.handoffTitle') }}<input v-model="handoffTitle" required maxlength="300"></label><button class="button button--primary" type="button" :disabled="loading || !handoffTitle.trim()" @click="requestHandoff">{{ t('data.createHandoff') }}</button></div>
+        <DataHandoffMetricForm v-if="handoffOptions" :key="selectedResultId ?? 0" :options="handoffOptions" @change="(scope, valid) => { metricScope = scope; metricScopeValid = valid }" />
+        <div v-if="selectedResultId !== null" class="form-actions"><label>{{ t('data.handoffTitle') }}<input v-model="handoffTitle" required maxlength="300"></label><button class="button button--primary" type="button" :disabled="loading || !handoffTitle.trim() || !metricScopeValid" @click="requestHandoff">{{ t('data.createHandoff') }}</button></div>
       </section>
     </template>
 

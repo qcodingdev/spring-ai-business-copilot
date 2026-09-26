@@ -17,6 +17,7 @@ import dev.qcoding.businesscopilot.reportcopilot.request.ReportPeriod;
 import dev.qcoding.businesscopilot.reportcopilot.request.ReportType;
 import dev.qcoding.businesscopilot.reportcopilot.source.ReportDataProvider;
 import dev.qcoding.businesscopilot.resumecopilot.assessment.ResumeAssessmentService;
+import dev.qcoding.businesscopilot.resumecopilot.enterprise.HrEnterpriseService;
 import dev.qcoding.businesscopilot.resumecopilot.job.JobCriteriaService;
 import dev.qcoding.businesscopilot.resumecopilot.job.JobDraftService;
 import dev.qcoding.businesscopilot.supportcopilot.classification.TicketClassificationRequest;
@@ -46,7 +47,7 @@ public class DemoScenarioExecutionService {
     private final TicketAnalysisService ticketAnalysisService;
     private final JobDraftService jobDraftService;
     private final JobCriteriaService jobCriteriaService;
-    private final ResumeAssessmentService resumeAssessmentService;
+    private final HrEnterpriseService hrEnterpriseService;
     private final ReportGenerationService reportGenerationService;
     private final ReportDataProvider reportDataProvider;
     private final ObjectMapper objectMapper;
@@ -60,7 +61,7 @@ public class DemoScenarioExecutionService {
             TicketAnalysisService ticketAnalysisService,
             JobDraftService jobDraftService,
             JobCriteriaService jobCriteriaService,
-            ResumeAssessmentService resumeAssessmentService,
+            HrEnterpriseService hrEnterpriseService,
             ReportGenerationService reportGenerationService,
             ReportDataProvider reportDataProvider,
             ObjectMapper objectMapper,
@@ -72,7 +73,7 @@ public class DemoScenarioExecutionService {
         this.ticketAnalysisService = ticketAnalysisService;
         this.jobDraftService = jobDraftService;
         this.jobCriteriaService = jobCriteriaService;
-        this.resumeAssessmentService = resumeAssessmentService;
+        this.hrEnterpriseService = hrEnterpriseService;
         this.reportGenerationService = reportGenerationService;
         this.reportDataProvider = reportDataProvider;
         this.objectMapper = objectMapper;
@@ -180,8 +181,13 @@ public class DemoScenarioExecutionService {
         JobCriteriaService.CriteriaResponse criteria = jobCriteriaService.extract(
                 "Java AI 应用开发工程师（虚构）", focusedJd);
         jobCriteriaService.confirm(criteria.jobId(), criteria.confirmationToken());
-        ResumeAssessmentService.AssessmentResponse assessment =
-                resumeAssessmentService.assess(criteria.jobId(), resume);
+        String fixtureReference = "fictional-demo-" + java.util.UUID.randomUUID();
+        java.time.Instant grantedAt = java.time.Instant.now();
+        hrEnterpriseService.saveConsent(new HrEnterpriseService.ConsentCommand(
+                fixtureReference, fixtureReference, HrEnterpriseService.ConsentPurpose.ASSESSMENT,
+                grantedAt, grantedAt.plus(java.time.Duration.ofHours(1))));
+        ResumeAssessmentService.AssessmentResponse assessment = hrEnterpriseService.assessAuthorized(
+                criteria.jobId(), fixtureReference, fixtureReference, resume);
         if (questionsOnly) {
             return new InterviewQuestionResult(
                     assessment.content() == null ? List.of() : assessment.content().evidenceGaps(),

@@ -3,6 +3,7 @@ package dev.qcoding.businesscopilot.reportcopilot.draft;
 import dev.qcoding.businesscopilot.commonsecurity.ConfirmationTokenService;
 import dev.qcoding.businesscopilot.commonsecurity.CurrentActor;
 import dev.qcoding.businesscopilot.commonsecurity.CurrentActorProvider;
+import dev.qcoding.businesscopilot.commonsecurity.IndependentReviewService;
 import dev.qcoding.businesscopilot.commonsecurity.ObjectAccessPolicy;
 import dev.qcoding.businesscopilot.commonsecurity.ObjectAction;
 import dev.qcoding.businesscopilot.commonweb.api.BusinessException;
@@ -28,6 +29,7 @@ public class ReportDraftConfirmationService {
     private final ObjectAccessPolicy accessPolicy;
     private final ConfirmationTokenService tokenService;
     private final ReportOutputSanitizer outputSanitizer;
+    private final IndependentReviewService reviewService;
 
     public ReportDraftConfirmationService(ReportDraftRepository draftRepository,
                                           ReportAuditService auditService,
@@ -35,12 +37,24 @@ public class ReportDraftConfirmationService {
                                           ObjectAccessPolicy accessPolicy,
                                           ConfirmationTokenService tokenService,
                                           ReportOutputSanitizer outputSanitizer) {
+        this(draftRepository, auditService, actorProvider, accessPolicy, tokenService,
+                outputSanitizer, null);
+    }
+
+    public ReportDraftConfirmationService(ReportDraftRepository draftRepository,
+                                          ReportAuditService auditService,
+                                          CurrentActorProvider actorProvider,
+                                          ObjectAccessPolicy accessPolicy,
+                                          ConfirmationTokenService tokenService,
+                                          ReportOutputSanitizer outputSanitizer,
+                                          IndependentReviewService reviewService) {
         this.draftRepository = draftRepository;
         this.auditService = auditService;
         this.actorProvider = actorProvider;
         this.accessPolicy = accessPolicy;
         this.tokenService = tokenService;
         this.outputSanitizer = outputSanitizer;
+        this.reviewService = reviewService;
     }
 
     /** Saves human text edits while keeping every evidence link and section shape immutable. */
@@ -58,12 +72,16 @@ public class ReportDraftConfirmationService {
                 draftId, ReportDraftStatus.DRAFTED, sanitized, actor.actorId())) {
             throw new BusinessException(ErrorCode.STATE_CONFLICT);
         }
+        if (reviewService != null) {
+            reviewService.contentChanged(IndependentReviewService.SubjectType.REPORT_DRAFT,
+                    String.valueOf(draftId), draft.ownerActorId());
+        }
         auditService.recordRequired(new ReportAuditLog(
                 draft.requestId(), draftId, "DRAFT_EDITED", 0, null, null,
                 ReportDraftStatus.DRAFTED.name(), null, null,
                 draft.ownerActorId(), actor.actorId(), null, null,
                 null, null, null, "report-human-edit-v1", null, null, null, null));
-        return new EditResult(draftId, ReportDraftStatus.DRAFTED, sanitized);
+        return new EditResult(draftId, ReportDraftStatus.DRAFTED, sanitized, reviewStatus(draftId));
     }
 
     @Transactional
@@ -71,6 +89,10 @@ public class ReportDraftConfirmationService {
         ReportDraft draft = resolveDraft(draftId, token, ObjectAction.CONFIRM);
         if (draft.status() != ReportDraftStatus.DRAFTED) {
             throw new BusinessException(ErrorCode.STATE_CONFLICT);
+        }
+        if (reviewService != null) {
+            reviewService.requireApproved(IndependentReviewService.SubjectType.REPORT_DRAFT,
+                    String.valueOf(draftId), draft.ownerActorId());
         }
         CurrentActor actor = actorProvider.currentActor();
         if (!draftRepository.transitionStatus(
@@ -96,6 +118,10 @@ public class ReportDraftConfirmationService {
         if (!draftRepository.transitionStatus(
                 draftId, draft.status(), ReportDraftStatus.CANCELED, actor.actorId())) {
             throw new BusinessException(ErrorCode.STATE_CONFLICT);
+        }
+        if (reviewService != null) {
+            reviewService.supersede(IndependentReviewService.SubjectType.REPORT_DRAFT,
+                    String.valueOf(draftId), draft.ownerActorId());
         }
         auditService.recordRequired(new ReportAuditLog(
                 draft.requestId(), draftId, "CANCELED", 0, null, null,
@@ -129,7 +155,7 @@ public class ReportDraftConfirmationService {
                 draft.status().name(), null, null, draft.ownerActorId(), actor.actorId(),
                 null, null, null, null, null, null, null, null, null, null));
         return new ReviewSession(draftId, draft.status(), draft.content(), draft.reviewReasons(),
-                token.rawToken(), expiresAt);
+                token.rawToken(), expiresAt, reviewStatus(draftId));
     }
 
     private ReportDraft resolveDraft(Long draftId, String rawToken, ObjectAction action) {
@@ -190,10 +216,17 @@ public class ReportDraftConfirmationService {
     public record ConfirmationResult(Long draftId, ReportDraftStatus status) {
     }
 
-    public record EditResult(Long draftId, ReportDraftStatus status, LlmReportOutput content) {
+    public record EditResult(Long draftId, ReportDraftStatus status, LlmReportOutput content,
+                             String approvalStatus) {
     }
 
     public record ReviewSession(Long draftId, ReportDraftStatus status, LlmReportOutput content,
                                 String reviewReasons, String confirmationToken,
-                                Instant expiresAt) { }
+                                Instant expiresAt, String approvalStatus) { }
+
+    private String reviewStatus(Long draftId) {
+        if (reviewService == null) return IndependentReviewService.Status.APPROVED.name();
+        return reviewService.status(IndependentReviewService.SubjectType.REPORT_DRAFT,
+                String.valueOf(draftId)).status().name();
+    }
 }

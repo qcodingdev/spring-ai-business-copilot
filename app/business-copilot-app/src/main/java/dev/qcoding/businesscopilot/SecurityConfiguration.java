@@ -25,13 +25,16 @@ import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 
+import dev.qcoding.businesscopilot.identity.EnterpriseOidcProperties;
+import dev.qcoding.businesscopilot.identity.EnterpriseOidcUserService;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
 /** 应用的单组织认证与角色边界配置。 */
 @Configuration(proxyBeanMethods = false)
 @EnableWebSecurity
-@EnableConfigurationProperties({RuntimeModeProperties.class, PublicDemoProperties.class})
+@EnableConfigurationProperties({RuntimeModeProperties.class, PublicDemoProperties.class, EnterpriseOidcProperties.class})
 public class SecurityConfiguration {
 
     @Bean
@@ -40,6 +43,7 @@ public class SecurityConfiguration {
     }
 
     @Bean
+    @ConditionalOnProperty(name = "business-copilot.security.oidc.enabled", havingValue = "false", matchIfMissing = true)
     UserDetailsService userDetailsService(
             PasswordEncoder encoder,
             @Value("${business-copilot.security.admin.username:admin}") String adminUsername,
@@ -58,7 +62,7 @@ public class SecurityConfiguration {
     SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             RuntimeModeProperties runtimeModeProperties,
-            BusinessRequestContextFilter businessRequestContextFilter) throws Exception {
+            BusinessRequestContextFilter businessRequestContextFilter, EnterpriseOidcProperties oidc) throws Exception {
         CookieCsrfTokenRepository csrfRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
         CsrfTokenRequestAttributeHandler csrfRequestHandler = new CsrfTokenRequestAttributeHandler();
 
@@ -70,12 +74,30 @@ public class SecurityConfiguration {
                         .requestMatchers("/admin", "/admin/**", "/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/actuator/metrics/**").hasAnyRole("ADMIN", "REVIEWER")
                         .requestMatchers(HttpMethod.GET, "/api/*/audit-logs").hasAnyRole("ADMIN", "REVIEWER")
+                        .requestMatchers(HttpMethod.GET, "/api/reviews/queue")
+                            .hasAnyRole("ADMIN", "REVIEWER")
+                        .requestMatchers(HttpMethod.GET, "/api/reviews/mine", "/api/reviews/subject/**")
+                            .hasAnyRole("ADMIN", "OPERATOR", "REVIEWER")
+                        .requestMatchers(HttpMethod.GET, "/api/governance/prompts/**")
+                            .hasAnyRole("ADMIN", "OPERATOR", "REVIEWER")
+                        .requestMatchers(HttpMethod.GET, "/api/governance/evaluations/**")
+                            .hasAnyRole("ADMIN", "OPERATOR", "REVIEWER")
                         .requestMatchers(HttpMethod.GET,
                                 "/api/knowledge-copilot/quality-queue",
+                                "/api/knowledge-copilot/feedback-history",
                                 "/api/knowledge-copilot/quality-metrics",
                                 "/api/knowledge-copilot/sources/issues",
-                                "/api/support-copilot/enterprise/quality-metrics")
+                                "/api/support-copilot/enterprise/quality-metrics",
+                                "/api/support-copilot/enterprise/quality-cases")
                             .hasAnyRole("ADMIN", "REVIEWER")
+                        .requestMatchers(HttpMethod.GET,
+                                "/api/support-copilot/tickets/*/follow-ups",
+                                "/api/support-copilot/tickets/*/handoff")
+                            .hasAnyRole("ADMIN", "OPERATOR", "REVIEWER")
+                        .requestMatchers(HttpMethod.GET,
+                                "/api/data-copilot/sql-candidates/*/revisions",
+                                "/api/report-copilot/enterprise/drafts/*/data-trace")
+                            .hasAnyRole("ADMIN", "OPERATOR")
                         .requestMatchers(HttpMethod.GET,
                                 "/api/resume-copilot/enterprise/question-bank",
                                 "/api/resume-copilot/enterprise/interview-sessions",
@@ -113,8 +135,40 @@ public class SecurityConfiguration {
                             .hasAnyRole("ADMIN", "OPERATOR", "REVIEWER")
                         .requestMatchers(
                                 HttpMethod.POST,
-                                "/api/knowledge-copilot/quality-queue/*/review")
+                                "/api/governance/prompts/versions/*/review",
+                                "/api/governance/evaluations/versions/*/review",
+                                "/api/reviews/*/decision",
+                                "/api/knowledge-copilot/quality-queue/*/review",
+                                "/api/support-copilot/enterprise/quality-cases")
                             .hasAnyRole("ADMIN", "REVIEWER")
+                        .requestMatchers(HttpMethod.POST,
+                                "/api/governance/prompts/versions/*/publish",
+                                "/api/governance/prompts/*/rollback",
+                                "/api/governance/evaluations/datasets/*/archive",
+                                "/api/governance/evaluations/versions/*/publish",
+                                "/api/governance/evaluations/runs/*/external-results")
+                            .hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST,
+                                "/api/governance/prompts/*/versions",
+                                "/api/governance/prompts/definitions/*/versions",
+                                "/api/governance/prompts/versions/*/submit",
+                                "/api/governance/evaluations/datasets",
+                                "/api/governance/evaluations/versions/*/clone",
+                                "/api/governance/evaluations/versions/*/cases",
+                                "/api/governance/evaluations/versions/*/cases/import",
+                                "/api/governance/evaluations/versions/*/cases/*/enabled",
+                                "/api/governance/evaluations/versions/*/submit",
+                                "/api/governance/evaluations/runs",
+                                "/api/governance/evaluations/runs/*/cancel")
+                            .hasAnyRole("ADMIN", "OPERATOR")
+                        .requestMatchers(HttpMethod.PUT, "/api/governance/prompts/versions/*")
+                            .hasAnyRole("ADMIN", "OPERATOR")
+                        .requestMatchers(HttpMethod.PUT,
+                                "/api/governance/evaluations/versions/*/cases/*")
+                            .hasAnyRole("ADMIN", "OPERATOR")
+                        .requestMatchers(HttpMethod.PUT,
+                                "/api/governance/evaluations/gate-policies/*")
+                            .hasRole("ADMIN")
                         .requestMatchers(HttpMethod.POST,
                                 "/api/support-copilot/reply-drafts/*/confirm",
                                 "/api/support-copilot/reply-drafts/*/edit",
@@ -168,7 +222,6 @@ public class SecurityConfiguration {
                 .csrf(csrf -> csrf
                         .csrfTokenRepository(csrfRepository)
                         .csrfTokenRequestHandler(csrfRequestHandler))
-                .formLogin(form -> form.loginPage("/login").defaultSuccessUrl("/", true).permitAll())
                 .logout(logout -> logout.logoutSuccessUrl("/login?logout"))
                 .exceptionHandling(exceptions -> exceptions
                         .defaultAuthenticationEntryPointFor(
@@ -181,6 +234,14 @@ public class SecurityConfiguration {
                 .addFilterAfter(new PublicDemoBoundaryFilter(runtimeModeProperties),
                         BusinessRequestContextFilter.class);
 
+        if (oidc.enabled()) {
+            http.addFilterBefore(new dev.qcoding.businesscopilot.identity.OidcSessionExpiryFilter(), AnonymousAuthenticationFilter.class);
+            http.oauth2Login(login -> login.loginPage("/login").defaultSuccessUrl("/", true)
+                    .failureUrl("/login?error").permitAll()
+                    .userInfoEndpoint(info -> info.oidcUserService(new EnterpriseOidcUserService(oidc))));
+        } else {
+            http.formLogin(form -> form.loginPage("/login").defaultSuccessUrl("/", true).permitAll());
+        }
         return http.build();
     }
 

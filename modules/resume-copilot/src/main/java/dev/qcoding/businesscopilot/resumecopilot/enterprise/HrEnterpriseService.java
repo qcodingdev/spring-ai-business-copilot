@@ -86,32 +86,53 @@ public class HrEnterpriseService {
             return jdbcTemplate.queryForObject("""
                 INSERT INTO hr_candidate_consents (
                     consent_reference, candidate_reference, purpose, purpose_code,
-                    granted_at, expires_at, recorded_by
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    granted_at, expires_at, recorded_by, retention_expires_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING id, consent_reference, candidate_reference, purpose_code,
                           granted_at, expires_at, revoked_at, recorded_by
                 """, this::mapConsent, command.consentReference().trim(),
                     command.candidateReference().trim(), command.purpose().name(),
                     command.purpose().name(), Timestamp.from(command.grantedAt()),
-                    Timestamp.from(command.expiresAt()), actorId);
+                    Timestamp.from(command.expiresAt()), actorId,
+                    Timestamp.from(command.expiresAt().plus(java.time.Duration.ofDays(30))));
         } catch (org.springframework.dao.DuplicateKeyException ex) {
             throw new BusinessException(ErrorCode.STATE_CONFLICT,
                     "授权凭据编号已存在；授权内容不可覆盖，请使用新的凭据编号");
         }
     }
 
+    @Transactional
     public Consent revokeConsent(String reference) {
         CurrentActor actor = actorProvider.currentActor();
         List<Consent> rows = jdbcTemplate.query("""
                 UPDATE hr_candidate_consents
-                SET revoked_at = now()
+                SET revoked_at = now(), retention_expires_at = now() + INTERVAL '30 days'
                 WHERE consent_reference = ? AND revoked_at IS NULL
                   AND (recorded_by = ? OR ?)
                 RETURNING id, consent_reference, candidate_reference, purpose_code,
                           granted_at, expires_at, revoked_at, recorded_by
                 """, this::mapConsent, reference, actor.actorId(), isAdmin(actor));
         if (rows.isEmpty()) throw new BusinessException(ErrorCode.NOT_FOUND);
-        return rows.getFirst();
+        Consent revoked = rows.getFirst();
+        // 立即让现有评估及其派生协作失去处理资格；定时保留清理会物理删除整条级联链。
+        jdbcTemplate.update("""
+                UPDATE resume_submissions
+                SET expires_at = LEAST(expires_at, now())
+                WHERE consent_id = ?
+                """, revoked.id());
+        jdbcTemplate.update("""
+                UPDATE hr_interview_sessions session
+                SET status = 'CANCELED', closed_at = now()
+                FROM resume_assessments assessment
+                JOIN resume_submissions submission ON submission.id = assessment.submission_id
+                WHERE session.assessment_id = assessment.id
+                  AND submission.consent_id = ? AND session.status = 'OPEN'
+                """, revoked.id());
+        jdbcTemplate.update("""
+                UPDATE hr_ats_imports SET expires_at = LEAST(expires_at, now())
+                WHERE consent_reference = ?
+                """, revoked.consentReference());
+        return revoked;
     }
 
     public List<Consent> consents() {
@@ -125,35 +146,22 @@ public class HrEnterpriseService {
                 """, this::mapConsent, actor.actorId(), isAdmin(actor));
     }
 
-    @Transactional
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     public ResumeAssessmentService.AssessmentResponse assessAuthorized(
             long jobId, String candidateReference, String consentReference, String resumeText) {
         Consent consent = requireValidConsent(
                 consentReference, candidateReference, ConsentPurpose.ASSESSMENT);
-        ResumeAssessmentService.AssessmentResponse response =
-                assessmentService.assess(jobId, resumeText);
-        jdbcTemplate.update("""
-                UPDATE resume_submissions
-                SET consent_id = ?, candidate_reference = ?
-                WHERE id = ?
-                """, consent.id(), candidateReference.trim(), response.submissionId());
-        return response;
+        return assessmentService.assess(jobId, resumeText, consent.id(), candidateReference.trim());
     }
 
-    @Transactional
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     public ResumeAssessmentService.AssessmentResponse assessAuthorizedFile(
             long jobId, String candidateReference, String consentReference,
             String fileName, String contentType, byte[] content) {
         Consent consent = requireValidConsent(
                 consentReference, candidateReference, ConsentPurpose.ASSESSMENT);
-        ResumeAssessmentService.AssessmentResponse response =
-                assessmentService.assessFile(jobId, fileName, contentType, content);
-        jdbcTemplate.update("""
-                UPDATE resume_submissions
-                SET consent_id = ?, candidate_reference = ?
-                WHERE id = ?
-                """, consent.id(), candidateReference.trim(), response.submissionId());
-        return response;
+        return assessmentService.assessFile(jobId, fileName, contentType, content,
+                consent.id(), candidateReference.trim());
     }
 
     @Transactional
@@ -183,7 +191,8 @@ public class HrEnterpriseService {
 
     @Transactional
     public InterviewQuestion approveQuestion(long id) {
-        String actorId = actorProvider.currentActor().actorId();
+        CurrentActor actor = actorProvider.currentActor();
+        String actorId = actor.actorId();
         List<ApprovalTarget> targets = jdbcTemplate.query("""
                 SELECT question_key AS object_key, owner_actor_id
                 FROM hr_interview_question_bank WHERE id = ?
@@ -191,9 +200,9 @@ public class HrEnterpriseService {
                 rs.getString("object_key"), rs.getString("owner_actor_id")), id);
         if (targets.isEmpty()) throw new BusinessException(ErrorCode.NOT_FOUND);
         ApprovalTarget target = targets.getFirst();
-        if (actorId.equals(target.ownerActorId())) {
+        if (actorId.equals(target.ownerActorId()) && !actor.hasRole(BusinessRole.ADMIN)) {
             throw new BusinessException(ErrorCode.STATE_CONFLICT,
-                    "题库版本必须由不同于创建者的管理员批准");
+                    "题库版本必须由不同于创建者的管理员批准；管理员可按例外规则自审");
         }
         advisoryLock("hr-question:" + target.objectKey());
         jdbcTemplate.update("""
@@ -234,6 +243,13 @@ public class HrEnterpriseService {
                     SELECT 1 FROM resume_assessments
                     WHERE id = ? AND status = 'REVIEWED'
                       AND (owner_actor_id = ? OR ?)
+                      AND EXISTS (
+                          SELECT 1 FROM resume_submissions submission
+                          JOIN hr_candidate_consents consent ON consent.id = submission.consent_id
+                          WHERE submission.id = resume_assessments.submission_id
+                            AND submission.expires_at > now()
+                            AND consent.revoked_at IS NULL AND consent.expires_at > now()
+                      )
                 )
                 RETURNING id, assessment_id, session_reference, status,
                           owner_actor_id, created_at, closed_at
@@ -295,8 +311,13 @@ public class HrEnterpriseService {
                 SELECT ?, ?, 'INTERVIEWER', ?
                 WHERE EXISTS (
                     SELECT 1 FROM hr_interview_sessions
-                    WHERE id = ? AND status = 'OPEN'
-                      AND (owner_actor_id = ? OR ?)
+                    JOIN resume_assessments assessment ON assessment.id = hr_interview_sessions.assessment_id
+                    JOIN resume_submissions submission ON submission.id = assessment.submission_id
+                    JOIN hr_candidate_consents consent ON consent.id = submission.consent_id
+                    WHERE hr_interview_sessions.id = ? AND hr_interview_sessions.status = 'OPEN'
+                      AND (hr_interview_sessions.owner_actor_id = ? OR ?)
+                      AND submission.expires_at > now()
+                      AND consent.revoked_at IS NULL AND consent.expires_at > now()
                 )
                 ON CONFLICT (session_id, actor_id) DO UPDATE SET actor_id = EXCLUDED.actor_id
                 RETURNING session_id, actor_id, member_role, added_by, created_at
@@ -313,6 +334,14 @@ public class HrEnterpriseService {
                 SET status = 'CLOSED', closed_at = now()
                 WHERE id = ? AND status = 'OPEN'
                   AND (owner_actor_id = ? OR ?)
+                  AND EXISTS (
+                      SELECT 1 FROM resume_assessments assessment
+                      JOIN resume_submissions submission ON submission.id = assessment.submission_id
+                      JOIN hr_candidate_consents consent ON consent.id = submission.consent_id
+                      WHERE assessment.id = hr_interview_sessions.assessment_id
+                        AND submission.expires_at > now()
+                        AND consent.revoked_at IS NULL AND consent.expires_at > now()
+                  )
                 RETURNING id, assessment_id, session_reference, status,
                           owner_actor_id, created_at, closed_at
                 """, (rs, rowNum) -> mapSession(rs, rowNum).session(),
@@ -336,7 +365,12 @@ public class HrEnterpriseService {
                 WHERE EXISTS (
                     SELECT 1 FROM hr_interview_sessions s
                     JOIN hr_interview_session_members m ON m.session_id = s.id
+                    JOIN resume_assessments assessment ON assessment.id = s.assessment_id
+                    JOIN resume_submissions submission ON submission.id = assessment.submission_id
+                    JOIN hr_candidate_consents consent ON consent.id = submission.consent_id
                     WHERE s.id = ? AND s.status = 'OPEN' AND m.actor_id = ?
+                      AND submission.expires_at > now()
+                      AND consent.revoked_at IS NULL AND consent.expires_at > now()
                 )
                 ON CONFLICT (session_id, interviewer_actor_id) DO UPDATE SET
                     evidence_json = EXCLUDED.evidence_json,
@@ -417,7 +451,8 @@ public class HrEnterpriseService {
                 FROM hr_ats_imports i
                 JOIN hr_candidate_consents c
                   ON c.consent_reference = i.consent_reference
-                WHERE c.recorded_by = ? OR ?
+                WHERE (c.recorded_by = ? OR ?)
+                  AND i.expires_at > now() AND c.revoked_at IS NULL AND c.expires_at > now()
                 ORDER BY i.imported_at DESC
                 LIMIT 200
                 """, this::mapAtsImport, actorProvider.currentActor().actorId(),
@@ -447,17 +482,18 @@ public class HrEnterpriseService {
             jdbcTemplate.update("""
                     INSERT INTO hr_ats_imports (
                         connection_id, external_candidate_id, consent_reference,
-                        sanitized_payload, source_updated_at, imported_by
-                    ) VALUES (?, ?, ?, ?::jsonb, ?, ?)
+                        sanitized_payload, source_updated_at, imported_by, expires_at
+                    ) VALUES (?, ?, ?, ?::jsonb, ?, ?, ?)
                     ON CONFLICT (connection_id, external_candidate_id) DO UPDATE SET
                         consent_reference = EXCLUDED.consent_reference,
                         sanitized_payload = EXCLUDED.sanitized_payload,
                         source_updated_at = EXCLUDED.source_updated_at,
                         imported_by = EXCLUDED.imported_by,
-                        imported_at = now()
+                        imported_at = now(),
+                        expires_at = EXCLUDED.expires_at
                     """, connectionId, externalId, consent.consentReference(), sanitized,
                     timestamp(parseInstant(firstText(candidate, "updated_at", "updatedAt"))),
-                    actorProvider.currentActor().actorId());
+                    actorProvider.currentActor().actorId(), Timestamp.from(consent.expiresAt()));
             imported++;
             if (imported >= limit) break;
         }
@@ -512,7 +548,8 @@ public class HrEnterpriseService {
 
     @Transactional
     public OnboardingChecklist approveChecklist(long id) {
-        String actorId = actorProvider.currentActor().actorId();
+        CurrentActor actor = actorProvider.currentActor();
+        String actorId = actor.actorId();
         List<ApprovalTarget> targets = jdbcTemplate.query("""
                 SELECT checklist_key AS object_key, owner_actor_id
                 FROM hr_onboarding_checklists WHERE id = ?
@@ -520,9 +557,9 @@ public class HrEnterpriseService {
                 rs.getString("object_key"), rs.getString("owner_actor_id")), id);
         if (targets.isEmpty()) throw new BusinessException(ErrorCode.NOT_FOUND);
         ApprovalTarget target = targets.getFirst();
-        if (actorId.equals(target.ownerActorId())) {
+        if (actorId.equals(target.ownerActorId()) && !actor.hasRole(BusinessRole.ADMIN)) {
             throw new BusinessException(ErrorCode.STATE_CONFLICT,
-                    "入职清单版本必须由不同于创建者的管理员批准");
+                    "入职清单版本必须由不同于创建者的管理员批准；管理员可按例外规则自审");
         }
         advisoryLock("hr-onboarding:" + target.objectKey());
         jdbcTemplate.update("""

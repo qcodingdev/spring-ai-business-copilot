@@ -21,5 +21,9 @@ public enum AuditStatus {
     /** Execution failed at the database layer. */
     EXECUTION_FAILED,
     /** AI result explanation step failed (non-fatal; results still returned). */
-    EXPLANATION_FAILED
+    EXPLANATION_FAILED,
+    /** Running execution was cancelled by an authorized actor. */
+    CANCELLED,
+    /** An operation was rejected by object-level access policy. */
+    ACCESS_DENIED
 }

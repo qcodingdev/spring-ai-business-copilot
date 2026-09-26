@@ -124,6 +124,34 @@ class JdbcReadOnlyQueryExecutorTest {
         assertThat(result.truncated()).isFalse();
     }
 
+    @Test
+    @DisplayName("SQL NULL cells are preserved without failing result mapping")
+    void sqlNullCellsArePreserved() throws SQLException {
+        String sql = "SELECT id, optional_note FROM customers LIMIT 10";
+        when(guardrailService.validate(sql, guardrailsProperties))
+                .thenReturn(SqlValidationResult.pass(sql));
+        when(jdbcTemplate.execute(any(StatementCallback.class))).thenAnswer(invocation -> {
+            StatementCallback<QueryResultTable> callback = invocation.getArgument(0);
+            Statement stmt = mock(Statement.class);
+            ResultSet rs = mockResultSet(
+                    List.of("id", "optional_note"),
+                    List.of("integer", "varchar"),
+                    java.util.Collections.singletonList(java.util.Arrays.asList(1, null)));
+            when(stmt.executeQuery(sql)).thenReturn(rs);
+            return callback.doInStatement(stmt);
+        });
+
+        QueryResultTable result = executor.execute(sql);
+
+        assertThat(result.rows()).hasSize(1);
+        assertThat(result.rows().getFirst().values())
+                .containsEntry("id", 1)
+                .containsKey("optional_note");
+        assertThat(result.rows().getFirst().values().get("optional_note")).isNull();
+        assertThatThrownBy(() -> result.rows().getFirst().values().put("new", "value"))
+                .isInstanceOf(UnsupportedOperationException.class);
+    }
+
     // ---- Test: max rows exceeded sets truncated=true ----
 
     @Test

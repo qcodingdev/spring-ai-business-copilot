@@ -1,4 +1,15 @@
 export default {
+  metricScopeTitle: "业务指标与周期（可选）",
+  metricScopeUnavailable: "仅完整单行数值结果且采用有效审批指标时可登记环比口径；仍可作为普通来源交接。",
+  metricScopeEnable: "将数值列登记为已核验的期间总量",
+  selectMetric: "选择查询采用的指标",
+  metricResultColumn: "结果数值列",
+  selectMetricColumn: "选择数值列",
+  metricPeriodStart: "业务周期开始",
+  metricPeriodEnd: "业务周期结束（含当天）",
+  metricTimezone: "业务时区",
+  metricScopeConfirm: "我已核对 SQL、指标口径、数值列、单位和起止日期，确认该值代表此业务周期的完整总量。系统不会自动验证 SQL 的业务日期含义。",
+
   title: '安全数据查询',
   description: '把业务问题转换为只读查询，先预览口径和影响范围，再由你确认执行。',
   tabs: { query: '提问与查询', governance: '治理模板', records: '执行记录', handoff: '结果交接' },
@@ -77,4 +88,12 @@ export default {
     second: '列出本季度订单金额最高的 10 个客户及订单金额。',
     third: '按商品分类统计历史销售金额和销量，按销售金额倒序返回前 5 项。',
   },
+
+  clarificationNeeded: '需要先澄清业务口径，本次未生成候选：',
+  reviseCandidate: '修正候选',
+  reviseInstruction: '修正要求（例如：只统计已支付订单）',
+  reviseSubmit: '生成修正候选',
+  reviseHint: '每次修正都会重新通过 SQL 安全校验并生成全新确认凭证；旧候选与旧凭证立即失效。',
+  revisionCreated: '已生成修正候选，请重新确认后执行。',
+  revisionNotExecutable: '修正候选未通过安全校验，原候选保持可用。',
 }

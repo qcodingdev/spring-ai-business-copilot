@@ -66,9 +66,12 @@ class AiEmbeddingServiceTest {
     @Test
     void modelNameReflectsConfiguration() {
         AiModelProperties props = new AiModelProperties("gpt-5-mini", false, 1000);
-        AiEmbeddingService service = new AiEmbeddingService(emptyProvider(), props);
+        AiEmbeddingService service = new AiEmbeddingService(emptyProvider(), props,
+                new AiEmbeddingProperties("text-embedding-3-small", "openai"),
+                new AiCallCoordinator(new AiResilienceProperties(0, null, 0, 0, 0, null),
+                        new AiCallMetrics(null, props)));
 
-        assertThat(service.modelName()).isEqualTo("gpt-5-mini");
+        assertThat(service.modelName()).isEqualTo("text-embedding-3-small");
     }
 
     @Test

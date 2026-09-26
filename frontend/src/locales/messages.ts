@@ -1,4 +1,5 @@
 import zhCommon from './zh-CN/common'
+import zhHome from './zh-CN/home'
 import zhAuth from './zh-CN/auth'
 import zhNavigation from './zh-CN/navigation'
 import zhErrors from './zh-CN/errors'
@@ -10,6 +11,7 @@ import zhReport from './zh-CN/report'
 import zhHr from './zh-CN/hr'
 import zhAdmin from './zh-CN/admin'
 import enCommon from './en-US/common'
+import enHome from './en-US/home'
 import enAuth from './en-US/auth'
 import enNavigation from './en-US/navigation'
 import enErrors from './en-US/errors'
@@ -24,6 +26,7 @@ import enAdmin from './en-US/admin'
 export const messages = {
   'zh-CN': {
     common: zhCommon,
+    home: zhHome,
     auth: zhAuth,
     navigation: zhNavigation,
     errors: zhErrors,
@@ -37,6 +40,7 @@ export const messages = {
   },
   'en-US': {
     common: enCommon,
+    home: enHome,
     auth: enAuth,
     navigation: enNavigation,
     errors: enErrors,

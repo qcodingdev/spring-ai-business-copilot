@@ -44,7 +44,7 @@ class ReportGenerationServiceTest {
         ReportRequestPreparationService.ReportRequestPreview preview = preview();
         when(preparationService.prepare(org.mockito.ArgumentMatchers.any())).thenReturn(preview);
         when(aiChatService.modelName()).thenReturn("test-model");
-        when(aiChatService.generateJsonWithMetadata(anyString(), anyString(), eq(LlmReportOutput.class)))
+        when(aiChatService.generateEvidenceJsonWithMetadata(anyString(), anyString(), eq(LlmReportOutput.class)))
                 .thenReturn(invocation(validOutput("source-1")));
         when(draftPersistenceService.createDraft(any(), any(), eq("test-model"),
                 any(), any(), anyString(), any()))
@@ -58,7 +58,7 @@ class ReportGenerationServiceTest {
         assertThat(response.draftId()).isEqualTo(10L);
         assertThat(response.confirmationToken()).isEqualTo("confirm-token");
         assertThat(response.content().executiveSummary()).isEqualTo("Orders remained stable.");
-        verify(aiChatService).generateJsonWithMetadata(
+        verify(aiChatService).generateEvidenceJsonWithMetadata(
                 eq("report.generation"),
                 org.mockito.ArgumentMatchers.contains("sourceId=source-1"), eq(LlmReportOutput.class));
     }
@@ -67,7 +67,7 @@ class ReportGenerationServiceTest {
     void storesOnlyReviewReasonsWhenOutputCitesAnUnknownSource() {
         when(preparationService.prepare(org.mockito.ArgumentMatchers.any())).thenReturn(preview());
         when(aiChatService.modelName()).thenReturn("test-model");
-        when(aiChatService.generateJsonWithMetadata(anyString(), anyString(), eq(LlmReportOutput.class)))
+        when(aiChatService.generateEvidenceJsonWithMetadata(anyString(), anyString(), eq(LlmReportOutput.class)))
                 .thenReturn(invocation(validOutput("invented-source")));
         when(draftPersistenceService.createNeedsReviewDraft(
                 any(), any(), eq("test-model"), any(), any(), anyString(), any()))
@@ -88,11 +88,49 @@ class ReportGenerationServiceTest {
     }
 
     @Test
+    void replacesTranslatedClaimsAndDiscardsInventedMetricCardsFromDataRows() {
+        ReportSource tableSource = new ReportSource("source-table", ReportSourceType.KNOWLEDGE,
+                "Data query result", "product=Star Router, amount=1284", "b".repeat(64),
+                Map.of("rowCount", "3"));
+        ReportRequestPreparationService.ReportRequestPreview tablePreview =
+                new ReportRequestPreparationService.ReportRequestPreview(ReportType.TEAM_WEEKLY,
+                        new ReportPeriod(LocalDate.of(2026, 7, 6), LocalDate.of(2026, 7, 10)),
+                        "Data query result", List.of(tableSource));
+        LlmReportOutput modelOutput = new LlmReportOutput(
+                "Query executed successfully and returned the 3 most expensive products.",
+                List.of("source-table"),
+                List.of(new MetricHighlight("amount", "1284", "query-result",
+                        "amount 1284", List.of("source-table"))),
+                List.of(new ReportItem("Query executed successfully.", List.of("source-table"))),
+                List.of(), List.of(), List.of(),
+                List.of(new ReportCitation("source-table", "Data query result")));
+        when(preparationService.prepare(org.mockito.ArgumentMatchers.any())).thenReturn(tablePreview);
+        when(aiChatService.modelName()).thenReturn("test-model");
+        when(aiChatService.generateEvidenceJsonWithMetadata(anyString(), anyString(), eq(LlmReportOutput.class)))
+                .thenReturn(invocation(modelOutput));
+        when(draftPersistenceService.createDraft(any(), any(), eq("test-model"),
+                any(), any(), anyString(), any()))
+                .thenReturn(new ReportDraft(12L, 22L,
+                        new LlmReportOutput("Data query result", List.of("source-table"),
+                                List.of(), List.of(), List.of(), List.of(), List.of(),
+                                List.of(new ReportCitation("source-table", "Data query result"))),
+                        ReportDraftStatus.DRAFTED, null, "confirm-token", "digest", "operator-1", null,
+                        Instant.parse("2026-07-11T12:00:00Z"), Instant.now(), Instant.now()));
+
+        ReportDraftResponse response = service.generate(new ReportGenerateRequest(null, null, null, null, null, null));
+
+        assertThat(response.status()).isEqualTo("DRAFTED");
+        assertThat(response.content().executiveSummary()).isEqualTo("product=Star Router, amount=1284");
+        assertThat(response.content().metricHighlights()).isEmpty();
+        assertThat(response.content().completedItems()).isEmpty();
+    }
+
+    @Test
     void recordsMetadataOnlyFailureWhenTheModelCallFails() {
         ReportRequestPreparationService.ReportRequestPreview preview = preview();
         when(preparationService.prepare(org.mockito.ArgumentMatchers.any())).thenReturn(preview);
         when(aiChatService.modelName()).thenReturn("test-model");
-        when(aiChatService.generateJsonWithMetadata(anyString(), anyString(), eq(LlmReportOutput.class)))
+        when(aiChatService.generateEvidenceJsonWithMetadata(anyString(), anyString(), eq(LlmReportOutput.class)))
                 .thenThrow(new IllegalStateException("model offline"));
 
         assertThatThrownBy(() -> service.generate(new ReportGenerateRequest(null, null, null, null, null, null)))
@@ -105,7 +143,7 @@ class ReportGenerationServiceTest {
 
     private ReportRequestPreparationService.ReportRequestPreview preview() {
         ReportSource source = new ReportSource("source-1", ReportSourceType.METRIC, "Orders",
-                "Value: 1284 orders", "a".repeat(64),
+                "Orders remained stable. Value: 1284 orders", "a".repeat(64),
                 Map.of("name", "Orders", "value", "1284", "unit", "orders"));
         return new ReportRequestPreparationService.ReportRequestPreview(ReportType.TEAM_WEEKLY,
                 new ReportPeriod(LocalDate.of(2026, 7, 6), LocalDate.of(2026, 7, 10)), "Delivery weekly", List.of(source));

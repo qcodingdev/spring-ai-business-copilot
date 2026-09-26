@@ -17,6 +17,21 @@ public interface SupportExternalAdapter {
             String sanitizedDraft,
             String idempotencyKey);
 
+    /**
+     * SUP-03：供应商回执查询适配。实现方按幂等键向外部系统核对回写结果；
+     * 无法核对时返回 empty，调用方必须保留未知状态，不得猜测。
+     */
+    default java.util.Optional<ExternalWritebackReceipt> fetchWritebackReceipt(
+            SupportExternalConnection connection,
+            String externalTicketId,
+            String idempotencyKey) {
+        return java.util.Optional.empty();
+    }
+
+    /** 外部系统核对结果：delivered 明确成功/失败；两者皆非则保持未知。 */
+    record ExternalWritebackReceipt(boolean delivered, String receipt) {
+    }
+
     record ExternalTicket(
             String externalId,
             String customerMessage,

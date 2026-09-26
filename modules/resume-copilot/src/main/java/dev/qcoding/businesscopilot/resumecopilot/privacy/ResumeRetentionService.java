@@ -16,6 +16,8 @@ public class ResumeRetentionService {
 
     @Scheduled(fixedDelayString = "${business-copilot.resume-copilot.retention-cleanup-delay:PT1H}")
     public int deleteExpiredSubmissions() {
-        return repository.deleteExpiredSubmissions(Instant.now());
+        Instant now = Instant.now();
+        int submissions = repository.deleteExpiredSubmissions(now);
+        return submissions + repository.deleteExpiredConsentArtifacts(now);
     }
 }

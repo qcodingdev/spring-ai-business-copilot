@@ -4,13 +4,18 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.time.Duration;
 
-/** Data 企业治理预算；用于在执行前拒绝明显超出预算的查询计划。 */
+/** Data 企业治理预算；用于在执行前拒绝明显超出预算的查询计划，并约束候选修正预算。 */
 @ConfigurationProperties(prefix = "business-copilot.data-copilot.enterprise")
 public record DataEnterpriseProperties(long maxEstimatedRows, boolean blockHighRiskPlan,
-                                       Duration resultRetention) {
+                                       Duration resultRetention, Integer maxCandidateRevisions) {
 
     public DataEnterpriseProperties(long maxEstimatedRows, boolean blockHighRiskPlan) {
-        this(maxEstimatedRows, blockHighRiskPlan, Duration.ofHours(24));
+        this(maxEstimatedRows, blockHighRiskPlan, Duration.ofHours(24), null);
+    }
+
+    public DataEnterpriseProperties(long maxEstimatedRows, boolean blockHighRiskPlan,
+                                    Duration resultRetention) {
+        this(maxEstimatedRows, blockHighRiskPlan, resultRetention, null);
     }
 
     public DataEnterpriseProperties {
@@ -19,6 +24,9 @@ public record DataEnterpriseProperties(long maxEstimatedRows, boolean blockHighR
         }
         if (resultRetention == null || resultRetention.isZero() || resultRetention.isNegative()) {
             resultRetention = Duration.ofHours(24);
+        }
+        if (maxCandidateRevisions == null || maxCandidateRevisions < 1) {
+            maxCandidateRevisions = 2;
         }
     }
 }

@@ -69,7 +69,10 @@ public class ReportHtmlExportService {
                 <head><meta charset="utf-8"><title>业务报告</title></head>
                 <body>
                 """);
-        html.append("<main><h1>业务报告 ").append(draft.id()).append("</h1>");
+        var metadata = draftRepository.findRequestMetadata(draft.requestId());
+        html.append("<main><h1>").append(escape(metadata.map(ReportDraftRepository.RequestMetadata::title)
+                .orElse("业务报告 " + draft.id()))).append("</h1>");
+        metadata.ifPresent(value -> html.append("<p>周期：").append(escape(value.periodLabel())).append("</p>"));
         html.append("<section><h2>执行摘要</h2><p>")
                 .append(escape(content.executiveSummary())).append("</p>");
         appendSources(html, content.executiveSummarySourceIds());

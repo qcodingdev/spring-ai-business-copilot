@@ -1,7 +1,7 @@
 {
   "name": "spring-ai-business-copilot-frontend",
   "private": true,
-  "version": "2.4.0",
+  "version": "2.4.1",
   "type": "module",
   "engines": {
     "node": ">=22 <23"
@@ -10,10 +10,10 @@
     "dev": "vite",
     "typecheck": "vue-tsc --noEmit",
     "lint": "eslint . --max-warnings=0",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "test": "node --experimental-require-module node_modules/vitest/vitest.mjs run",
+    "test:watch": "node --experimental-require-module node_modules/vitest/vitest.mjs",
     "test:e2e": "playwright test",
-    "test:i18n": "vitest run src/locales/i18n.spec.ts",
+    "test:i18n": "node --experimental-require-module node_modules/vitest/vitest.mjs run src/locales/i18n.spec.ts",
     "build": "npm run typecheck && vite build",
     "check": "npm run typecheck && npm run lint && npm run test && npm run build"
   },

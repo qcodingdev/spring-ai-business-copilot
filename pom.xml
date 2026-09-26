@@ -6,7 +6,7 @@
 
     <groupId>dev.qcoding</groupId>
     <artifactId>spring-ai-business-copilot</artifactId>
-    <version>2.4.0</version>
+    <version>2.4.1</version>
     <packaging>pom</packaging>
 
     <name>Spring AI Business Copilot</name>
@@ -27,6 +27,8 @@
         <module>platform/ai-core</module>
         <module>platform/ai-guardrails</module>
         <module>platform/ai-tool-audit</module>
+        <module>platform/task-runtime</module>
+        <module>platform/evaluation-harness</module>
         <module>modules/data-copilot</module>
         <module>modules/knowledge-copilot</module>
         <module>modules/support-copilot</module>

@@ -51,4 +51,16 @@ public record AuditEvent(
                 null, null, null, null, null, null, null,
                 null, null, null, null, null);
     }
+
+    /** 带对象归属人和实际操作人的便捷构造器，用于对象级操作（如取消）的审计。 */
+    public AuditEvent(String requestId, AuditEventType eventType, String userQuestion,
+                      String generatedSql, String finalSql, AuditStatus status,
+                      String validationErrors, boolean confirmed, Integer rowCount,
+                      String errorMessage, String modelName, Long latencyMs,
+                      String creatorActorId, String actionActorId) {
+        this(requestId, eventType, userQuestion, generatedSql, finalSql, status,
+                validationErrors, confirmed, rowCount, errorMessage, modelName, latencyMs,
+                creatorActorId, actionActorId, null, null, null, null, null, null,
+                null, null, null, null);
+    }
 }

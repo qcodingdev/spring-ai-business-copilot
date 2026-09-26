@@ -16,7 +16,7 @@ public record EnterpriseReadinessProperties(
 
     public EnterpriseReadinessProperties {
         if (applicationVersion == null || applicationVersion.isBlank()) {
-            applicationVersion = "2.4.0";
+            applicationVersion = "2.4.1";
         } else {
             applicationVersion = applicationVersion.trim();
         }

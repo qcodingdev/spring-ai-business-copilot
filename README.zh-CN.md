@@ -1,12 +1,12 @@
 <h1 align="center">Spring AI Business Copilot</h1>
 
 <p align="center">
-  <strong>面向企业真实流程的开源 AI 业务协同工作台。</strong><br>
-  安全数据分析 · 企业知识治理 · 客户工单协同 · 经营报告 · 招聘与员工服务
+  <strong>用 Java / Spring AI，跑通真实 AI 业务流程。</strong><br>
+  RAG 知识库 · Text-to-SQL · AI 辅助客服 · 报告生成 · HR Copilot
 </p>
 
 <p align="center">
-  <a href="https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.4.0"><img alt="正式版 v2.4.0" src="https://img.shields.io/badge/Release-v2.4.0-2563EB"></a>
+  <a href="https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.4.1"><img alt="正式版 v2.4.1" src="https://img.shields.io/badge/Release-v2.4.1-2563EB"></a>
   <a href="https://openjdk.org/projects/jdk/21/"><img alt="Java 21" src="https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&amp;logoColor=white"></a>
   <a href="https://spring.io/projects/spring-boot"><img alt="Spring Boot 4.1" src="https://img.shields.io/badge/Spring%20Boot-4.1-6DB33F?logo=springboot&amp;logoColor=white"></a>
   <a href="https://spring.io/projects/spring-ai"><img alt="Spring AI 2.0" src="https://img.shields.io/badge/Spring%20AI-2.0-6DB33F"></a>
@@ -15,46 +15,38 @@
 
 <p align="center">
   <a href="README.md">English</a> ·
+  <a href="#快速预览">演示 GIF</a> ·
   <a href="#快速开始">快速开始</a> ·
   <a href="#当前业务能力">业务能力</a> ·
   <a href="#总体架构">总体架构</a> ·
-  <a href="https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.4.0">稳定版 v2.4.0</a> ·
+  <a href="https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.4.1">稳定版 v2.4.1</a> ·
   <a href="https://gitee.com/qcodingdev/spring-ai-business-copilot">Gitee</a>
 </p>
 
+## 这个项目适合谁？
+
+如果你正在用 Java / Spring AI 学习或开发企业 AI 应用，这个项目提供一套可运行的全栈参考实现：RAG 知识问答、自然语言查数据库、客服回复草稿、经营报告和 HR 辅助。你可以从页面和 API 一路看到模型调用、业务处理与结果保存。
+
+- **学习 Spring AI：** 在真实应用里理解文档检索、带引用问答和 SQL 生成。
+- **开发业务项目：** 从五个模块中选一个场景，按需改造页面、接口和持久化业务流程。
+- **评估项目交付：** 参考安全校验（Guardrails）、人工确认（Human-in-the-loop）、审计和运行检查，作为企业 AI 治理的起点。
+
+## 快速预览
+
 ![Spring AI Business Copilot 2.3 业务工作台](assets/workbench-demo.gif)
 
-> **稳定版本：** `v2.4.0` 新增仅管理员可用的五模块企业就绪闭环：配置前置条件防止空系统误报 `READY`，运行检查跳回既有页面整改，由服务端重新检查并保存受保留期约束、仅追加且无业务正文的应用证据快照。生产部署仍需由部署方完成统一身份、密钥、网络策略、数据保留、真实模型评测和供应商沙箱验收。
+约 12 秒看一遍五模块工作台页面，画面来自 v2.3，仅使用虚构数据。
 
-## 一个工作台，连接五类企业业务
+**[本地运行](#快速开始)** · [查看五个业务流程](#当前业务能力)
 
-Spring AI Business Copilot 已经从最初的 Data Copilot，发展为覆盖数据分析、企业知识、客户服务、经营报告、招聘与员工服务的统一业务工作台。五个模块既可以独立使用，也通过数据交接、知识证据、人工复核和状态记录形成协同流程。
-
-`2.3` 版本线把已有能力产品化，而不是增加模块；`2.3.1` 加固外部集成和维护基线，`2.4.0` 补齐企业运行就绪证据，不增加第六个业务域：
-
-- **统一企业工作台：** Vue 3 + TypeScript 双语界面统一承载工作总览、五个业务域和系统管理，并根据 `ADMIN`、`OPERATOR`、`REVIEWER` 展示可执行动作。
-- **跨模块业务协同：** Data 查询结果可以直接交给 Report；Knowledge 为客服和员工制度问答提供证据；外部工单、知识源、报告来源和 ATS 数据进入各自受控流程。
-- **完整人工复核：** SQL 执行、知识质量处置、客服草稿、报告确认、招聘评估等关键动作都保留证据、风险、状态、人工编辑和确认记录。
-- **可诊断、可交付：** 系统管理提供运行状态、AI 调用链、Token/延迟、知识文档和体验数据管理；Docker Compose、自动化测试、SBOM 和安全门禁覆盖交付链路。
-- **可维护的外部集成：** Notion 使用当前 `2026-03-11` API 契约并在安全预算内完整遍历页面；SharePoint、Confluence、Notion、Jira Service Management、Zendesk、ServiceNow、飞书和企微均有直接请求契约验证。
-- **企业就绪证据：** 7 项模型/模块前置条件加 13 项运行检查，覆盖配置缺失、领取超时、结果未知、知识失效、未恢复失败、SLA 违约和到期复核；管理员可进入整改、重新检查并按有效期和保留期保存追加式应用证据。
-
-## 当前业务能力
-
-| 业务域 | 当前可操作流程 | 关键控制点 |
-|---|---|---|
-| [数据分析](modules/data-copilot/README.md) | 自然语言生成 SQL 候选；维护指标词典和审批模板；查看结果快照与审计；把脱敏结果交接给经营报告 | 查询只读且受 Schema、字段、函数、行数、耗时和结果大小约束，执行前必须确认 |
-| [企业知识](modules/knowledge-copilot/README.md) | 上传和管理文档；同步受控知识源；进行带引用问答；处理包含证据、答案、后续动作和结论的质量复核队列 | 无当前可见证据时拒答，引用必须能回溯到当前文档版本 |
-| [客户服务](modules/support-copilot/README.md) | 工单分析、SLA 与相似案例辅助；在人工复核队列中修订和确认草稿；管理外部连接与处理记录 | 确认草稿不等于发送客户消息，外部内部备注回写需要独立预览和二次确认 |
-| [经营报告](modules/report-copilot/README.md) | 优先接入 Data 结果并自动填充标题和来源，也可手工输入或上传 CSV/JSON；生成、编辑、确认、排期和导出报告 | 报告事实绑定不可变来源快照，定时任务只生成待复核草稿，不自动发布 |
-| [招聘与员工服务](modules/resume-copilot/README.md) | 招聘协同覆盖岗位标准、简历证据评估、面试、候选人授权和 ATS 只读导入；员工服务覆盖制度问答和入职清单 | 不生成总分、排名或录用/淘汰结论，不执行 ATS 写操作 |
+不配置模型密钥也能先浏览界面；AI 生成需要 Chat 模型，知识库索引与问答还需要 Embedding 模型。具体体验范围见下方配置模式。
 
 ## 快速开始
 
 需要本机已安装 Docker，并支持 Compose。
 
 ```bash
-git clone --branch v2.4.0 --single-branch \
+git clone --branch v2.4.1 --single-branch \
   https://github.com/qcodingdev/spring-ai-business-copilot.git
 cd spring-ai-business-copilot/examples
 cp .env.example .env
@@ -108,6 +100,26 @@ Chat 与 Embedding 端点相互独立，因为很多 OpenAI 兼容 Chat 服务�
 
 管理员可继续进入“系统管理 → 企业就绪”，从风险项跳回上述五模块整改，重新检查并保存绑定用途的证据快照。
 
+<details>
+<summary>接入现有企业身份（可选 OIDC）</summary>
+
+单组织试点可设置 `SPRING_PROFILES_ACTIVE=self-hosted,oidc`（或 `prod,oidc`），并通过部署密钥注入 `BUSINESS_COPILOT_OIDC_ISSUER_URI`、`BUSINESS_COPILOT_OIDC_CLIENT_ID`、`BUSINESS_COPILOT_OIDC_CLIENT_SECRET`。在身份源登记回调 `https://<你的域名>/login/oauth2/code/enterprise`。已签名 ID token 的应用专用数组 `business_copilot_roles` 映射 `ADMIN`、`OPERATOR`、`REVIEWER`；字段名可配置。独立复核时为操作员和复核员分别分配角色。
+
+登录页提供企业入口并禁用三个本地示例账号。对象归属与审计使用 issuer 和 subject 派生的稳定 actor，姓名或邮箱变化不会转移归属；原本地账号的数据不会自动重新分配。会话在 ID token 到期或空闲 20 分钟后失效；身份源即时撤权、单点登出仍须在部署环境验收，请在身份源设置短 token 有效期。使用 HTTPS；仅在清除不可信转发头的入口代理后启用 forwarded headers。配置见[环境变量示例](examples/.env.example)。本模式需要实际身份源验收，不与 `public-demo` 混用。
+
+</details>
+
+
+## 当前业务能力
+
+| 业务域 | 当前可操作流程 | 关键控制点 |
+|---|---|---|
+| [数据分析](modules/data-copilot/README.md) | 自然语言生成 SQL 候选；维护指标词典和审批模板；查看结果快照与审计；把脱敏结果交接给经营报告 | 查询只读且受 Schema、字段、函数、行数、耗时和结果大小约束，执行前必须确认 |
+| [企业知识](modules/knowledge-copilot/README.md) | 上传和管理文档；同步受控知识源；进行带引用问答；处理包含证据、答案、后续动作和结论的质量复核队列 | 无当前可见证据时拒答，引用必须能回溯到当前文档版本 |
+| [客户服务](modules/support-copilot/README.md) | 工单分析、SLA 与相似案例辅助；在人工复核队列中修订和确认草稿；管理外部连接与处理记录 | 确认草稿不等于发送客户消息，外部内部备注回写需要独立预览和二次确认 |
+| [经营报告](modules/report-copilot/README.md) | 优先接入 Data 结果并自动填充标题和来源，也可手工输入或上传 CSV/JSON；生成、编辑、确认、排期和导出报告 | 报告事实绑定不可变来源快照，定时任务只生成待复核草稿，不自动发布 |
+| [招聘与员工服务](modules/resume-copilot/README.md) | 招聘协同覆盖岗位标准、简历证据评估、面试、候选人授权和 ATS 只读导入；员工服务覆盖制度问答和入职清单 | 不生成总分、排名或录用/淘汰结论，不执行 ATS 写操作 |
+
 ## 产品页面
 
 | Data 结果交接 | Knowledge 质量复核 |
@@ -121,6 +133,19 @@ Chat 与 Embedding 端点相互独立，因为很多 OpenAI 兼容 Chat 服务�
 ![招聘协同与员工服务分组导航](assets/resume-copilot-result.png)
 
 以上画面均来自可运行的 Docker Compose 应用，只使用虚构数据。
+
+## 一个工作台，连接五类企业业务
+
+Spring AI Business Copilot 已经从最初的 Data Copilot，发展为覆盖数据分析、企业知识、客户服务、经营报告、招聘与员工服务的统一业务工作台。五个模块既可以独立使用，也通过数据交接、知识证据、人工复核和状态记录形成协同流程。
+
+`2.3` 版本线把已有能力产品化，而不是增加模块；`2.3.1` 加固外部集成和维护基线，`2.4.0` 补齐企业运行就绪证据，不增加第六个业务域：
+
+- **统一企业工作台：** Vue 3 + TypeScript 双语界面统一承载工作总览、五个业务域和系统管理，并根据 `ADMIN`、`OPERATOR`、`REVIEWER` 展示可执行动作。
+- **跨模块业务协同：** Data 查询结果可以直接交给 Report；Knowledge 为客服和员工制度问答提供证据；外部工单、知识源、报告来源和 ATS 数据进入各自受控流程。
+- **完整人工复核：** SQL 执行、知识质量处置、客服草稿、报告确认、招聘评估等关键动作都保留证据、风险、状态、人工编辑和确认记录。
+- **可诊断、可交付：** 系统管理提供运行状态、AI 调用链、Token/延迟、知识文档和体验数据管理；Docker Compose、自动化测试、SBOM 和安全门禁覆盖交付链路。
+- **可维护的外部集成：** Notion 使用当前 `2026-03-11` API 契约并在安全预算内完整遍历页面；SharePoint、Confluence、Notion、Jira Service Management、Zendesk、ServiceNow、飞书和企微均有直接请求契约验证。
+- **企业就绪证据：** 7 项模型/模块前置条件加 13 项运行检查，覆盖配置缺失、领取超时、结果未知、知识失效、未恢复失败、SLA 违约和到期复核；管理员可进入整改、重新检查并按有效期和保留期保存追加式应用证据。
 
 ## 内建于业务流程的可信控制
 
@@ -158,6 +183,8 @@ flowchart LR
 
 ## 部署与集成状态
 
+> **稳定版本：** `v2.4.1` 增加受治理的任务恢复、评测集与 Prompt 版本审核，以及可选的企业 OIDC 模式。Data 到 Report 的指标交接保留来源和周期口径，五个业务流程继续由人工复核并记录审计。生产部署仍需由部署方完成统一身份、密钥、网络策略、数据保留、真实模型评测和供应商沙箱验收。
+
 | 能力 | 当前状态 | 部署方责任 |
 |---|---|---|
 | 本地 Docker Compose | 可运行样例 | 进入共享环境前修改全部演示密码 |
@@ -184,7 +211,7 @@ flowchart LR
 
 | 资源 | 链接 |
 |---|---|
-| 稳定版本 | [v2.4.0](https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.4.0) |
+| 稳定版本 | [v2.4.1](https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.4.1) |
 | 版本记录 | [CHANGELOG.md](CHANGELOG.md) · [GitHub Releases](https://github.com/qcodingdev/spring-ai-business-copilot/releases) |
 | 问题与建议 | [GitHub Issues](https://github.com/qcodingdev/spring-ai-business-copilot/issues) |
 | 参与贡献 | [CONTRIBUTING.md](CONTRIBUTING.md) |

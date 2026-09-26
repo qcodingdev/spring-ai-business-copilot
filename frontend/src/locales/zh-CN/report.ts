@@ -1,4 +1,10 @@
 export default {
+  jiraProjectKeys: 'Jira 项目键（逗号分隔）',
+  frequency: '生成频率',
+  frequencies: { weekly: '每周一 09:00', daily: '每天 09:00', monthly: '每月 1 日 09:00', custom: '自定义排期（高级）' },
+  sourceNames: '选择报告来源',
+  noExternalSources: '暂无启用的外部来源，可使用客服指标或先由管理员配置来源。',
+
   title: '证据化报告生成与导出',
   description: '先预览来源与新鲜度，再生成可人工确认的报告草稿；系统不会自动发布。',
   tabs: { generate: '报告生成', records: '报告记录', sources: '来源管理', schedules: '调度与导出' },
@@ -8,6 +14,7 @@ export default {
   dataHandoffSourceSummary: 'Data 结果：{title}（{rows} 行，引用 {reference}）',
   noDataHandoffs: '暂无可用的 Data 结果交接。先在 Data Copilot 的“结果交接”中创建。',
   reportTitle: '报告标题',
+  types: { TEAM_WEEKLY: '团队周报', BUSINESS_WEEKLY: '经营周报', PROJECT_STATUS: '项目进展报告', INCIDENT_REVIEW: '事件复盘报告', SALES_REVIEW: '销售复盘报告' },
   source: '来源数据',
   sourcePlaceholder: '输入已脱敏的指标、任务或会议记录。',
   uploadSource: '上传来源文件（可选）', uploadSourceHint: '支持 CSV 或 JSON。选择文件后可留空上方文本；文件内容会先经过大小、结构和敏感信息校验。',
@@ -21,6 +28,7 @@ export default {
   sections: { completedItems: '已完成事项', risks: '风险', actionItems: '来源行动项', suggestions: 'AI 建议' },
   saveEdit: '保存人工修改',
   editSaved: '报告修改已保存，仍需人工确认。',
+  editSavedContinue: '报告修改已保存，请继续确认报告后再导出。',
   confirmed: '报告已确认，现在可以导出；系统不会自动发布。',
   cancelled: '报告草稿已取消。',
   needsReview: '报告证据校验未通过，未保存不可信正文。请取消当前记录并从来源重新生成。',
@@ -40,4 +48,10 @@ export default {
     second: '本月受理工单 1260 条，首次响应达标率 96.4%，平均解决时长 5.2 小时；接口超时相关工单环比上升 18%，需联合研发排查。',
     third: '项目已完成需求评审和核心接口联调，计划下周进入业务验收；当前依赖外部系统开放测试账号，负责人需在周三前完成协调。',
   },
+
+  viewDataTrace: '查看数据追溯',
+  hideDataTrace: '收起数据追溯',
+  noDataTrace: '该草稿没有 Data 交接追溯记录。',
+  traceResult: '结果快照',
+  traceCandidate: 'SQL 候选',
 }

@@ -13,6 +13,7 @@ import dev.qcoding.businesscopilot.supportcopilot.audit.SupportAuditLog;
 import dev.qcoding.businesscopilot.supportcopilot.audit.SupportAuditService;
 import dev.qcoding.businesscopilot.supportcopilot.ticket.SupportTicketRepository;
 import dev.qcoding.businesscopilot.supportcopilot.ticket.SupportTicketStatus;
+import dev.qcoding.businesscopilot.supportcopilot.quality.SupportQualityCaseService;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
@@ -29,6 +30,7 @@ public class ReplyDraftConfirmationService {
     private final ConfirmationTokenService tokenService;
     private final SensitiveTextMasker sensitiveTextMasker;
     private final SupportCopilotProperties properties;
+    private final SupportQualityCaseService qualityCaseService;
 
     public ReplyDraftConfirmationService(SupportReplyDraftRepository draftRepository,
                                          SupportTicketRepository ticketRepository,
@@ -38,6 +40,19 @@ public class ReplyDraftConfirmationService {
                                          ConfirmationTokenService tokenService,
                                          SensitiveTextMasker sensitiveTextMasker,
                                          SupportCopilotProperties properties) {
+        this(draftRepository, ticketRepository, auditService, actorProvider, accessPolicy,
+                tokenService, sensitiveTextMasker, properties, null);
+    }
+
+    public ReplyDraftConfirmationService(SupportReplyDraftRepository draftRepository,
+                                         SupportTicketRepository ticketRepository,
+                                         SupportAuditService auditService,
+                                         CurrentActorProvider actorProvider,
+                                         ObjectAccessPolicy accessPolicy,
+                                         ConfirmationTokenService tokenService,
+                                         SensitiveTextMasker sensitiveTextMasker,
+                                         SupportCopilotProperties properties,
+                                         SupportQualityCaseService qualityCaseService) {
         this.draftRepository = draftRepository;
         this.ticketRepository = ticketRepository;
         this.auditService = auditService;
@@ -46,6 +61,7 @@ public class ReplyDraftConfirmationService {
         this.tokenService = tokenService;
         this.sensitiveTextMasker = sensitiveTextMasker;
         this.properties = properties;
+        this.qualityCaseService = qualityCaseService;
     }
 
     @Transactional
@@ -181,6 +197,11 @@ public class ReplyDraftConfirmationService {
                 null, null, draft.ownerActorId(), actor.actorId(),
                 null, null, null, null, null, "support-human-feedback-v2",
                 null, null, null, null, null, null));
+        if (qualityCaseService != null && draft.reviewQueue()
+                && (actor.hasRole(dev.qcoding.businesscopilot.commonsecurity.BusinessRole.REVIEWER)
+                || actor.hasRole(dev.qcoding.businesscopilot.commonsecurity.BusinessRole.ADMIN))) {
+            qualityCaseService.recordReviewEdit(draftId, reason);
+        }
         return new EditResult(draftId, masked, draft.status());
     }
 

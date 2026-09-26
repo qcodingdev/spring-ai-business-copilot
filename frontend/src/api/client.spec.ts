@@ -27,4 +27,20 @@ describe('API request budgets', () => {
     expect(timeout).toHaveBeenCalledWith(AI_GENERATION_REQUEST_TIMEOUT_MS)
     expect(fetchMock.mock.calls[0]?.[1]).not.toHaveProperty('timeoutMs')
   })
+
+  it('coalesces identical in-flight mutations to prevent duplicate actions', async () => {
+    let resolveFetch: ((response: Response) => void) | undefined
+    const fetchMock = vi.fn().mockImplementation(() => new Promise<Response>((resolve) => { resolveFetch = resolve }))
+    vi.stubGlobal('fetch', fetchMock)
+    const init = { method: 'POST', body: JSON.stringify({ confirmationToken: 'token' }) }
+
+    const first = api('/api/data-copilot/sql-candidates/one/execute', init)
+    const second = api('/api/data-copilot/sql-candidates/one/execute', init)
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    resolveFetch?.(new Response(JSON.stringify({
+      data: {}, success: true, errorCode: null, message: null, requestId: null, timestamp: '',
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    await expect(Promise.all([first, second])).resolves.toHaveLength(2)
+  })
 })

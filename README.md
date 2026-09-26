@@ -1,12 +1,12 @@
 <h1 align="center">Spring AI Business Copilot</h1>
 
 <p align="center">
-  <strong>An open-source AI operations workbench for real enterprise workflows.</strong><br>
-  Governed data analysis · Enterprise knowledge · Customer operations · Business reporting · Recruiting and employee services
+  <strong>Build real AI business applications with Java and Spring AI.</strong><br>
+  RAG knowledge base · Text-to-SQL · AI-assisted support · Report generation · HR Copilot
 </p>
 
 <p align="center">
-  <a href="https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.4.0"><img alt="Release v2.4.0" src="https://img.shields.io/badge/Release-v2.4.0-2563EB"></a>
+  <a href="https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.4.1"><img alt="Release v2.4.1" src="https://img.shields.io/badge/Release-v2.4.1-2563EB"></a>
   <a href="https://openjdk.org/projects/jdk/21/"><img alt="Java 21" src="https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&amp;logoColor=white"></a>
   <a href="https://spring.io/projects/spring-boot"><img alt="Spring Boot 4.1" src="https://img.shields.io/badge/Spring%20Boot-4.1-6DB33F?logo=springboot&amp;logoColor=white"></a>
   <a href="https://spring.io/projects/spring-ai"><img alt="Spring AI 2.0" src="https://img.shields.io/badge/Spring%20AI-2.0-6DB33F"></a>
@@ -14,47 +14,39 @@
 </p>
 
 <p align="center">
-  <a href="README.zh-CN.md">简体中文</a> ·
+  <a href="README.zh-CN.md"><strong>简体中文说明</strong></a> ·
+  <a href="#quick-preview">Demo GIF</a> ·
   <a href="#quick-start">Quick start</a> ·
   <a href="#current-business-capabilities">Capabilities</a> ·
   <a href="#architecture">Architecture</a> ·
-  <a href="https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.4.0">Stable v2.4.0</a> ·
+  <a href="https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.4.1">Stable v2.4.1</a> ·
   <a href="https://gitee.com/qcodingdev/spring-ai-business-copilot">Gitee</a>
 </p>
 
+## Who is this for?
+
+If you are learning or building enterprise AI applications with Java / Spring AI, this project provides a runnable full-stack reference: RAG knowledge Q&A, natural-language SQL queries, support reply drafts, business reports, and HR assistance. Follow each workflow from the web page and API through model calls to saved results.
+
+- **Learning Spring AI:** explore document retrieval, cited answers, and SQL generation in a working application.
+- **Building a business project:** start with one of the five modules and adapt its UI, APIs, and persisted workflow to your needs.
+- **Evaluating delivery:** inspect safety checks (Guardrails), human confirmation (Human-in-the-loop), audit records, and operational checks as a starting point for enterprise AI governance.
+
+## Quick preview
+
 ![Spring AI Business Copilot 2.3 workbench](assets/workbench-demo.gif)
 
-> **Stable release:** `v2.4.0` adds an Admin-only five-module readiness loop: configuration prerequisites prevent empty deployments from reporting `READY`, operational checks link back to existing remediation screens, and the server persists retention-bounded, append-only, content-safe application evidence snapshots. Production deployment still requires deployment-owned identity, secrets, network policy, retention settings, real-model evaluation, and vendor sandbox acceptance.
+A roughly 12-second page tour of the five-module workbench, captured in v2.3 with fictional data.
 
-## One workbench for five enterprise domains
+**[Run it locally](#quick-start)** · [Explore the five workflows](#current-business-capabilities)
 
-Spring AI Business Copilot has grown from the original Data Copilot into a unified workbench for data analysis, enterprise knowledge, customer operations, business reporting, recruiting, and employee services. Each domain can run independently, while data handoffs, grounded knowledge, human review, and persisted state connect them into operational workflows.
-
-The `2.3` line productized these existing capabilities rather than adding more modules. `2.3.1` strengthened the external-integration and maintenance baseline; `2.4.0` adds enterprise-readiness evidence without introducing a sixth business domain:
-
-- **Unified enterprise workbench:** a bilingual Vue 3 + TypeScript interface brings together the overview, five business domains, and system administration, with actions scoped to `ADMIN`, `OPERATOR`, and `REVIEWER` roles.
-- **Cross-domain collaboration:** Data results flow into Report; Knowledge grounds support and employee-policy answers; external tickets, knowledge sources, report inputs, and ATS records enter controlled module workflows.
-- **Complete human review:** SQL execution, knowledge-quality disposition, support drafts, report confirmation, and recruiting assessments retain evidence, risk, state, human edits, and confirmation records.
-- **Diagnosable delivery:** administration covers runtime health, AI call chains, token/latency visibility, knowledge documents, and experience data; Docker Compose, automated tests, SBOM, and security gates cover delivery.
-- **Maintained integrations:** Notion uses the current `2026-03-11` API contract and bounded full-page traversal; direct contracts cover SharePoint, Confluence, Notion, Jira Service Management, Zendesk, ServiceNow, Feishu, and WeCom.
-- **Readiness evidence:** seven model/module prerequisites and thirteen operational checks cover configuration, stale claims, uncertain writebacks, invalid knowledge, unrecovered failures, SLA breaches, and due reviews; Admin can remediate, rerun, and retain append-only application evidence with bounded validity and retention.
-
-## Current business capabilities
-
-| Domain | Operational flow available today | Key control |
-|---|---|---|
-| [Data analysis](modules/data-copilot/README.md) | Generate SQL candidates from natural language; govern metric definitions and approved templates; inspect result snapshots and audits; hand masked results to Report | Queries are read-only and bounded by schema, columns, functions, rows, time, and result size, with confirmation before execution |
-| [Enterprise knowledge](modules/knowledge-copilot/README.md) | Upload and manage documents; synchronize governed sources; ask cited questions; process a quality queue with separate evidence, answer, remediation, and disposition fields | The system refuses to answer without current accessible evidence, and every citation resolves to the current document version |
-| [Customer operations](modules/support-copilot/README.md) | Analyze tickets with SLA and similar-case context; revise and confirm drafts in a human-review queue; manage external connections and outcome records | Confirming a draft does not send a customer message; external internal-note writeback requires a separate preview and confirmation |
-| [Business reporting](modules/report-copilot/README.md) | Start from a Data handoff that fills title and source automatically, or use typed/CSV/JSON input; generate, edit, confirm, schedule, and export reports | Facts remain bound to immutable source snapshots; schedules create reviewable drafts and never auto-publish |
-| [Recruiting and employee services](modules/resume-copilot/README.md) | Recruiting covers job criteria, evidence-based resume review, interviews, candidate consent, and read-only ATS import; employee services cover cited policy Q&A and onboarding checklists | No score, ranking, hire/reject conclusion, or ATS write action is produced |
+You can explore the interface without a model key. AI generation requires a chat model; Knowledge ingestion and Q&A also require an embedding model. See the configuration modes below.
 
 ## Quick start
 
 Requirements: Docker with Compose support.
 
 ```bash
-git clone --branch v2.4.0 --single-branch \
+git clone --branch v2.4.1 --single-branch \
   https://github.com/qcodingdev/spring-ai-business-copilot.git
 cd spring-ai-business-copilot/examples
 cp .env.example .env
@@ -108,6 +100,26 @@ Chat and embedding endpoints are independent because many OpenAI-compatible chat
 
 Administrators can then open **System administration → Enterprise readiness**, follow any remediation link back to these five workflows, rerun the checks, and save a purpose-bound evidence snapshot.
 
+<details>
+<summary>Use existing enterprise identities (optional OIDC)</summary>
+
+For a single-organization pilot, set `SPRING_PROFILES_ACTIVE=self-hosted,oidc` (or `prod,oidc`) and the `BUSINESS_COPILOT_OIDC_ISSUER_URI`, `BUSINESS_COPILOT_OIDC_CLIENT_ID`, and `BUSINESS_COPILOT_OIDC_CLIENT_SECRET` variables in your secret-backed deployment. Register `https://<your-host>/login/oauth2/code/enterprise` as the redirect URI. The signed ID token must contain the application-specific array `business_copilot_roles` with `ADMIN`, `OPERATOR`, or `REVIEWER`; the claim name is configurable. Keep operator and reviewer assignments separate for independent review.
+
+The login page exposes enterprise sign-in and disables local sample accounts. Ownership and audit use a stable actor derived from issuer and subject, so a display-name or email change does not transfer ownership. Existing local-account records are not automatically reassigned. The session expires at ID-token expiry or after 20 idle minutes; immediate IdP revocation and single logout still require deployment acceptance. Configure short token lifetimes at the IdP. Use HTTPS; enable forwarded headers only behind an ingress that strips untrusted forwarding headers. See the [environment example](examples/.env.example). This mode must be accepted against your actual IdP and is separate from `public-demo`.
+
+</details>
+
+
+## Current business capabilities
+
+| Domain | Operational flow available today | Key control |
+|---|---|---|
+| [Data analysis](modules/data-copilot/README.md) | Generate SQL candidates from natural language; govern metric definitions and approved templates; inspect result snapshots and audits; hand masked results to Report | Queries are read-only and bounded by schema, columns, functions, rows, time, and result size, with confirmation before execution |
+| [Enterprise knowledge](modules/knowledge-copilot/README.md) | Upload and manage documents; synchronize governed sources; ask cited questions; process a quality queue with separate evidence, answer, remediation, and disposition fields | The system refuses to answer without current accessible evidence, and every citation resolves to the current document version |
+| [Customer operations](modules/support-copilot/README.md) | Analyze tickets with SLA and similar-case context; revise and confirm drafts in a human-review queue; manage external connections and outcome records | Confirming a draft does not send a customer message; external internal-note writeback requires a separate preview and confirmation |
+| [Business reporting](modules/report-copilot/README.md) | Start from a Data handoff that fills title and source automatically, or use typed/CSV/JSON input; generate, edit, confirm, schedule, and export reports | Facts remain bound to immutable source snapshots; schedules create reviewable drafts and never auto-publish |
+| [Recruiting and employee services](modules/resume-copilot/README.md) | Recruiting covers job criteria, evidence-based resume review, interviews, candidate consent, and read-only ATS import; employee services cover cited policy Q&A and onboarding checklists | No score, ranking, hire/reject conclusion, or ATS write action is produced |
+
 ## Product tour
 
 | Data result handoff | Knowledge quality review |
@@ -121,6 +133,19 @@ Administrators can then open **System administration → Enterprise readiness**,
 ![Grouped recruiting and employee-service navigation](assets/resume-copilot-result.png)
 
 All visuals use fictional data captured from the runnable Docker Compose application.
+
+## One workbench for five enterprise domains
+
+Spring AI Business Copilot has grown from the original Data Copilot into a unified workbench for data analysis, enterprise knowledge, customer operations, business reporting, recruiting, and employee services. Each domain can run independently, while data handoffs, grounded knowledge, human review, and persisted state connect them into operational workflows.
+
+The `2.3` line productized these existing capabilities rather than adding more modules. `2.3.1` strengthened the external-integration and maintenance baseline; `2.4.0` adds enterprise-readiness evidence without introducing a sixth business domain:
+
+- **Unified enterprise workbench:** a bilingual Vue 3 + TypeScript interface brings together the overview, five business domains, and system administration, with actions scoped to `ADMIN`, `OPERATOR`, and `REVIEWER` roles.
+- **Cross-domain collaboration:** Data results flow into Report; Knowledge grounds support and employee-policy answers; external tickets, knowledge sources, report inputs, and ATS records enter controlled module workflows.
+- **Complete human review:** SQL execution, knowledge-quality disposition, support drafts, report confirmation, and recruiting assessments retain evidence, risk, state, human edits, and confirmation records.
+- **Diagnosable delivery:** administration covers runtime health, AI call chains, token/latency visibility, knowledge documents, and experience data; Docker Compose, automated tests, SBOM, and security gates cover delivery.
+- **Maintained integrations:** Notion uses the current `2026-03-11` API contract and bounded full-page traversal; direct contracts cover SharePoint, Confluence, Notion, Jira Service Management, Zendesk, ServiceNow, Feishu, and WeCom.
+- **Readiness evidence:** seven model/module prerequisites and thirteen operational checks cover configuration, stale claims, uncertain writebacks, invalid knowledge, unrecovered failures, SLA breaches, and due reviews; Admin can remediate, rerun, and retain append-only application evidence with bounded validity and retention.
 
 ## Trust built into the workflow
 
@@ -158,6 +183,8 @@ flowchart LR
 
 ## Deployment and integration status
 
+> **Stable release:** `v2.4.1` adds governed task recovery, versioned evaluation and Prompt review, and an optional enterprise OIDC profile. Data-to-Report metrics retain their source and period definitions, while the five business workflows keep human review and audit boundaries. Production deployment still requires deployment-owned identity, secrets, network policy, retention settings, real-model evaluation, and vendor sandbox acceptance.
+
 | Capability | Status | Deployment responsibility |
 |---|---|---|
 | Local Docker Compose | Runnable sample | Replace demo passwords before any shared deployment |
@@ -184,7 +211,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow and focused 
 
 | Resource | Link |
 |---|---|
-| Stable release | [v2.4.0](https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.4.0) |
+| Stable release | [v2.4.1](https://github.com/qcodingdev/spring-ai-business-copilot/releases/tag/v2.4.1) |
 | Release history | [CHANGELOG.md](CHANGELOG.md) · [GitHub Releases](https://github.com/qcodingdev/spring-ai-business-copilot/releases) |
 | Questions and bugs | [GitHub Issues](https://github.com/qcodingdev/spring-ai-business-copilot/issues) |
 | Contributing | [CONTRIBUTING.md](CONTRIBUTING.md) |

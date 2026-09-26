@@ -133,4 +133,42 @@ public class JdbcSupportTicketRepository implements SupportTicketRepository {
         Long result = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM support_tickets", Long.class);
         return result != null ? result : 0;
     }
+    @Override
+    public boolean updateHandoffReason(Long id, SupportHandoffReason reason) {
+        return jdbcTemplate.update(
+                "UPDATE support_tickets SET handoff_reason = ? WHERE id = ?",
+                reason.name(), id) == 1;
+    }
+
+    @Override
+    public boolean saveFollowUps(Long id, java.util.List<String> questions) {
+        if (questions == null || questions.isEmpty()) {
+            return jdbcTemplate.update(
+                    "UPDATE support_tickets SET followup_questions = NULL WHERE id = ?", id) == 1;
+        }
+        String json = new tools.jackson.databind.ObjectMapper()
+                .writerWithDefaultPrettyPrinter()
+                .writeValueAsString(questions);
+        return jdbcTemplate.update(
+                "UPDATE support_tickets SET followup_questions = ?::jsonb WHERE id = ?",
+                json, id) == 1;
+    }
+
+    @Override
+    public java.util.Optional<SupportHandoffReason> findHandoffReason(Long id) {
+        List<String> rows = jdbcTemplate.queryForList(
+                "SELECT handoff_reason FROM support_tickets WHERE id = ? AND handoff_reason IS NOT NULL",
+                String.class, id);
+        return rows.isEmpty()
+                ? java.util.Optional.empty()
+                : java.util.Optional.of(SupportHandoffReason.valueOf(rows.get(0)));
+    }
+
+    @Override
+    public java.util.Optional<String> findFollowUps(Long id) {
+        List<String> rows = jdbcTemplate.queryForList(
+                "SELECT followup_questions::text FROM support_tickets WHERE id = ? AND followup_questions IS NOT NULL",
+                String.class, id);
+        return rows.isEmpty() ? java.util.Optional.empty() : java.util.Optional.of(rows.get(0));
+    }
 }

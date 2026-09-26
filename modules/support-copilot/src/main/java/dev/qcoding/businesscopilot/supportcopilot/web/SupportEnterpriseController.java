@@ -25,8 +25,13 @@ public class SupportEnterpriseController {
 
     private final SupportEnterpriseService service;
 
-    public SupportEnterpriseController(SupportEnterpriseService service) {
+    private final dev.qcoding.businesscopilot.supportcopilot.quality.SupportQualityCaseService qualityCaseService;
+
+    public SupportEnterpriseController(
+            SupportEnterpriseService service,
+            dev.qcoding.businesscopilot.supportcopilot.quality.SupportQualityCaseService qualityCaseService) {
         this.service = service;
+        this.qualityCaseService = qualityCaseService;
     }
 
     @GetMapping("/connections")
@@ -86,6 +91,38 @@ public class SupportEnterpriseController {
     @GetMapping("/writebacks/{writebackId}")
     public ResponseEntity<ApiResponse<?>> writebackStatus(@PathVariable long writebackId) {
         return ResponseEntity.ok(ApiResponse.ok(service.writebackStatus(writebackId)));
+    }
+
+    /** SUP-03：主动向外部系统核对回写结果；无法核对时保持未知状态。 */
+    @PostMapping("/writebacks/{writebackId}/receipt-refresh")
+    public ResponseEntity<ApiResponse<?>> refreshReceipt(
+            @PathVariable long writebackId) {
+        return ResponseEntity.ok(ApiResponse.ok(service.refreshWritebackReceipt(writebackId)));
+    }
+
+    /** SUP-05：质量案例登记与查询（内容脱敏，仅复核员/管理员）。 */
+    @PostMapping("/quality-cases")
+    public ResponseEntity<ApiResponse<?>> recordQualityCase(
+            @Valid @RequestBody QualityCaseRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(qualityCaseService.record(
+                new dev.qcoding.businesscopilot.supportcopilot.quality.SupportQualityCaseService.QualityCaseCommand(
+                        request.ticketRef(), request.caseType(), request.failureSummary(),
+                        request.revisionReason(), request.draftId(), request.draftVersion()))));
+    }
+
+    @GetMapping("/quality-cases")
+    public ResponseEntity<ApiResponse<?>> qualityCases(
+            @RequestParam(required = false) String caseType) {
+        return ResponseEntity.ok(ApiResponse.ok(qualityCaseService.list(caseType)));
+    }
+
+    public record QualityCaseRequest(
+            @NotBlank @Size(max = 64) String ticketRef,
+            @NotBlank @Size(max = 40) String caseType,
+            @NotBlank @Size(max = 1000) String failureSummary,
+            @NotBlank @Size(max = 1000) String revisionReason,
+            @NotNull Long draftId,
+            @Size(max = 200) String draftVersion) {
     }
 
     @PostMapping("/writebacks/{writebackId}/resolve")

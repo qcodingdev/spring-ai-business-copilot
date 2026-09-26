@@ -1,5 +1,7 @@
 package dev.qcoding.businesscopilot.datacopilot.query;
 
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -13,6 +15,10 @@ public record QueryRow(Map<String, Object> values) {
 
     /** Defensive copy so callers cannot mutate the row after construction. */
     public QueryRow {
-        values = values == null ? Map.of() : Map.copyOf(values);
+        // JDBC null is a valid SQL cell value. Map.copyOf rejects null values and
+        // previously turned any nullable result column into an internal NPE.
+        values = values == null
+                ? Map.of()
+                : Collections.unmodifiableMap(new LinkedHashMap<>(values));
     }
 }

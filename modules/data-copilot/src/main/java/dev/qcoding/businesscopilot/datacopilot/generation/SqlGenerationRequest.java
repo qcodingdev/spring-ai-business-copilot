@@ -11,5 +11,11 @@ import jakarta.validation.constraints.Size;
 public record SqlGenerationRequest(
         @NotBlank(message = "问题不能为空")
         @Size(max = 1000, message = "问题长度不能超过1000字符")
-        String question) {
+        String question,
+        @Size(max = 1000, message = "修正要求长度不能超过1000字符")
+        String revisionInstruction) {
+
+    public SqlGenerationRequest(String question) {
+        this(question, null);
+    }
 }

@@ -63,7 +63,7 @@ public record ReportCopilotProperties(
         this(enabled, maxPeriodDays, maxSourceCount, maxSourceLength, maxMetricSources,
                 maxTaskSources, maxMeetingNoteSources, draftTtl, allowedReportTypes,
                 markdownExportEnabled, true, 1_048_576, Duration.ofDays(7),
-                "evidence-weekly", "2.0", Duration.ofHours(24));
+                "evidence-weekly", "2.1", Duration.ofHours(24));
     }
 
     @ConstructorBinding
@@ -105,7 +105,7 @@ public record ReportCopilotProperties(
             defaultTemplateId = "evidence-weekly";
         }
         if (defaultTemplateVersion == null || defaultTemplateVersion.isBlank()) {
-            defaultTemplateVersion = "2.0";
+            defaultTemplateVersion = "2.1";
         }
         if (reviewSla == null || reviewSla.isNegative() || reviewSla.isZero()) {
             reviewSla = Duration.ofHours(24);

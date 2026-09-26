@@ -16,6 +16,7 @@ import dev.qcoding.businesscopilot.knowledgecopilot.indexing.KnowledgeIndexJob;
 import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeAnswerFeedback;
 import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeAnswerFeedbackRequest;
 import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeFeedbackService;
+import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeFeedbackHistoryItem;
 import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeQualityMetrics;
 import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeQualityQueueItem;
 import dev.qcoding.businesscopilot.knowledgecopilot.feedback.KnowledgeQualityReview;
@@ -50,6 +51,7 @@ import java.util.UUID;
  *   <li>GET  /api/knowledge-copilot/documents — 文档列表</li>
  *   <li>PATCH /api/knowledge-copilot/documents/{documentId}/enabled — 启用/停用文档</li>
  *   <li>POST /api/knowledge-copilot/questions — 知识问答</li>
+ *   <li>GET  /api/knowledge-copilot/feedback-history — 点赞/点踩反馈明细</li>
  *   <li>GET  /api/knowledge-copilot/audit-logs — 审计日志</li>
  * </ul>
  * </p>
@@ -184,6 +186,16 @@ public class KnowledgeCopilotController {
         List<KnowledgeQualityQueueItem> items = feedbackService.findQualityQueue(page, size);
         return ResponseEntity.ok(ApiResponse.ok(PageResponse.of(
                 items, page, size, feedbackService.countQualityQueue())));
+    }
+
+    /** GET /api/knowledge-copilot/feedback-history — 点赞/点踩反馈明细分页。 */
+    @GetMapping("/feedback-history")
+    public ResponseEntity<ApiResponse<PageResponse<KnowledgeFeedbackHistoryItem>>> getFeedbackHistory(
+            @RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
+            @RequestParam(name = "size", defaultValue = "20") @Min(1) @Max(100) int size) {
+        List<KnowledgeFeedbackHistoryItem> items = feedbackService.findFeedbackHistory(page, size);
+        return ResponseEntity.ok(ApiResponse.ok(PageResponse.of(
+                items, page, size, feedbackService.countFeedbackHistory())));
     }
 
     /** POST /api/knowledge-copilot/quality-queue/{answerId}/review — 人工处置质量问题。 */

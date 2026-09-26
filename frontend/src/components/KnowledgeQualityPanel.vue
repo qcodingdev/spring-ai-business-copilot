@@ -5,6 +5,7 @@ import { api, ApiError, jsonBody } from '@/api/client'
 import RequestId from './RequestId.vue'
 import StatusBadge from './StatusBadge.vue'
 import ToastMessage from './ToastMessage.vue'
+import { formatDate } from '@/locales/format'
 
 interface QueueItem {
   answerId: number
@@ -24,9 +25,42 @@ interface QueueItem {
   issueUpdatedAt: string
 }
 
+interface FeedbackHistoryItem {
+  feedbackId: number
+  answerId: number
+  requestId: string | null
+  question: string | null
+  answerPreview: string | null
+  rating: string
+  feedbackReason: string | null
+  comment: string | null
+  feedbackCreatedAt: string
+  feedbackUpdatedAt: string
+}
+
+interface FeedbackHistoryPage {
+  content: FeedbackHistoryItem[]
+  totalElements: number
+}
+
+interface QualityMetrics {
+  feedbackCount: number
+  helpfulCount: number
+  notHelpfulCount: number
+  pendingReviewCount: number
+  resolvedCount: number
+  dismissedCount: number
+  knowledgeUpdateRequiredCount: number
+}
+
 const { t, te, locale } = useI18n()
 const loading = ref(false)
 const queue = ref<QueueItem[]>([])
+const feedbackHistory = ref<FeedbackHistoryItem[]>([])
+const feedbackHistoryTotal = ref(0)
+const feedbackHistoryPage = ref(0)
+const feedbackHistoryPageSize = 50
+const metrics = ref<QualityMetrics | null>(null)
 const selected = ref<QueueItem | null>(null)
 const decision = ref('KNOWLEDGE_UPDATE_REQUIRED')
 const evidenceAssessment = ref('INSUFFICIENT')
@@ -44,6 +78,7 @@ const evidenceOptions = ['SUFFICIENT', 'INSUFFICIENT', 'CONFLICTING', 'OUTDATED'
 const answerOptions = ['ACCURATE', 'PARTIALLY_ACCURATE', 'INACCURATE', 'NOT_VERIFIABLE']
 const remediationOptions = ['NONE', 'REINDEX_SOURCE', 'UPDATE_KNOWLEDGE', 'ADJUST_POLICY', 'FOLLOW_UP_WITH_REQUESTER']
 const decisionOptions = ['RESOLVED', 'DISMISSED', 'KNOWLEDGE_UPDATE_REQUIRED']
+const feedbackHistoryPageCount = computed(() => Math.max(1, Math.ceil(feedbackHistoryTotal.value / feedbackHistoryPageSize)))
 
 function showToast(message: string, tone: 'success' | 'danger' = 'success'): void {
   if (toastTimer) clearTimeout(toastTimer)
@@ -64,6 +99,14 @@ function detailText(value: string | null): string {
   return value ? statusLabel(value) : ''
 }
 
+function feedbackReasonLabel(value: string | null): string {
+  return value ? optionLabel('feedback', value) : t('knowledge.noFeedbackReason')
+}
+
+function feedbackTime(item: FeedbackHistoryItem): string {
+  return formatDate(item.feedbackUpdatedAt || item.feedbackCreatedAt, locale.value) || '—'
+}
+
 function chunkIds(value: string | null): string[] {
   return value?.split(',').map((item) => item.trim()).filter(Boolean) ?? []
 }
@@ -80,9 +123,16 @@ function beginReview(item: QueueItem): void {
 async function load(): Promise<void> {
   loading.value = true
   try {
-    const response = await api<{ content: QueueItem[] }>('/api/knowledge-copilot/quality-queue?size=50')
-    queue.value = response.data?.content ?? []
-    requestId.value = response.requestId
+    const [queueResponse, metricsResponse, historyResponse] = await Promise.all([
+      api<{ content: QueueItem[] }>('/api/knowledge-copilot/quality-queue?size=50'),
+      api<QualityMetrics>('/api/knowledge-copilot/quality-metrics'),
+      api<FeedbackHistoryPage>(`/api/knowledge-copilot/feedback-history?page=${feedbackHistoryPage.value}&size=${feedbackHistoryPageSize}`),
+    ])
+    queue.value = queueResponse.data?.content ?? []
+    metrics.value = metricsResponse.data ?? null
+    feedbackHistory.value = historyResponse.data?.content ?? []
+    feedbackHistoryTotal.value = historyResponse.data?.totalElements ?? feedbackHistory.value.length
+    requestId.value = queueResponse.requestId ?? metricsResponse.requestId ?? historyResponse.requestId
   } catch (error) {
     errorCode.value = error instanceof ApiError ? error.errorCode : 'generic'
     requestId.value = error instanceof ApiError ? error.requestId : null
@@ -90,8 +140,15 @@ async function load(): Promise<void> {
   } finally { loading.value = false }
 }
 
+async function changeFeedbackPage(offset: number): Promise<void> {
+  const nextPage = feedbackHistoryPage.value + offset
+  if (loading.value || nextPage < 0 || nextPage >= feedbackHistoryPageCount.value) return
+  feedbackHistoryPage.value = nextPage
+  await load()
+}
+
 async function review(): Promise<void> {
-  if (!selected.value || !note.value.trim()) return
+  if (loading.value || !selected.value || !note.value.trim()) return
   loading.value = true
   try {
     const item = selected.value
@@ -130,15 +187,52 @@ onUnmounted(() => { if (toastTimer) clearTimeout(toastTimer) })
       <button class="button button--secondary" type="button" :disabled="loading" @click="load">{{ loading ? t('common.loading') : t('common.refresh') }}</button>
     </div>
 
+    <div v-if="metrics" class="queue-summary" aria-live="polite">
+      <article><span>{{ t('knowledge.feedbackTotal') }}</span><strong>{{ metrics.feedbackCount }}</strong></article>
+      <article><span>{{ t('knowledge.feedbackHelpful') }}</span><strong>{{ metrics.helpfulCount }}</strong></article>
+      <article><span>{{ t('knowledge.feedbackNotHelpful') }}</span><strong>{{ metrics.notHelpfulCount }}</strong></article>
+      <article><span>{{ t('knowledge.feedbackPending') }}</span><strong>{{ metrics.pendingReviewCount }}</strong></article>
+      <article><span>{{ t('knowledge.feedbackResolved') }}</span><strong>{{ metrics.resolvedCount }}</strong></article>
+      <article><span>{{ t('knowledge.feedbackUpdateRequired') }}</span><strong>{{ metrics.knowledgeUpdateRequiredCount }}</strong></article>
+    </div>
+
     <div v-if="queue.length" class="quality-queue-list">
       <article v-for="item in queue" :key="item.answerId" class="quality-queue-card" :class="{ active: selected?.answerId === item.answerId }">
-        <div class="quality-queue-card__heading"><div><small>#{{ item.answerId }} · {{ new Date(item.issueUpdatedAt).toLocaleString(locale) }}</small><h3>{{ item.question }}</h3></div><StatusBadge :label="statusLabel(item.rating || item.answerStatus)" :tone="item.rating === 'NOT_HELPFUL' ? 'warning' : 'info'" /></div>
+        <div class="quality-queue-card__heading"><div><small>#{{ item.answerId }} · {{ formatDate(item.issueUpdatedAt, locale) || '—' }}</small><h3>{{ item.question }}</h3></div><StatusBadge :label="statusLabel(item.rating || item.answerStatus)" :tone="item.rating === 'NOT_HELPFUL' ? 'warning' : 'info'" /></div>
         <p>{{ item.comment || detailText(item.refusalReason) || t('knowledge.qualityNoComment') }}</p>
         <div class="quality-queue-card__signals"><span>{{ t('knowledge.retrievedEvidence') }} <b>{{ chunkIds(item.retrievedChunkIds).length }}</b></span><span>{{ t('knowledge.citedEvidence') }} <b>{{ chunkIds(item.citedChunkIds).length }}</b></span><span>{{ t('knowledge.issueVersion') }} <b>v{{ item.issueVersion }}</b></span></div>
         <button class="button button--primary" type="button" @click="beginReview(item)">{{ t('knowledge.reviewIssue') }}</button>
       </article>
     </div>
     <p v-else class="empty-state">{{ t('common.noData') }}</p>
+
+    <section class="workflow-card feedback-history" aria-live="polite">
+      <div class="section-heading">
+        <div><h3>{{ t('knowledge.feedbackHistoryHeading') }}</h3><p class="enterprise-panel__description">{{ t('knowledge.feedbackHistoryDescription') }}</p></div>
+        <small v-if="feedbackHistoryTotal">{{ t('knowledge.feedbackTotalRows', { count: feedbackHistoryTotal }) }}</small>
+      </div>
+      <div v-if="feedbackHistory.length" class="table-scroll">
+        <table class="data-table feedback-history-table">
+          <thead><tr><th>{{ t('knowledge.feedbackRating') }}</th><th>{{ t('knowledge.feedbackQuestion') }}</th><th>{{ t('knowledge.feedbackAnswer') }}</th><th>{{ t('knowledge.feedbackReason') }}</th><th>{{ t('knowledge.feedbackComment') }}</th><th>{{ t('knowledge.feedbackTime') }}</th></tr></thead>
+          <tbody>
+            <tr v-for="item in feedbackHistory" :key="item.feedbackId">
+              <td><StatusBadge :label="statusLabel(item.rating)" :tone="item.rating === 'NOT_HELPFUL' ? 'warning' : 'success'" /></td>
+              <td><strong>#{{ item.answerId }}</strong><small>{{ item.question || t('knowledge.redactedQuestion') }}</small></td>
+              <td>{{ item.answerPreview || t('knowledge.redactedAnswer') }}</td>
+              <td>{{ feedbackReasonLabel(item.feedbackReason) }}</td>
+              <td>{{ item.comment || '—' }}</td>
+              <td>{{ feedbackTime(item) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p v-else class="empty-state">{{ t('knowledge.feedbackNoRecords') }}</p>
+      <div v-if="feedbackHistoryTotal > feedbackHistoryPageSize" class="button-row feedback-history-pagination">
+        <button class="button button--secondary" type="button" :disabled="loading || feedbackHistoryPage === 0" @click="changeFeedbackPage(-1)">{{ t('knowledge.previousPage') }}</button>
+        <span class="field-hint">{{ feedbackHistoryPage + 1 }} / {{ feedbackHistoryPageCount }}</span>
+        <button class="button button--secondary" type="button" :disabled="loading || feedbackHistoryPage + 1 >= feedbackHistoryPageCount" @click="changeFeedbackPage(1)">{{ t('knowledge.nextPage') }}</button>
+      </div>
+    </section>
 
     <form v-if="selected" class="knowledge-review-form" @submit.prevent="review">
       <div class="section-heading"><div><p class="panel-kicker">{{ t('knowledge.reviewContext') }} #{{ selected.answerId }}</p><h3>{{ selected.question }}</h3></div><StatusBadge :label="statusLabel(selected.answerStatus)" tone="warning" /></div>

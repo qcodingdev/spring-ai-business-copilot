@@ -36,7 +36,7 @@ public class ReportRequestPreparationService {
         String templateId = valueOrDefault(request.templateId(),
                 properties == null ? "evidence-weekly" : properties.defaultTemplateId());
         String templateVersion = valueOrDefault(request.templateVersion(),
-                properties == null ? "2.0" : properties.defaultTemplateVersion());
+                properties == null ? "2.1" : properties.defaultTemplateVersion());
         return new ReportRequestPreview(request.reportType(), request.period(), request.title().trim(),
                 sources, templateId, templateVersion);
     }
@@ -46,7 +46,7 @@ public class ReportRequestPreparationService {
 
         public ReportRequestPreview(ReportType reportType, ReportPeriod period, String title,
                                     List<ReportSource> sources) {
-            this(reportType, period, title, sources, "evidence-weekly", "2.0");
+            this(reportType, period, title, sources, "evidence-weekly", "2.1");
         }
     }
 

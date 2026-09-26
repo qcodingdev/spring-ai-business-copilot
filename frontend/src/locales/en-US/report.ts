@@ -1,4 +1,10 @@
 export default {
+  jiraProjectKeys: 'Jira project keys (comma separated)',
+  frequency: 'Generation frequency',
+  frequencies: { weekly: 'Mondays at 09:00', daily: 'Daily at 09:00', monthly: 'First day of the month at 09:00', custom: 'Custom schedule (advanced)' },
+  sourceNames: 'Select report sources',
+  noExternalSources: 'No external sources are enabled. Use support metrics or ask an administrator to configure a source.',
+
   title: 'Evidence-grounded report generation and export',
   description: 'Preview source freshness before generating a human-confirmed draft. Reports are never auto-published.',
   tabs: { generate: 'Generate report', records: 'Report records', sources: 'Source management', schedules: 'Schedules and export' },
@@ -8,6 +14,7 @@ export default {
   dataHandoffSourceSummary: 'Data result: {title} ({rows} rows, reference {reference})',
   noDataHandoffs: 'No Data result handoffs are available. Create one in Data Copilot first.',
   reportTitle: 'Report title',
+  types: { TEAM_WEEKLY: 'Team weekly report', BUSINESS_WEEKLY: 'Business weekly report', PROJECT_STATUS: 'Project status report', INCIDENT_REVIEW: 'Incident review', SALES_REVIEW: 'Sales review' },
   source: 'Source data',
   sourcePlaceholder: 'Enter masked metrics, tasks, or meeting notes.',
   uploadSource: 'Upload source file (optional)', uploadSourceHint: 'CSV and JSON are supported. When a file is selected, source text is optional. File size, structure, and sensitive data checks run first.',
@@ -21,6 +28,7 @@ export default {
   sections: { completedItems: 'Completed items', risks: 'Risks', actionItems: 'Source action items', suggestions: 'AI suggestions' },
   saveEdit: 'Save human edits',
   editSaved: 'Report edits were saved. Human confirmation is still required.',
+  editSavedContinue: 'Report edits were saved. Confirm the report before exporting it.',
   confirmed: 'The report is confirmed and can be exported. It was not published automatically.',
   cancelled: 'The report draft was cancelled.',
   needsReview: 'Report evidence validation failed, so no untrusted content was retained. Cancel this record and regenerate from its sources.',
@@ -40,4 +48,10 @@ export default {
     second: 'This month handled 1,260 tickets, achieved a 96.4% first-response SLA, and averaged 5.2 hours to resolution. API timeout tickets increased 18% month over month and need engineering investigation.',
     third: 'The project completed requirements review and core API integration and enters business acceptance next week. The current dependency is a test account from an external system, due Wednesday.',
   },
+
+  viewDataTrace: 'View data trace',
+  hideDataTrace: 'Hide data trace',
+  noDataTrace: 'This draft has no Data handoff trace records.',
+  traceResult: 'Result snapshot',
+  traceCandidate: 'SQL candidate',
 }

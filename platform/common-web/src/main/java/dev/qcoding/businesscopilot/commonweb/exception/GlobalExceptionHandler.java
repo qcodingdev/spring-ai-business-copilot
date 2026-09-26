@@ -99,6 +99,11 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleUnexpected(Exception ex, HttpServletRequest request) {
+        // MVC's missing resource/handler exceptions expose this spring-web contract.
+        if (ex instanceof org.springframework.web.ErrorResponse error
+                && error.getStatusCode().value() == 404) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.fail(ErrorCode.NOT_FOUND));
+        }
         log.error("请求发生未预期异常：uri={}", request.getRequestURI(), ex);
         ApiResponse<Void> body = ApiResponse.fail(ErrorCode.INTERNAL_ERROR);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(body);

@@ -263,6 +263,22 @@ class SecurityConfigurationTest {
     }
 
     @Test
+    void reviewerCanViewKnowledgeFeedbackHistory() throws Exception {
+        mockMvc.perform(get("/api/knowledge-copilot/feedback-history")
+                        .with(user("reviewer").roles("REVIEWER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ok"));
+    }
+
+    @Test
+    void operatorCannotViewKnowledgeFeedbackHistory() throws Exception {
+        mockMvc.perform(get("/api/knowledge-copilot/feedback-history")
+                        .with(user("operator").roles("OPERATOR")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("SEC_0403"));
+    }
+
+    @Test
     void operatorCannotViewKnowledgeQualityQueue() throws Exception {
         mockMvc.perform(get("/api/knowledge-copilot/quality-queue")
                         .with(user("operator").roles("OPERATOR")))
@@ -335,7 +351,32 @@ class SecurityConfigurationTest {
     }
 
     @Test
+    void supportQualityCasesAreReviewerOrAdminOnlyForReadAndWrite() throws Exception {
+        mockMvc.perform(get("/api/support-copilot/enterprise/quality-cases")
+                        .with(user("operator").roles("OPERATOR")))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/support-copilot/enterprise/quality-cases")
+                        .with(user("reviewer").roles("REVIEWER")))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/support-copilot/enterprise/quality-cases")
+                        .with(user("reviewer").roles("REVIEWER"))
+                        .with(csrf()).contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/support-copilot/enterprise/quality-cases")
+                        .with(user("operator").roles("OPERATOR"))
+                        .with(csrf()).contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void enterpriseReadinessAssessmentAndEvidenceAreAdminOnly() throws Exception {
+        for (String path : java.util.List.of("/api/admin/acceptance-evidence", "/api/admin/task-runs")) {
+            mockMvc.perform(get(path).with(user("operator").roles("OPERATOR")))
+                    .andExpect(status().isForbidden());
+            mockMvc.perform(post(path).with(user("reviewer").roles("REVIEWER"))
+                            .with(csrf()).contentType(MediaType.APPLICATION_JSON).content("{}"))
+                    .andExpect(status().isForbidden());
+        }
         mockMvc.perform(get("/api/admin/readiness")
                         .with(user("operator").roles("OPERATOR")))
                 .andExpect(status().isForbidden());
@@ -453,6 +494,11 @@ class SecurityConfigurationTest {
             return java.util.Map.of("status", "ok");
         }
 
+        @GetMapping("/feedback-history")
+        java.util.Map<String, String> knowledgeFeedbackHistory() {
+            return java.util.Map.of("status", "ok");
+        }
+
         @GetMapping("/quality-metrics")
         java.util.Map<String, String> knowledgeQualityMetrics() {
             return java.util.Map.of("status", "ok");
@@ -476,6 +522,16 @@ class SecurityConfigurationTest {
         @GetMapping("/api/support-copilot/enterprise/quality-metrics")
         java.util.Map<String, String> supportQualityMetrics() {
             return java.util.Map.of("status", "ok");
+        }
+
+        @GetMapping("/api/support-copilot/enterprise/quality-cases")
+        java.util.Map<String, String> supportQualityCases() {
+            return java.util.Map.of("status", "ok");
+        }
+
+        @PostMapping("/api/support-copilot/enterprise/quality-cases")
+        java.util.Map<String, String> recordSupportQualityCase() {
+            return java.util.Map.of("status", "saved");
         }
 
         @PostMapping("/api/report-copilot/enterprise/reports/generate")

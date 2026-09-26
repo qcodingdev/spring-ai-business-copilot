@@ -26,12 +26,24 @@ public final class AiCallMetrics {
     }
 
     public void beforeExternalCall(String type, String operation) {
-        usageRecorder.beforeExternalCall(provider, model, type, operation);
+        beforeExternalCall(type, operation, provider, model);
+    }
+
+    public void beforeExternalCall(String type, String operation, String providerOverride, String modelOverride) {
+        usageRecorder.beforeExternalCall(effective(providerOverride, provider), effective(modelOverride, model),
+                type, operation);
     }
 
     public void record(String type, String operation, String status, long latencyNanos) {
+        record(type, operation, status, latencyNanos, provider, model);
+    }
+
+    public void record(String type, String operation, String status, long latencyNanos,
+                       String providerOverride, String modelOverride) {
+        String effectiveProvider = effective(providerOverride, provider);
+        String effectiveModel = effective(modelOverride, model);
         if (registry != null) {
-            Tags tags = baseTags(type, operation).and("status", status);
+            Tags tags = baseTags(type, operation, effectiveProvider, effectiveModel).and("status", status);
             registry.counter("business.copilot.ai.calls", tags).increment();
             Timer.builder("business.copilot.ai.latency")
                     .description("AI 外部调用耗时")
@@ -39,7 +51,7 @@ public final class AiCallMetrics {
                     .register(registry)
                     .record(latencyNanos, TimeUnit.NANOSECONDS);
         }
-        usageRecorder.recordCall(provider, model, type, operation, status, latencyNanos);
+        usageRecorder.recordCall(effectiveProvider, effectiveModel, type, operation, status, latencyNanos);
     }
 
     public void recordTokens(String operation, Integer inputTokens, Integer outputTokens) {
@@ -57,6 +69,15 @@ public final class AiCallMetrics {
     }
 
     private Tags baseTags(String type, String operation) {
-        return Tags.of("type", type, "operation", operation, "provider", provider, "model", model);
+        return baseTags(type, operation, provider, model);
+    }
+
+    private Tags baseTags(String type, String operation, String effectiveProvider, String effectiveModel) {
+        return Tags.of("type", type, "operation", operation,
+                "provider", effectiveProvider, "model", effectiveModel);
+    }
+
+    private String effective(String override, String fallback) {
+        return override == null || override.isBlank() ? fallback : override;
     }
 }

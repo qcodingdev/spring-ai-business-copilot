@@ -72,16 +72,18 @@ public class ResumeAssessmentService {
         this.documentTextExtractor = documentTextExtractor;
     }
 
-    public AssessmentResponse assess(long jobId, String resumeText) {
-        return assess(jobId, resumeText, "text-input.txt", "text/plain");
+    public AssessmentResponse assess(long jobId, String resumeText, long consentId, String candidateReference) {
+        return assess(jobId, resumeText, "text-input.txt", "text/plain", consentId, candidateReference);
     }
 
-    public AssessmentResponse assessFile(long jobId, String fileName, String contentType, byte[] content) {
+    public AssessmentResponse assessFile(long jobId, String fileName, String contentType, byte[] content,
+                                         long consentId, String candidateReference) {
         return assess(jobId, documentTextExtractor.extract(fileName, contentType, content).text(),
-                fileName, contentType);
+                fileName, contentType, consentId, candidateReference);
     }
 
-    private AssessmentResponse assess(long jobId, String resumeText, String fileName, String contentType) {
+    private AssessmentResponse assess(long jobId, String resumeText, String fileName, String contentType,
+                                      long consentId, String candidateReference) {
         ResumeJobEntity job = repository.findJob(jobId);
         CurrentActor actor = actorProvider.currentActor();
         if (job == null || !accessPolicy.allowed(
@@ -96,7 +98,8 @@ public class ResumeAssessmentService {
         if (evidence.isEmpty()) throw new BusinessException(ErrorCode.VALIDATION_ERROR, "未找到可用的简历证据。");
         Instant submissionExpiresAt = Instant.now().plus(properties.submissionRetention());
         long submissionId = repository.persistSubmission(
-                jobId, sanitizedResume, evidence, fileName, contentType, submissionExpiresAt);
+                jobId, sanitizedResume, evidence, fileName, contentType, submissionExpiresAt,
+                consentId, candidateReference);
         repository.audit("RESUME_SANITIZED", jobId, submissionId, null, 0, evidence.size(), null,
                 "SANITIZED", null);
         List<ResumeModels.JobCriterion> criteria = criteriaService.criteria(job);

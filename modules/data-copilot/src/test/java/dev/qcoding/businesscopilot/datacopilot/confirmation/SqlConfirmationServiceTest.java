@@ -16,6 +16,9 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 class SqlConfirmationServiceTest {
 
@@ -114,6 +117,26 @@ class SqlConfirmationServiceTest {
         SqlCandidate candidate = service.createNotExecutableCandidate(SQL);
         assertThat(candidate.status()).isEqualTo(SqlCandidateStatus.REJECTED);
         assertThat(store.findById(candidate.candidateId())).isNull();
+    }
+
+    @Test
+    void metricVersionChangedBeforeConfirmationExpiresCandidateInsteadOfExecutingIt() {
+        SqlCandidateMetricReferenceService metricReferences = mock(SqlCandidateMetricReferenceService.class);
+        service = new SqlConfirmationService(
+                store, new DataCopilotConfirmationProperties(10), actors,
+                new DefaultObjectAccessPolicy(), new ConfirmationTokenService(), metricReferences);
+        SqlCandidate created = service.createExecutableCandidate(SQL);
+        doThrow(new BusinessException(ErrorCode.STATE_CONFLICT, "指标定义已停用或版本已变化"))
+                .when(metricReferences).requireCurrent(created.candidateId());
+
+        assertThatThrownBy(() -> service.confirmAndConsume(
+                created.candidateId(), created.confirmationToken()))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("指标定义已停用或版本已变化");
+
+        verify(metricReferences).requireCurrent(created.candidateId());
+        assertThat(store.findById(created.candidateId()).status())
+                .isEqualTo(SqlCandidateStatus.EXPIRED);
     }
 
     private SqlCandidate copyWithExpiry(SqlCandidate candidate, Instant expiresAt) {

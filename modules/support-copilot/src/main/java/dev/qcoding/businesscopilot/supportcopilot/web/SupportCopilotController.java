@@ -10,6 +10,7 @@ import dev.qcoding.businesscopilot.supportcopilot.draft.ReplyDraftResponse;
 import dev.qcoding.businesscopilot.supportcopilot.knowledge.SupportKnowledgeResult;
 import dev.qcoding.businesscopilot.supportcopilot.queue.SupportQueueService;
 import dev.qcoding.businesscopilot.supportcopilot.ticket.TicketAnalysisService;
+import dev.qcoding.businesscopilot.supportcopilot.ticket.SupportTicketReadService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -46,15 +47,38 @@ public class SupportCopilotController {
     private final ReplyDraftConfirmationService confirmationService;
     private final SupportAuditService auditService;
     private final SupportQueueService queueService;
+    private final SupportTicketReadService ticketReadService;
 
     public SupportCopilotController(TicketAnalysisService analysisService,
                                      ReplyDraftConfirmationService confirmationService,
                                      SupportAuditService auditService,
-                                     SupportQueueService queueService) {
+                                     SupportQueueService queueService,
+                                     SupportTicketReadService ticketReadService) {
         this.analysisService = analysisService;
         this.confirmationService = confirmationService;
         this.auditService = auditService;
         this.queueService = queueService;
+        this.ticketReadService = ticketReadService;
+    }
+
+    /** SUP-01：读取工单的追问建议（待人工审核，不自动发送客户）。 */
+    @GetMapping("/tickets/{ticketId}/follow-ups")
+    public ResponseEntity<ApiResponse<java.util.List<String>>> followUps(
+            @org.springframework.web.bind.annotation.PathVariable long ticketId) {
+        return ResponseEntity.ok(ApiResponse.ok(ticketReadService.followUps(ticketId)));
+    }
+
+    /** SUP-02：读取工单的转人工原因与下一步建议。 */
+    @GetMapping("/tickets/{ticketId}/handoff")
+    public ResponseEntity<ApiResponse<HandoffReasonResponse>> handoff(
+            @org.springframework.web.bind.annotation.PathVariable long ticketId) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                java.util.Optional.ofNullable(ticketReadService.handoffReason(ticketId))
+                        .map(reason -> new HandoffReasonResponse(reason.name(), reason.nextStep()))
+                        .orElse(null)));
+    }
+
+    public record HandoffReasonResponse(String reason, String nextStep) {
     }
 
     // ═══════════════════════════════════════════════════════════════

@@ -5,16 +5,20 @@ import dev.qcoding.businesscopilot.aicore.PromptTemplateService;
 import dev.qcoding.businesscopilot.audit.AuditService;
 import dev.qcoding.businesscopilot.commonsecurity.ConfirmationTokenService;
 import dev.qcoding.businesscopilot.commonsecurity.CurrentActorProvider;
+import dev.qcoding.businesscopilot.commonsecurity.IndependentReviewService;
 import dev.qcoding.businesscopilot.commonsecurity.ObjectAccessPolicy;
 import dev.qcoding.businesscopilot.datacopilot.confirmation.DataCopilotConfirmationProperties;
 import dev.qcoding.businesscopilot.datacopilot.confirmation.JdbcSqlCandidateStore;
 import dev.qcoding.businesscopilot.datacopilot.confirmation.SqlCandidateStore;
+import dev.qcoding.businesscopilot.datacopilot.confirmation.SqlCandidateMetricReferenceService;
 import dev.qcoding.businesscopilot.datacopilot.confirmation.SqlConfirmationService;
 import dev.qcoding.businesscopilot.datacopilot.explanation.QueryResultSummarizer;
 import dev.qcoding.businesscopilot.datacopilot.explanation.ResultExplanationService;
 import dev.qcoding.businesscopilot.datacopilot.enterprise.DataGovernanceService;
 import dev.qcoding.businesscopilot.datacopilot.enterprise.DataEnterpriseProperties;
 import dev.qcoding.businesscopilot.datacopilot.enterprise.DataQueryResultService;
+import dev.qcoding.businesscopilot.datacopilot.enterprise.MetricDictionaryService;
+import dev.qcoding.businesscopilot.datacopilot.enterprise.SqlCandidateRevisionService;
 import dev.qcoding.businesscopilot.datacopilot.generation.SqlGenerationService;
 import dev.qcoding.businesscopilot.datacopilot.query.JdbcReadOnlyQueryExecutor;
 import dev.qcoding.businesscopilot.datacopilot.query.QueryExecutionProperties;
@@ -31,6 +35,7 @@ import dev.qcoding.businesscopilot.guardrails.GuardrailsProperties;
 import dev.qcoding.businesscopilot.guardrails.SensitiveDataMasker;
 import dev.qcoding.businesscopilot.guardrails.SqlGuardrailService;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -121,9 +126,18 @@ public class DataCopilotAutoConfiguration {
                                                           DataCopilotConfirmationProperties properties,
                                                           CurrentActorProvider actorProvider,
                                                           ObjectAccessPolicy accessPolicy,
-                                                          ConfirmationTokenService tokenService) {
+                                                          ConfirmationTokenService tokenService,
+                                                          SqlCandidateMetricReferenceService metricReferenceService,
+                                                          ObjectProvider<IndependentReviewService> reviewService) {
         return new SqlConfirmationService(
-                store, properties, actorProvider, accessPolicy, tokenService);
+                store, properties, actorProvider, accessPolicy, tokenService, metricReferenceService,
+                reviewService.getIfAvailable());
+    }
+
+    @Bean
+    public SqlCandidateMetricReferenceService sqlCandidateMetricReferenceService(
+            @Qualifier("jdbcTemplate") JdbcTemplate platformJdbcTemplate) {
+        return new SqlCandidateMetricReferenceService(platformJdbcTemplate);
     }
 
     @Bean
@@ -169,15 +183,33 @@ public class DataCopilotAutoConfiguration {
     }
 
     @Bean
+    public MetricDictionaryService metricDictionaryService(
+            @Qualifier("jdbcTemplate") JdbcTemplate platformJdbcTemplate) {
+        return new MetricDictionaryService(platformJdbcTemplate);
+    }
+
+    @Bean
+    public SqlCandidateRevisionService sqlCandidateRevisionService(
+            @Qualifier("jdbcTemplate") JdbcTemplate platformJdbcTemplate,
+            SqlGenerationService sqlGenerationService,
+            CurrentActorProvider actorProvider,
+            DataEnterpriseProperties properties) {
+        return new SqlCandidateRevisionService(
+                platformJdbcTemplate, sqlGenerationService, actorProvider, properties);
+    }
+
+    @Bean
     public SqlGenerationService sqlGenerationService(SchemaContextService schemaContextService,
                                                       AiChatService aiChatService,
                                                       PromptTemplateService promptTemplateService,
                                                       SqlGuardrailService guardrailService,
                                                       AuditService auditService,
                                                       GuardrailsProperties guardrailsProperties,
-                                                      SqlConfirmationService confirmationService) {
+                                                      SqlConfirmationService confirmationService,
+                                                      MetricDictionaryService metricDictionaryService) {
         return new SqlGenerationService(schemaContextService, aiChatService, promptTemplateService,
-                guardrailService, auditService, guardrailsProperties, confirmationService);
+                guardrailService, auditService, guardrailsProperties, confirmationService,
+                metricDictionaryService);
     }
 
     @Bean
@@ -185,13 +217,17 @@ public class DataCopilotAutoConfiguration {
                                                         ReadOnlyQueryExecutor readOnlyQueryExecutor,
                                                         ResultExplanationService resultExplanationService,
                                                         AuditService auditService,
-                                                        DataQueryResultService dataQueryResultService) {
+                                                        DataQueryResultService dataQueryResultService,
+                                                        CurrentActorProvider actorProvider,
+                                                        ObjectAccessPolicy accessPolicy) {
         return new QueryExecutionService(
                 confirmationService,
                 readOnlyQueryExecutor,
                 resultExplanationService,
                 auditService,
-                dataQueryResultService);
+                dataQueryResultService,
+                actorProvider,
+                accessPolicy);
     }
 
     @Bean
@@ -237,7 +273,9 @@ public class DataCopilotAutoConfiguration {
     public DataEnterpriseController dataEnterpriseController(
             DataGovernanceService governanceService,
             DataQueryResultService resultService,
-            QueryExecutionService executionService) {
-        return new DataEnterpriseController(governanceService, resultService, executionService);
+            QueryExecutionService executionService,
+            SqlCandidateRevisionService revisionService) {
+        return new DataEnterpriseController(governanceService, resultService, executionService,
+                revisionService);
     }
 }

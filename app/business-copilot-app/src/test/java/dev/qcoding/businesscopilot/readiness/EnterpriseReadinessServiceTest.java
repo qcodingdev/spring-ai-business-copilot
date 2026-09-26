@@ -171,7 +171,7 @@ class EnterpriseReadinessServiceTest {
         EnterpriseReadinessProperties defaults = new EnterpriseReadinessProperties(
                 " ", null, null, null, null, null);
 
-        assertThat(defaults.applicationVersion()).isEqualTo("2.4.0");
+        assertThat(defaults.applicationVersion()).isEqualTo("2.4.1");
         assertThat(defaults.snapshotValidity()).isEqualTo(Duration.ofHours(24));
         assertThat(defaults.snapshotRetention()).isEqualTo(Duration.ofDays(90));
         assertThatThrownBy(() -> new EnterpriseReadinessProperties(

@@ -18,6 +18,7 @@ import dev.qcoding.businesscopilot.supportcopilot.draft.JdbcSupportReplyDraftRep
 import dev.qcoding.businesscopilot.supportcopilot.draft.ReplyDraftConfirmationService;
 import dev.qcoding.businesscopilot.supportcopilot.draft.ReplyDraftGuardrailService;
 import dev.qcoding.businesscopilot.supportcopilot.draft.ReplyDraftService;
+import dev.qcoding.businesscopilot.supportcopilot.draft.SupportFollowUpService;
 import dev.qcoding.businesscopilot.supportcopilot.draft.SupportReplyDraftRepository;
 import dev.qcoding.businesscopilot.supportcopilot.knowledge.FallbackSupportKnowledgeRetriever;
 import dev.qcoding.businesscopilot.supportcopilot.knowledge.KnowledgeCopilotSupportKnowledgeRetriever;
@@ -25,6 +26,7 @@ import dev.qcoding.businesscopilot.supportcopilot.knowledge.SupportKnowledgeRetr
 import dev.qcoding.businesscopilot.supportcopilot.ticket.JdbcSupportTicketRepository;
 import dev.qcoding.businesscopilot.supportcopilot.ticket.SupportTicketRepository;
 import dev.qcoding.businesscopilot.supportcopilot.ticket.TicketAnalysisService;
+import dev.qcoding.businesscopilot.supportcopilot.ticket.SupportTicketReadService;
 import dev.qcoding.businesscopilot.supportcopilot.web.SupportCopilotController;
 import dev.qcoding.businesscopilot.supportcopilot.web.SupportEnterpriseController;
 import dev.qcoding.businesscopilot.supportcopilot.integration.RestSupportExternalAdapter;
@@ -132,10 +134,12 @@ public class SupportCopilotAutoConfiguration {
             ObjectAccessPolicy accessPolicy,
             ConfirmationTokenService tokenService,
             SensitiveTextMasker sensitiveTextMasker,
-            SupportCopilotProperties properties) {
+            SupportCopilotProperties properties,
+            dev.qcoding.businesscopilot.supportcopilot.quality.SupportQualityCaseService qualityCaseService) {
         return new ReplyDraftConfirmationService(
                 draftRepository, ticketRepository, auditService,
-                actorProvider, accessPolicy, tokenService, sensitiveTextMasker, properties);
+                actorProvider, accessPolicy, tokenService, sensitiveTextMasker, properties,
+                qualityCaseService);
     }
 
     // ── Knowledge retriever ──────────────────────────────────────────────
@@ -165,10 +169,17 @@ public class SupportCopilotAutoConfiguration {
             SupportAuditService auditService,
             SensitiveTextMasker sensitiveTextMasker,
             SupportCopilotProperties properties,
-            CurrentActorProvider actorProvider) {
+            CurrentActorProvider actorProvider,
+            SupportFollowUpService followUpService) {
         return new TicketAnalysisService(classificationService, knowledgeRetriever,
                 draftService, ticketRepository, auditService, sensitiveTextMasker,
-                properties, actorProvider);
+                properties, actorProvider, followUpService);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public SupportFollowUpService supportFollowUpService() {
+        return new SupportFollowUpService();
     }
 
     @Bean
@@ -177,6 +188,15 @@ public class SupportCopilotAutoConfiguration {
             CurrentActorProvider actorProvider,
             SupportAuditService auditService) {
         return new SupportQueueService(jdbcTemplate, actorProvider, auditService);
+    }
+
+    @Bean
+    public SupportTicketReadService supportTicketReadService(
+            SupportTicketRepository ticketRepository,
+            CurrentActorProvider actorProvider,
+            ObjectAccessPolicy accessPolicy,
+            ObjectMapper objectMapper) {
+        return new SupportTicketReadService(ticketRepository, actorProvider, accessPolicy, objectMapper);
     }
 
     @Bean
@@ -207,8 +227,21 @@ public class SupportCopilotAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean(SupportEnterpriseController.class)
-    public SupportEnterpriseController supportEnterpriseController(SupportEnterpriseService service) {
-        return new SupportEnterpriseController(service);
+    public SupportEnterpriseController supportEnterpriseController(
+            SupportEnterpriseService service,
+            dev.qcoding.businesscopilot.supportcopilot.quality.SupportQualityCaseService qualityCaseService) {
+        return new SupportEnterpriseController(service, qualityCaseService);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public dev.qcoding.businesscopilot.supportcopilot.quality.SupportQualityCaseService supportQualityCaseService(
+            @org.springframework.beans.factory.annotation.Qualifier("jdbcTemplate")
+            org.springframework.jdbc.core.JdbcTemplate platformJdbcTemplate,
+            CurrentActorProvider actorProvider,
+            SensitiveTextMasker sensitiveTextMasker) {
+        return new dev.qcoding.businesscopilot.supportcopilot.quality.SupportQualityCaseService(
+                platformJdbcTemplate, actorProvider, sensitiveTextMasker);
     }
 
     @Bean
@@ -217,8 +250,9 @@ public class SupportCopilotAutoConfiguration {
             TicketAnalysisService analysisService,
             ReplyDraftConfirmationService confirmationService,
             SupportAuditService auditService,
-            SupportQueueService queueService) {
+            SupportQueueService queueService,
+            SupportTicketReadService ticketReadService) {
         return new SupportCopilotController(
-                analysisService, confirmationService, auditService, queueService);
+                analysisService, confirmationService, auditService, queueService, ticketReadService);
     }
 }

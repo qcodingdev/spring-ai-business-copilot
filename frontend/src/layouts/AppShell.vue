@@ -10,6 +10,7 @@ const { t } = useI18n()
 const route = useRoute()
 const { session, isAdmin, isReviewer } = useSession()
 const menuOpen = ref(false)
+const signingOut = ref(false)
 const csrfToken = computed(() => {
   const match = document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]+)/)
   return match ? decodeURIComponent(match[1] ?? '') : ''
@@ -22,7 +23,7 @@ const navigation = computed(() => [
     { to: '/support', label: t('navigation.support'), icon: 'support' as const },
     { to: '/report', label: t('navigation.report'), icon: 'report' as const },
     { to: '/hr', label: t('navigation.hr'), icon: 'hr' as const },
-  ].filter((item) => !isReviewer.value || item.to !== '/report')),
+  ]),
 ])
 const pageTitle = computed(() => {
   const key = route.path === '/' ? 'overview' : route.path.slice(1)
@@ -56,7 +57,7 @@ const userInitial = computed(() => (session.value?.username?.slice(0, 1) || 'U')
           <span>{{ item.label }}</span>
           <span class="nav-arrow" aria-hidden="true">›</span>
         </RouterLink>
-        <div v-if="route.path === '/hr' && !isReviewer" class="sidebar-subnav" :aria-label="t('hr.title')">
+        <div v-if="route.path === '/hr' && (!isReviewer || isAdmin)" class="sidebar-subnav" :aria-label="t('hr.title')">
           <RouterLink :to="{ path: '/hr', query: { section: 'recruiting' } }" class="sidebar-subnav__link" :class="{ active: route.query.section !== 'employee' }" :aria-current="route.query.section !== 'employee' ? 'page' : undefined" @click="menuOpen = false">
             <span>{{ t('hr.sections.recruiting') }}</span>
           </RouterLink>
@@ -85,9 +86,9 @@ const userInitial = computed(() => (session.value?.username?.slice(0, 1) || 'U')
         <div class="topbar__context"><span>{{ t('common.workbench') }}</span><b>/</b><strong>{{ pageTitle }}</strong></div>
         <div class="runtime-chip"><span></span>{{ session?.runtimeMode ?? t('common.unknown') }}</div>
         <LanguageSwitcher />
-        <form action="/logout" method="post">
+        <form action="/logout" method="post" @submit="signingOut = true">
           <input v-if="csrfToken" type="hidden" name="_csrf" :value="csrfToken" />
-          <button class="logout-button" type="submit" :aria-label="t('auth.signOut')">
+          <button class="logout-button" type="submit" :aria-label="t('auth.signOut')" :disabled="signingOut">
             <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M10 5H5v14h5m4-3 4-4-4-4m4 4H9" /></svg>
             <span>{{ t('auth.signOut') }}</span>
           </button>

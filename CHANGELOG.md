@@ -6,6 +6,64 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [2.4.1] - 2026-09-26
+
+### Added
+
+- Added object-ownership enforcement for query cancellation: only the execution
+  owner or an admin can cancel a running execution; cross-operator cancels are
+  rejected and audited (`QUERY_CANCEL_DENIED`), and missing actor context fails
+  closed (CORE-01, scenario D-06).
+- Added cumulative AI usage accounting: every model attempt (first call, language
+  retry) is recorded separately into metrics and the returned metadata carries the
+  summed usage; unknown provider usage stays unknown instead of being counted as
+  zero (CORE-02).
+- Added `platform/task-runtime` with owner checks, transaction-scoped run locks,
+  conditional transitions, persisted context references, dispatch-time budget
+  reservations, interruption recovery, and an end-user timeline. Report generation
+  and Knowledge answering use the runtime in production paths.
+- Added `platform/evaluation-harness` and an executable first-40-scenario gate for
+  Data, Knowledge, Support, Report, Resume/HR, and cross-module cases. Empty or
+  unverified results, assertion failures, model-call budget violations, and cleanup
+  failures block the gate.
+- Added a bilingual administrator acceptance page with four separate categories:
+  runtime readiness, model quality, vendor acceptance and release gates. Evidence
+  history is append-only and version-scoped; actors and timestamps come from the
+  server, and runtime evidence comes only from a server readiness check. Recording
+  evidence does not run tests, certify production acceptance or publish releases.
+- Added an optional enterprise OIDC profile with issuer-and-subject-based actor
+  identity, application role mapping, and session expiry enforcement.
+- Added explicit Data metric snapshots and period definitions for Report handoffs,
+  with deterministic comparisons only when metric versions and periods are
+  compatible.
+
+### Changed
+
+- Bumped the development version to 2.4.1-SNAPSHOT and documented the baseline
+  relationship between the main workspace and the analysis workspace (CORE-03).
+- Finalized the Maven, frontend, and application evidence version as 2.4.1.
+- Standardized all nine bundled business Prompt templates on Simplified Chinese by
+  default, added request-locale-selected `.en-US` variants with matching variables,
+  recorded the actual localized template key in governance and audit metadata, and
+  persisted each report schedule's locale for background generation.
+- Added a CI job that exercises the five business flows in a real application
+  backed by PostgreSQL and a controlled model test double.
+
+### Fixed
+
+- Constrained Report generation to extractive, source-supported claims and included
+  source titles in grounding checks after real-model smoke exposed unsupported
+  interpretive wording.
+- Recorded embedding usage with its configured provider and model identity instead
+  of inheriting the chat model identity.
+- Kept Report draft publication and Data handoff consumption in one conditional
+  transaction, preventing a replaced worker from committing late results.
+
+### Security
+
+- Updated Bouncy Castle, Netty, Tomcat, and Vitest to address dependency
+  vulnerabilities.
+
 ## [2.4.0] - 2026-08-26
 
 ### Added
@@ -268,7 +326,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Kept risky actions behind single-use confirmation tokens and explicit human review.
 - Excluded local AI-agent settings, internal planning documents, and generated review evidence from the public repository.
 
-[Unreleased]: https://github.com/qcodingdev/spring-ai-business-copilot/compare/v2.3.1...main
+[Unreleased]: https://github.com/qcodingdev/spring-ai-business-copilot/compare/v2.4.1...main
+[2.4.1]: https://github.com/qcodingdev/spring-ai-business-copilot/compare/v2.4.0...v2.4.1
+[2.4.0]: https://github.com/qcodingdev/spring-ai-business-copilot/compare/v2.3.1...v2.4.0
 [2.3.1]: https://github.com/qcodingdev/spring-ai-business-copilot/compare/v2.3.0...v2.3.1
 [2.3.0]: https://github.com/qcodingdev/spring-ai-business-copilot/compare/v2.2.1...v2.3.0
 [2.2.1]: https://github.com/qcodingdev/spring-ai-business-copilot/compare/v2.2.0...v2.2.1

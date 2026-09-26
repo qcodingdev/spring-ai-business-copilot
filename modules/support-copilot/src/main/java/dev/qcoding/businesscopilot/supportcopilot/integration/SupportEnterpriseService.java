@@ -266,7 +266,9 @@ public class SupportEnterpriseService {
         ConfirmationTokenService.IssuedToken token = tokenService.issue();
         Instant expiresAt = Instant.now().plus(Duration.ofMinutes(10));
         String actorId = actorProvider.currentActor().actorId();
-        Long id = jdbcTemplate.queryForObject("""
+        Long id;
+        try {
+            id = jdbcTemplate.queryForObject("""
                 INSERT INTO support_draft_writebacks (
                     draft_id, connection_id, external_ticket_id, payload_hash,
                     status, token_digest, expires_at, requested_by
@@ -277,13 +279,17 @@ public class SupportEnterpriseService {
                     token_digest = EXCLUDED.token_digest,
                     expires_at = EXCLUDED.expires_at,
                     requested_by = EXCLUDED.requested_by,
-                    confirmed_by = NULL, attempt_count = 0, last_attempt_at = NULL,
+                    confirmed_by = NULL, last_attempt_at = NULL,
                     completed_at = NULL,
                     error_category = NULL,
                     updated_at = now()
+                WHERE support_draft_writebacks.status IN ('FAILED', 'CANCELED', 'EXPIRED')
                 RETURNING id
                 """, Long.class, draftId, source.connectionId(), source.externalTicketId(),
                 sha256(source.draftText()), token.digest(), Timestamp.from(expiresAt), actorId);
+        } catch (org.springframework.dao.EmptyResultDataAccessException ex) {
+            throw new BusinessException(ErrorCode.STATE_CONFLICT, "回写状态已变化，请刷新后核对");
+        }
         recordAudit(source.ticketId(), "WRITEBACK_PREPARED", source.ownerActorId(), actorId, null);
         return new WritebackIntent(id, "PENDING_CONFIRMATION", token.rawToken(), expiresAt);
     }
@@ -291,7 +297,7 @@ public class SupportEnterpriseService {
     public WritebackResult confirmWriteback(long writebackId, String rawToken) {
         List<PendingWriteback> pending = jdbcTemplate.query("""
                 SELECT w.id, w.draft_id, w.connection_id, w.external_ticket_id,
-                       w.token_digest, w.expires_at, w.payload_hash, w.requested_by,
+                       w.token_digest, w.expires_at, w.payload_hash, w.requested_by, w.attempt_count,
                        COALESCE(d.edited_draft_text, d.original_draft_text) AS draft_text,
                        d.ticket_id, d.owner_actor_id, d.reviewer_actor_id, d.review_queue
                 FROM support_draft_writebacks w
@@ -304,7 +310,7 @@ public class SupportEnterpriseService {
                 rs.getString("requested_by"), rs.getString("draft_text"),
                 rs.getLong("ticket_id"),
                 rs.getString("owner_actor_id"), rs.getString("reviewer_actor_id"),
-                rs.getBoolean("review_queue")),
+                rs.getBoolean("review_queue"), rs.getInt("attempt_count")),
                 writebackId);
         if (pending.isEmpty()) throw new BusinessException(ErrorCode.STATE_CONFLICT);
         PendingWriteback writeback = pending.getFirst();
@@ -334,30 +340,39 @@ public class SupportEnterpriseService {
                 SET status = 'PROCESSING', token_digest = NULL, confirmed_by = ?,
                     attempt_count = attempt_count + 1, last_attempt_at = now(), updated_at = now()
                 WHERE id = ? AND status = 'PENDING_CONFIRMATION' AND expires_at > now()
-                """, actorId, writebackId);
+                  AND token_digest = ? AND payload_hash = ? AND attempt_count = ?
+                """, actorId, writebackId, writeback.tokenDigest(), writeback.payloadHash(),
+                writeback.attemptCount());
         if (claimed != 1) throw new BusinessException(ErrorCode.STATE_CONFLICT);
         recordAudit(writeback.ticketId(), "WRITEBACK_PROCESSING",
                 writeback.ownerActorId(), actorId, null);
+        int attempt = writeback.attemptCount() + 1;
         String idempotencyKey = "support-writeback-" + writebackId;
         try {
             externalAdapter.writeConfirmedDraft(
                     connection, writeback.externalTicketId(), writeback.draftText(), idempotencyKey);
-            jdbcTemplate.update("""
+            int completed = jdbcTemplate.update("""
                     UPDATE support_draft_writebacks
                     SET status = 'COMPLETED', completed_at = now(), external_receipt = ?,
                         updated_at = now()
-                    WHERE id = ? AND status = 'PROCESSING'
-                    """, idempotencyKey, writebackId);
+                    WHERE id = ? AND status = 'PROCESSING' AND attempt_count = ?
+                    """, idempotencyKey, writebackId, attempt);
+            if (completed != 1) {
+                return new WritebackResult(writebackId, writebackStatus(writebackId).status());
+            }
             auditService.record(newAudit(writeback.ticketId(), "WRITEBACK_COMPLETED",
                     writeback.ownerActorId(), actorId, null));
             return new WritebackResult(writebackId, "COMPLETED");
         } catch (RuntimeException ex) {
-            jdbcTemplate.update("""
+            int unknown = jdbcTemplate.update("""
                     UPDATE support_draft_writebacks
                     SET status = 'UNKNOWN', error_category = 'EXTERNAL_OUTCOME_UNKNOWN',
                         updated_at = now()
-                    WHERE id = ?
-                    """, writebackId);
+                    WHERE id = ? AND status = 'PROCESSING' AND attempt_count = ?
+                    """, writebackId, attempt);
+            if (unknown != 1) {
+                return new WritebackResult(writebackId, writebackStatus(writebackId).status());
+            }
             auditService.record(newAudit(writeback.ticketId(), "WRITEBACK_UNKNOWN",
                     writeback.ownerActorId(), actorId, "EXTERNAL_OUTCOME_UNKNOWN"));
             throw new BusinessException(ErrorCode.STATE_CONFLICT,
@@ -386,6 +401,65 @@ public class SupportEnterpriseService {
         }, writebackId);
         if (rows.isEmpty()) throw new BusinessException(ErrorCode.NOT_FOUND);
         return rows.getFirst();
+    }
+
+    /**
+     * SUP-03：主动向外部系统核对回写结果（UNKNOWN/PROCESSING 状态时可用）。
+     *
+     * <p>供应商回执明确成功则置 COMPLETED；明确失败置 FAILED；
+     * 适配器无法核对（empty）或核对异常时保持未知状态，绝不猜测。</p>
+     */
+    public WritebackStatus refreshWritebackReceipt(long writebackId) {
+        WritebackStatus current = writebackStatus(writebackId);
+        if (!"UNKNOWN".equals(current.status()) && !"PROCESSING".equals(current.status())) {
+            return current;
+        }
+        List<RefreshableWriteback> rows = jdbcTemplate.query("""
+                SELECT w.id, w.connection_id, w.external_ticket_id, w.attempt_count
+                FROM support_draft_writebacks w
+                WHERE w.id = ? AND w.status IN ('UNKNOWN', 'PROCESSING')
+                """, (rs, rowNum) -> new RefreshableWriteback(
+                rs.getLong("id"), rs.getLong("connection_id"),
+                rs.getString("external_ticket_id"), rs.getInt("attempt_count")), writebackId);
+        if (rows.isEmpty()) {
+            // 状态已在核对间隙变化，返回最新状态即可。
+            return writebackStatus(writebackId);
+        }
+        RefreshableWriteback row = rows.getFirst();
+        SupportExternalConnection connection = requireConnection(row.connectionId());
+        if (!connection.enabled()) {
+            throw new BusinessException(ErrorCode.STATE_CONFLICT, "外部客服连接未启用");
+        }
+        SupportExternalAdapter externalAdapter = adapter(connection.provider());
+        java.util.Optional<SupportExternalAdapter.ExternalWritebackReceipt> receipt;
+        try {
+            receipt = externalAdapter.fetchWritebackReceipt(
+                    connection, row.externalTicketId(), "support-writeback-" + writebackId);
+        } catch (RuntimeException ex) {
+            // 核对本身失败不改变业务状态，保持未知。
+            return writebackStatus(writebackId);
+        }
+        if (receipt.isEmpty()) {
+            return writebackStatus(writebackId);
+        }
+        if (receipt.get().delivered()) {
+            jdbcTemplate.update("""
+                    UPDATE support_draft_writebacks
+                    SET status = 'COMPLETED', completed_at = now(), external_receipt = ?,
+                        error_category = NULL, updated_at = now()
+                    WHERE id = ? AND status IN ('UNKNOWN', 'PROCESSING') AND attempt_count = ?
+                    """, receipt.get().receipt(), writebackId, row.attemptCount());
+        } else {
+            jdbcTemplate.update("""
+                    UPDATE support_draft_writebacks
+                    SET status = 'FAILED', error_category = 'PROVIDER_REJECTED', updated_at = now()
+                    WHERE id = ? AND status IN ('UNKNOWN', 'PROCESSING') AND attempt_count = ?
+                    """, writebackId, row.attemptCount());
+        }
+        return writebackStatus(writebackId);
+    }
+
+    private record RefreshableWriteback(long id, long connectionId, String externalTicketId, int attemptCount) {
     }
 
     /** Admin records externally verified resolution; retry requires explicit no-write evidence. */
@@ -573,7 +647,7 @@ public class SupportEnterpriseService {
                                     Instant expiresAt, String payloadHash,
                                     String requestedBy, String draftText, long ticketId,
                                     String ownerActorId, String reviewerActorId,
-                                    boolean reviewQueue) { }
+                                    boolean reviewQueue, int attemptCount) { }
     public record ConnectionCommand(String connectionKey, String displayName,
                                     SupportExternalProvider provider, String baseUrl,
                                     String secretRef, boolean enabled) { }
