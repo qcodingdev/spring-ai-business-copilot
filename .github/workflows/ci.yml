@@ -48,6 +48,11 @@ jobs:
       - name: Check fixed evaluation dataset gates
         run: ./scripts/check-evaluation-datasets.sh
 
+      - name: Check fictional model-quality baseline template and summary rules
+        run: |
+          python3 scripts/quality-baseline.py scripts/quality-baseline-example.json --validate-only
+          python3 -m unittest scripts/test_quality_baseline.py
+
       - name: Run unit, fixed evaluation, and PostgreSQL integration tests
         run: ./mvnw --batch-mode --no-transfer-progress verify -Psbom
 

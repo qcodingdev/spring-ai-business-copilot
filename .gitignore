@@ -1,6 +1,8 @@
 .DS_Store
 target/
 *.log
+__pycache__/
+*.pyc
 .idea/
 *.iml
 .vscode/

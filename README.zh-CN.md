@@ -199,6 +199,19 @@ flowchart LR
 
 本地源码开发使用 Java 21、Node 22、PostgreSQL 16 和 pgvector。Maven 会安装固定版本的前端工具，保证构建可复现。
 
+### 五模块质量基线模板
+
+仓库提供[虚构案例模板](scripts/quality-baseline-example.json)和[离线汇总工具](scripts/quality-baseline.py)。模板覆盖五模块的开发集、保留集各一例，初始判定均为空；它展示填写格式，不代表真实模型质量。先用 `--validate-only` 检查格式，运行模型并人工复核后再填写 `judgment`，随后生成分模块的正确率、拒答、证据、人工修改、延迟和 Token 汇总：
+
+```bash
+python3 scripts/quality-baseline.py scripts/quality-baseline-example.json --validate-only
+python3 scripts/quality-baseline.py path/to/reviewed-fictional-cases.json > quality-report.json
+```
+
+未判定的案例返回 `NOT_VERIFIED` 和退出码 2；`REVIEWED` 只表示样本判定完整，不代表发布批准。案例证据引用应指向本次测试记录，不要提交真实业务内容或密钥。固定安全评测和真实后端流程仍由现有 CI 独立执行。
+
+### 本地全量检查
+
 ```bash
 ./scripts/check-frontend-syntax.sh
 ./scripts/check-evaluation-datasets.sh

@@ -199,6 +199,19 @@ The presence of an adapter is not a claim of vendor certification. Review [SECUR
 
 Local source development uses Java 21, Node 22, and PostgreSQL 16 with pgvector. Maven installs pinned frontend tooling for reproducible builds.
 
+### Five-module quality baseline template
+
+The repository includes a [fictional case template](scripts/quality-baseline-example.json) and an [offline summary tool](scripts/quality-baseline.py). The template has one development and one holdout case per module, with every judgment initially empty; it demonstrates the format and makes no claim about model quality. Validate it first, then run a model, review its outputs, fill in the judgments, and summarize correctness, refusals, evidence support, human edits, latency, and tokens by module:
+
+```bash
+python3 scripts/quality-baseline.py scripts/quality-baseline-example.json --validate-only
+python3 scripts/quality-baseline.py path/to/reviewed-fictional-cases.json > quality-report.json
+```
+
+Unreviewed cases return `NOT_VERIFIED` with exit code 2. `REVIEWED` means the sample judgments are complete; it does not approve a release. Evidence references should point to records from that test run. Do not commit real business content or credentials. Existing CI separately checks fixed safety cases and real-backend workflows.
+
+### Full local checks
+
 ```bash
 ./scripts/check-frontend-syntax.sh
 ./scripts/check-evaluation-datasets.sh
